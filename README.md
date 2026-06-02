@@ -1,3 +1,18 @@
+---
+domain:
+- nlp
+tags:
+- literature-search
+- research-agent
+- openalex
+- fastapi
+models:
+- Qwen/Qwen3-235B-A22B-Instruct-2507
+license: Apache-2.0
+deployspec:
+  entry_file: Dockerfile
+---
+
 # PaperSeek
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)

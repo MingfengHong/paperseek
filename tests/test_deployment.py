@@ -24,6 +24,7 @@ class DeploymentTest(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("EXPOSE 7860", dockerfile)
         self.assertIn("PORT=7860", dockerfile)
+        self.assertIn("--shell /bin/sh paperseek", dockerfile)
         self.assertIn("--host 0.0.0.0", dockerfile)
         self.assertIn("${PORT:-7860}", dockerfile)
         self.assertIn("HEALTHCHECK", dockerfile)

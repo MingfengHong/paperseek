@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN useradd --create-home --shell /usr/sbin/nologin paperseek
+RUN useradd --create-home --shell /bin/sh paperseek
 
 COPY pyproject.toml README.md LICENSE ./
 COPY paperseek ./paperseek
