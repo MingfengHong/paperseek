@@ -78,6 +78,15 @@ class HistoryStoreTest(unittest.TestCase):
             self.assertTrue(store.delete_run(run_id))
             self.assertEqual(store.list_runs(), [])
 
+    def test_store_uses_requested_timezone_for_history_timestamps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "paperseek.db"
+            store = HistoryStore(db_path=db_path, enabled=True, timezone_name="Asia/Shanghai")
+            run_id = store.create_run("timezone test", {"data_source": "openalex"})
+            detail = store.get_run(run_id)
+            self.assertIsNotNone(detail)
+            self.assertIn("+08:00", detail["created_at"])
+
 
 class HistoryApiTest(unittest.TestCase):
     def test_history_endpoint_reads_configured_local_database(self):

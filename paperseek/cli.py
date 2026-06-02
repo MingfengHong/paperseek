@@ -118,7 +118,10 @@ Environment variables:
   LLM_MODEL          Model name
   LLM_BASE_URL       Custom API endpoint URL
   SEARCH_FIELD       Default discipline/field constraint
+  SEARCH_ACCEPT_MAX_RECORDS
+                     Source record cap accepted before ranking (default: 1000)
   EXPAND_CITATIONS   Set to "false" to skip OpenAlex citation expansion
+  CITATION_MAX_DEPTH OpenAlex citation traversal depth (default: 3)
   FETCH_ABSTRACTS    Set to "true" to enable DOI-based abstract fetching
   PAPERSEEK_HISTORY_ENABLED
                       Set to "false" to disable local SQLite search history
@@ -130,6 +133,7 @@ Environment variables:
     parser.add_argument("--db", "-d", default=None, help="WoS database (WOS, MEDLINE, BIOABS, etc.)")
     parser.add_argument("--fetch-abstracts", action="store_true", default=None, help="Fetch abstracts via DOI from Crossref/Semantic Scholar")
     parser.add_argument("--no-expand-citations", action="store_true", default=False, help="Disable OpenAlex citation-neighbor expansion")
+    parser.add_argument("--initial-query", default=None, help="Resume from a known source query and skip LLM query generation")
     parser.add_argument("--llm-provider", default=None, choices=list(SUPPORTED_LLM_PROVIDERS), help="LLM service provider")
     parser.add_argument("--llm-api-type", default=None, choices=list(SUPPORTED_LLM_API_TYPES), help="LLM API protocol")
     parser.add_argument("--llm-key", default=None, help="LLM API key")
@@ -141,7 +145,10 @@ Environment variables:
     parser.add_argument("--llm-base-url", default=None, help="Custom LLM API endpoint")
     parser.add_argument("--min", type=int, default=None, help="Target minimum results (default: 5)")
     parser.add_argument("--max", type=int, default=None, help="Target maximum results (default: 50)")
+    parser.add_argument("--accept-max", type=int, default=None, help="Accept source totals up to this count before ranking (default: 1000)")
     parser.add_argument("--iterations", type=int, default=None, help="Max broaden/narrow cycles (default: 5)")
+    parser.add_argument("--citation-depth", type=int, default=None, help="Maximum OpenAlex citation traversal depth (default: 3)")
+    parser.add_argument("--citation-threshold", type=float, default=None, help="Minimum relevance score for continuing citation traversal (default: 7)")
     parser.add_argument("--output", "-o", default="text", choices=["text", "json"], help="Output format (default: text)")
     parser.add_argument("--json", action="store_true", help="Shortcut for --output json")
     parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Print intermediate queries")
@@ -187,8 +194,14 @@ def _apply_search_args(config: AgentConfig, args) -> AgentConfig:
         config.target_min = args.min
     if args.max is not None:
         config.target_max = args.max
+    if args.accept_max is not None:
+        config.search_accept_max_records = args.accept_max
     if args.iterations is not None:
         config.max_iterations = args.iterations
+    if args.citation_depth is not None:
+        config.citation_max_depth = args.citation_depth
+    if args.citation_threshold is not None:
+        config.citation_relevance_threshold = args.citation_threshold
     return config
 
 
@@ -220,7 +233,7 @@ def _run_search(argv, prog: str):
     agent = WosSearchAgent(config, llm)
 
     try:
-        result = agent.search(args.question, verbose=args.verbose)
+        result = agent.search(args.question, verbose=args.verbose, initial_query=args.initial_query)
         history_payload = result_payload_from_search_result(result, config.data_source)
         if history_run_id:
             history_payload["run_id"] = history_run_id

@@ -282,10 +282,10 @@ PaperSeek 支持两类主流接口协议：OpenAI 风格接口和 Anthropic Mess
 
 1. **Query Generation**：LLM 根据研究问题和可选学科提示生成初始查询。
 2. **Source Search**：请求 OpenAlex、Crossref 或 WoS Starter，并记录 HTTP 状态和命中数量。
-3. **Query Refinement**：若命中数过少或过多，LLM 调整查询并继续下一轮。
+3. **Query Refinement**：若命中数过少或超过候选上限，LLM 调整查询并继续下一轮；最后一轮仍异常时会基于前几轮历史重建一次兜底查询。
 4. **Ranking & Results**：将候选池交给 LLM 统一评分，输出前若干条结果。
 
-如果启用 OpenAlex 引用扩展，PaperSeek 会从高匹配论文中选择 seed paper，加入 seed 的参考文献和被引论文，再对完整候选池统一评分。默认最大输出 50 条。
+如果启用 OpenAlex 引用扩展，PaperSeek 会从高匹配论文中选择 seed paper，沿参考文献和被引论文多层扩展；每层都会先判断是否仍有高价值相关论文，没有时停止。默认最大输出 50 条，检索阶段默认可接受最多 1000 条源记录作为后续排序候选；候选较多时会分页拉取并分批评分。
 
 ## 引用图
 
@@ -313,13 +313,17 @@ A -> B  表示 A 引用了 B
 | `WOS_API_KEY` | Clarivate Web of Science Starter API Key。 |
 | `WOS_DB` | WoS 数据库代码，默认 `WOS`。 |
 | `TARGET_MIN` / `TARGET_MAX` | 目标结果数量范围。 |
+| `SEARCH_ACCEPT_MAX_RECORDS` | 检索阶段可接受的源记录上限，默认 `1000`；最终仍按 `TARGET_MAX` 输出。 |
 | `MAX_ITERATIONS` | 最大查询调整轮数。 |
 | `EXPAND_CITATIONS` | 是否启用 OpenAlex 引用扩展，默认 `true`。 |
 | `FETCH_ABSTRACTS` | 是否尝试从外部 DOI 元数据补摘要，默认 `false`。 |
 | `CITATION_SEED_COUNT` | 引用扩展 seed 论文数量。 |
 | `CITATION_PER_SEED` | 每个 seed 抓取的引用邻居数量。 |
 | `CITATION_MAX_RECORDS` | 引用扩展候选上限。 |
+| `CITATION_MAX_DEPTH` | OpenAlex 引用扩展最大层数，默认 `3`。 |
+| `CITATION_RELEVANCE_THRESHOLD` | 继续引用扩展所需的最低相关性分数，默认 `7.0`。 |
 | `PAPERSEEK_HISTORY_ENABLED` | 是否启用本地历史记录，默认 `true`。 |
+| `PAPERSEEK_TIMEZONE` | 后端历史时间的时区覆盖值；Web UI 会优先使用浏览器时区，检测不到时默认 `Asia/Shanghai`。 |
 | `PAPERSEEK_DATA_DIR` | 本地数据目录，默认 `~/.paperseek`。 |
 | `PAPERSEEK_HISTORY_DB` | 本地历史 SQLite 数据库路径，默认 `~/.paperseek/paperseek.db`。 |
 

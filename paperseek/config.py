@@ -23,6 +23,9 @@ class AgentConfig:
     citation_seed_count: int = 3
     citation_per_seed: int = 4
     citation_max_records: int = 40
+    citation_max_depth: int = 3
+    citation_relevance_threshold: float = 7.0
+    search_accept_max_records: int = 1000
     target_min: int = 5
     target_max: int = 50
     max_iterations: int = 5
@@ -49,6 +52,9 @@ class AgentConfig:
             citation_seed_count=int(os.environ.get("CITATION_SEED_COUNT", "3")),
             citation_per_seed=int(os.environ.get("CITATION_PER_SEED", "4")),
             citation_max_records=int(os.environ.get("CITATION_MAX_RECORDS", "40")),
+            citation_max_depth=int(os.environ.get("CITATION_MAX_DEPTH", "3")),
+            citation_relevance_threshold=float(os.environ.get("CITATION_RELEVANCE_THRESHOLD", "7.0")),
+            search_accept_max_records=int(os.environ.get("SEARCH_ACCEPT_MAX_RECORDS", "1000")),
             target_min=int(os.environ.get("TARGET_MIN", "5")),
             target_max=int(os.environ.get("TARGET_MAX", "50")),
             max_iterations=int(os.environ.get("MAX_ITERATIONS", "5")),
@@ -69,6 +75,14 @@ class AgentConfig:
             raise ValueError(f"LLM_PROVIDER must be one of {', '.join(SUPPORTED_LLM_PROVIDERS)}, got '{self.llm_provider}'")
         if self.llm_api_type not in SUPPORTED_LLM_API_TYPES:
             raise ValueError(f"LLM_API_TYPE must be one of {', '.join(SUPPORTED_LLM_API_TYPES)}, got '{self.llm_api_type}'")
+        if int(self.target_min) > int(self.target_max):
+            raise ValueError("TARGET_MIN cannot exceed TARGET_MAX.")
+        self.search_accept_max_records = max(int(self.target_max), min(int(self.search_accept_max_records or 1000), 100000))
+        self.citation_seed_count = max(1, min(int(self.citation_seed_count or 3), 20))
+        self.citation_per_seed = max(1, min(int(self.citation_per_seed or 4), 20))
+        self.citation_max_records = max(1, min(int(self.citation_max_records or 40), 500))
+        self.citation_max_depth = max(1, min(int(self.citation_max_depth or 3), 8))
+        self.citation_relevance_threshold = max(1.0, min(float(self.citation_relevance_threshold or 7.0), 10.0))
         if missing:
             raise ValueError(
                 f"Missing required configuration: {', '.join(missing)}. "

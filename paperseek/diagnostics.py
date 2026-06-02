@@ -169,6 +169,22 @@ def run_doctor(config: AgentConfig) -> Dict[str, Any]:
             summary=f"Target result range is {config.target_min}-{config.target_max}.",
         ))
 
+    if int(getattr(config, "search_accept_max_records", 1000) or 1000) < int(config.target_max or 50):
+        checks.append(DiagnosticCheck(
+            id="runtime.source_cap",
+            status="fail",
+            severity="error",
+            summary="SEARCH_ACCEPT_MAX_RECORDS cannot be lower than TARGET_MAX.",
+            actions=["Raise SEARCH_ACCEPT_MAX_RECORDS or lower TARGET_MAX."],
+        ))
+    else:
+        checks.append(DiagnosticCheck(
+            id="runtime.source_cap",
+            status="pass",
+            severity="info",
+            summary=f"Source candidate cap is {getattr(config, 'search_accept_max_records', 1000)}.",
+        ))
+
     status = "pass"
     if any(check.status == "fail" for check in checks):
         status = "fail"

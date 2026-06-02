@@ -282,10 +282,10 @@ A search usually has four stages:
 
 1. **Query Generation**: the LLM creates an initial query from the research question and optional field hint.
 2. **Source Search**: PaperSeek requests OpenAlex, Crossref, or WoS Starter and logs HTTP status and hit counts.
-3. **Query Refinement**: if the hit count is too low or too high, the LLM adjusts the query and continues.
+3. **Query Refinement**: if the hit count is too low or above the source candidate cap, the LLM adjusts the query and continues. If the final iteration is still unusable, PaperSeek reconstructs one fallback query from the previous query history.
 4. **Ranking & Results**: the candidate pool is scored by the LLM, and the top records are returned.
 
-When OpenAlex citation expansion is enabled, PaperSeek selects high-matching seed papers, adds references and citing works, then ranks the complete candidate pool. The current default maximum output is 50 papers.
+When OpenAlex citation expansion is enabled, PaperSeek selects high-matching seed papers and traverses both references and citing works across multiple depths. Each depth is relevance-checked before continuing, and traversal stops when no high-value related papers remain. The default output cap is 50 papers; the source search stage accepts up to 1000 source records before ranking. Larger candidate pools are fetched by pages and scored in LLM batches.
 
 ## Citation Map
 
@@ -313,13 +313,17 @@ Graph nodes come from final results and OpenAlex citation expansion records. You
 | `WOS_API_KEY` | Clarivate Web of Science Starter API key. |
 | `WOS_DB` | WoS database code, default `WOS`. |
 | `TARGET_MIN` / `TARGET_MAX` | Target result count range. |
+| `SEARCH_ACCEPT_MAX_RECORDS` | Source record cap accepted before ranking; default `1000`. Final output still follows `TARGET_MAX`. |
 | `MAX_ITERATIONS` | Maximum query refinement iterations. |
 | `EXPAND_CITATIONS` | Enable OpenAlex citation expansion; default `true`. |
 | `FETCH_ABSTRACTS` | Try external DOI metadata for abstracts; default `false`. |
 | `CITATION_SEED_COUNT` | Number of seed papers used for citation expansion. |
 | `CITATION_PER_SEED` | Number of citation neighbors fetched per seed. |
 | `CITATION_MAX_RECORDS` | Candidate cap for citation expansion. |
+| `CITATION_MAX_DEPTH` | Maximum OpenAlex citation traversal depth; default `3`. |
+| `CITATION_RELEVANCE_THRESHOLD` | Minimum relevance score required to continue citation traversal; default `7.0`. |
 | `PAPERSEEK_HISTORY_ENABLED` | Enable local history; default `true`. |
+| `PAPERSEEK_TIMEZONE` | Backend history timezone override. The Web UI prefers the browser timezone and falls back to `Asia/Shanghai`. |
 | `PAPERSEEK_DATA_DIR` | Local PaperSeek data directory; default `~/.paperseek`. |
 | `PAPERSEEK_HISTORY_DB` | Local history SQLite path; default `~/.paperseek/paperseek.db`. |
 

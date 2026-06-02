@@ -5,11 +5,11 @@ import os
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional, Union
 
 from paperseek.config import AgentConfig
+from paperseek.time_utils import paperseek_now_iso
 
 
 DISABLED_VALUES = {"0", "false", "no", "off"}
@@ -17,8 +17,8 @@ SECRET_KEY_NAMES = {"api_key", "apikey", "authorization", "auth_token", "access_
 SECRET_KEY_PARTS = ("authorization", "token", "secret", "password")
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+def paperseek_history_now(timezone_name: Optional[str] = None) -> str:
+    return paperseek_now_iso(timezone_name)
 
 
 def history_enabled() -> bool:
@@ -91,6 +91,9 @@ def safe_search_params_from_config(config: AgentConfig) -> dict[str, Any]:
         "citation_seed_count": config.citation_seed_count,
         "citation_per_seed": config.citation_per_seed,
         "citation_max_records": config.citation_max_records,
+        "citation_max_depth": config.citation_max_depth,
+        "citation_relevance_threshold": config.citation_relevance_threshold,
+        "search_accept_max_records": config.search_accept_max_records,
         "target_min": config.target_min,
         "target_max": config.target_max,
         "max_iterations": config.max_iterations,
@@ -146,9 +149,15 @@ def _authors_from_paper(paper: dict[str, Any]) -> list[str]:
 
 
 class HistoryStore:
-    def __init__(self, db_path: Optional[Union[Path, str]] = None, enabled: Optional[bool] = None):
+    def __init__(
+        self,
+        db_path: Optional[Union[Path, str]] = None,
+        enabled: Optional[bool] = None,
+        timezone_name: Optional[str] = None,
+    ):
         self.db_path = Path(db_path).expanduser() if db_path is not None else history_db_path()
         self._enabled = history_enabled() if enabled is None else enabled
+        self._timezone_name = (timezone_name or "").strip()
         self._schema_ready = False
 
     @property
@@ -160,6 +169,9 @@ class HistoryStore:
             "enabled": self.enabled,
             "path": str(self.db_path),
         }
+
+    def _now(self) -> str:
+        return paperseek_history_now(self._timezone_name)
 
     def _connect(self) -> sqlite3.Connection:
         if not self.enabled:
@@ -255,7 +267,7 @@ class HistoryStore:
         if not self.enabled:
             return ""
         run_id = f"run_{uuid.uuid4().hex[:12]}"
-        now = utc_now()
+        now = self._now()
         try:
             with self._connection() as conn:
                 conn.execute(
@@ -289,7 +301,7 @@ class HistoryStore:
                         str(safe_event.get("status", "")),
                         str(safe_event.get("message", "")),
                         _json_dumps(safe_event),
-                        utc_now(),
+                        self._now(),
                     ),
                 )
         except Exception:
@@ -320,7 +332,7 @@ class HistoryStore:
                         "success",
                         _json_dumps(safe_payload.get("history") or []),
                         _json_dumps(safe_payload.get("citation_map") or {}),
-                        utc_now(),
+                        self._now(),
                         run_id,
                     ),
                 )
@@ -339,7 +351,7 @@ class HistoryStore:
                     SET status = ?, error_message = ?, finished_at = ?
                     WHERE id = ?
                     """,
-                    ("error", str(error_message or ""), utc_now(), run_id),
+                    ("error", str(error_message or ""), self._now(), run_id),
                 )
         except Exception:
             return

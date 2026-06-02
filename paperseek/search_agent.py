@@ -10,12 +10,15 @@ from paperseek.prompts import (
     SYSTEM_QUERY_GENERATION,
     SYSTEM_QUERY_BROADEN,
     SYSTEM_QUERY_NARROW,
+    SYSTEM_QUERY_FALLBACK,
     SYSTEM_OPENALEX_QUERY_GENERATION,
     SYSTEM_OPENALEX_QUERY_BROADEN,
     SYSTEM_OPENALEX_QUERY_NARROW,
+    SYSTEM_OPENALEX_QUERY_FALLBACK,
     SYSTEM_CROSSREF_QUERY_GENERATION,
     SYSTEM_CROSSREF_QUERY_BROADEN,
     SYSTEM_CROSSREF_QUERY_NARROW,
+    SYSTEM_CROSSREF_QUERY_FALLBACK,
     SYSTEM_RESULT_RANKING,
 )
 from paperseek.abstract_fetcher import AbstractFetcher
@@ -188,75 +191,31 @@ class WosSearchAgent:
             wos_cfg = Configuration(api_key={"ClarivateApiKeyAuth": config.wos_api_key})
             self.documents_api = DocumentsApi(ApiClient(configuration=wos_cfg))
 
-    def search(self, question: str, verbose: bool = False, event_handler: Optional[Callable[[dict], None]] = None) -> dict:
+    def search(
+        self,
+        question: str,
+        verbose: bool = False,
+        event_handler: Optional[Callable[[dict], None]] = None,
+        initial_query: Optional[str] = None,
+    ) -> dict:
         """Main entry: natural language question -> dict with results and metadata."""
         self.event_handler = event_handler
         try:
-            return self._search(question, verbose=verbose)
+            return self._search(question, verbose=verbose, initial_query=initial_query)
         finally:
             self.event_handler = None
 
-    def _search(self, question: str, verbose: bool = False) -> dict:
-        query = self._generate_query(question)
+    def _search(self, question: str, verbose: bool = False, initial_query: Optional[str] = None) -> dict:
+        query = self._initial_query(question, initial_query)
         history = []
         iteration = 0
         total = 0
         hits = []
+        fallback_used = False
 
         for iteration in range(1, self.config.max_iterations + 1):
-            safe_query = _make_starter_safe_query(query) if self.data_source == "wos" else query
-            if self.data_source == "wos" and safe_query != query:
-                row = {
-                    "iteration": iteration,
-                    "query": query,
-                    "total": None,
-                    "action": "sanitize",
-                    "next_query": safe_query,
-                    "message": "Converted the generated query to the stable WoS Starter subset before calling the API.",
-                }
-                history.append(row)
-                self._emit_stage("search", "processing", history=history, final_query=safe_query)
-                query = safe_query
-
-            if verbose:
-                print(f"[Iteration {iteration}] Query: {query}", file=sys.stderr)
-
-            server_error_variants = _server_error_query_variants(query)
             try:
-                while True:
-                    try:
-                        self._emit_stage(
-                            "search",
-                            "processing",
-                            iteration=iteration,
-                            query=query,
-                            history=history,
-                            final_query=query,
-                        )
-                        self._emit_log(f"{self._source_label()} request started: {self._source_request_label(query)}")
-                        result = self._provider_search(query)
-                        self._emit_log(self._source_response_log(result))
-                        break
-                    except ApiException as e:
-                        if e.status == 512 and server_error_variants:
-                            repaired_query = server_error_variants.pop(0)
-                            if repaired_query != query:
-                                action = "repair" if "NEAR/" in repaired_query.upper() else "simplify"
-                                row = {
-                                    "iteration": iteration,
-                                    "query": query,
-                                    "total": None,
-                                    "action": action,
-                                    "next_query": repaired_query,
-                                    "message": "WoS returned HTTP 512; rewrote the query into a simpler supported form and retried.",
-                                }
-                                history.append(row)
-                                self._emit_stage("search", "processing", history=history, final_query=repaired_query)
-                                query = repaired_query
-                                if verbose:
-                                    print(f"[Iteration {iteration}] Rewrote query after 512: {query}", file=sys.stderr)
-                                continue
-                        raise
+                query, result = self._run_source_iteration(iteration, query, history, verbose)
             except ApiException as e:
                 if e.status == 400 and "query" in str(e.body).lower():
                     current_query = query
@@ -281,6 +240,37 @@ class WosSearchAgent:
 
             if verbose:
                 print(f"[Iteration {iteration}] Total results: {total}", file=sys.stderr)
+
+            if self._source_count_is_acceptable(total):
+                action = "accept"
+                if total > self.config.target_max:
+                    action = "accept_relaxed"
+                    message = (
+                        f"Accepted {total} source records. This is above the final output target of {self.config.target_max}, "
+                        f"but within the source candidate cap of {self.config.search_accept_max_records}; ranking will select the best papers."
+                    )
+                elif total < self.config.target_min:
+                    action = "accept_low"
+                    message = f"Accepted {total} records, below the target minimum of {self.config.target_min}, because no further refinement is needed."
+                else:
+                    message = f"Accepted {total} records within the target range."
+                history.append({
+                    "iteration": iteration,
+                    "query": query,
+                    "total": total,
+                    "action": action,
+                    "next_query": None,
+                    "message": message,
+                })
+                self._emit_stage(
+                    "search",
+                    "complete",
+                    total=total,
+                    history=history,
+                    final_query=query,
+                    preview=self._preview_hits(hits),
+                )
+                break
 
             if total == 0 and iteration < self.config.max_iterations:
                 current_query = query
@@ -310,7 +300,7 @@ class WosSearchAgent:
                 history.append(row)
                 self._emit_stage("search", "processing", total=total, history=history, final_query=query, preview=self._preview_hits(hits))
                 continue
-            elif total > self.config.target_max and iteration < self.config.max_iterations:
+            elif total > self.config.search_accept_max_records and iteration < self.config.max_iterations:
                 current_query = query
                 query = self._narrow_query(question, query)
                 row = {
@@ -319,33 +309,59 @@ class WosSearchAgent:
                     "total": total,
                     "action": "narrow",
                     "next_query": query,
-                    "message": f"{total} records found, above the target maximum of {self.config.target_max}; generated a narrower query.",
+                    "message": f"{total} records found, above the source candidate cap of {self.config.search_accept_max_records}; generated a narrower query.",
                 }
                 history.append(row)
                 self._emit_stage("search", "processing", total=total, history=history, final_query=query, preview=self._preview_hits(hits))
                 continue
             else:
-                if total == 0:
-                    action = "empty"
-                    message = "No records found before the iteration limit was reached."
-                elif total < self.config.target_min:
-                    action = "accept_low"
-                    message = f"Accepted {total} records at the iteration limit, below the target minimum of {self.config.target_min}."
-                elif total > self.config.target_max:
-                    action = "accept_high"
-                    message = f"Accepted {total} records at the iteration limit, above the target maximum of {self.config.target_max}."
-                else:
-                    action = "accept"
-                    message = f"Accepted {total} records within the target range."
-                row = {
+                if not fallback_used:
+                    current_query = query
+                    fallback_query = self._fallback_query(question, history, current_query, total)
+                    fallback_used = True
+                    if fallback_query and fallback_query != current_query:
+                        query = fallback_query
+                        history.append({
+                            "iteration": iteration,
+                            "query": current_query,
+                            "total": total,
+                            "action": "fallback",
+                            "next_query": query,
+                            "message": (
+                                "Final iteration still produced an unusable source count; rebuilt one fallback query "
+                                "from the previous refinement history."
+                            ),
+                        })
+                        self._emit_stage(
+                            "search",
+                            "processing",
+                            total=total,
+                            history=history,
+                            final_query=query,
+                            preview=self._preview_hits(hits),
+                            fallback=True,
+                        )
+                        iteration += 1
+                        try:
+                            query, result = self._run_source_iteration(iteration, query, history, verbose)
+                            total = result.metadata.total if result.metadata and result.metadata.total is not None else 0
+                            hits = result.hits or []
+                        except ApiException as e:
+                            e.query = query
+                            e.iteration = iteration
+                            raise
+                    else:
+                        self._emit_log("Fallback query reconstruction returned the same query; accepting the final source response.")
+
+                action, message = self._final_source_action(total)
+                history.append({
                     "iteration": iteration,
                     "query": query,
                     "total": total,
                     "action": action,
                     "next_query": None,
                     "message": message,
-                }
-                history.append(row)
+                })
                 self._emit_stage(
                     "search",
                     "complete",
@@ -360,6 +376,7 @@ class WosSearchAgent:
             if verbose:
                 print(f"[Done] {total} total results after {self.config.max_iterations} iterations.", file=sys.stderr)
 
+        hits = self._collect_source_candidates(query, hits, total)
         candidates = self._prepare_candidates(question, hits)
         self._emit_stage("ranking", "processing", candidate_count=len(candidates))
         ranked = self._rank_results(question, candidates)[: self.config.target_max]
@@ -386,14 +403,183 @@ class WosSearchAgent:
             "ranked": ranked,
         }
 
-    def _provider_search(self, query: str):
+    def _provider_search(self, query: str, page: int = 1, limit: Optional[int] = None):
+        request_limit = limit or self._candidate_limit()
         if self.data_source in ("openalex", "crossref"):
-            return self.provider.search(query=query, limit=self._candidate_limit())
+            return self.provider.search(query=query, limit=request_limit, page=page)
         return self.documents_api.documents_get(
             q=query,
             db=self.config.wos_db,
-            limit=self._candidate_limit(),
+            limit=request_limit,
         )
+
+    def _collect_source_candidates(self, query: str, hits: list, total: int) -> list:
+        candidates = self._dedupe_documents(list(hits or []))
+        if self.data_source not in ("openalex", "crossref") or not self.provider:
+            return candidates
+        desired = min(
+            int(total or 0),
+            int(getattr(self.config, "search_accept_max_records", 1000) or 1000),
+        )
+        if desired <= len(candidates) or desired <= 0:
+            return candidates
+
+        page_size = self._candidate_limit()
+        page = 2
+        self._emit_log(f"Source candidate paging started: fetching up to {desired} records for ranking.")
+        while len(candidates) < desired:
+            self._emit_log(f"{self._source_label()} candidate page request started: page={page}; limit={page_size}.")
+            result = self._provider_search(query, page=page, limit=page_size)
+            self._emit_log(self._source_response_log(result))
+            page_hits = result.hits or []
+            if not page_hits:
+                break
+            before = len(candidates)
+            candidates = self._dedupe_documents(candidates + page_hits)
+            if len(candidates) == before:
+                break
+            if len(candidates) >= desired:
+                candidates = candidates[:desired]
+                break
+            if len(page_hits) < page_size:
+                break
+            page += 1
+
+        self._emit_log(f"Source candidate paging completed: fetched {len(candidates)} records for ranking.")
+        self._emit_stage("search", "complete", total=total, final_query=query, fetched_candidates=len(candidates), preview=self._preview_hits(candidates))
+        return candidates
+
+    def _initial_query(self, question: str, initial_query: Optional[str]) -> str:
+        if not (initial_query or "").strip():
+            return self._generate_query(question)
+        if self.data_source == "wos":
+            query = _make_starter_safe_query(_extract_query(initial_query or ""))
+        else:
+            query = _extract_openalex_query(initial_query or "")
+        self._emit_stage("query", "complete", source=self.data_source, query=query, resumed=True)
+        self._emit_log("Query generation skipped: using supplied initial query checkpoint.")
+        return query
+
+    def _run_source_iteration(self, iteration: int, query: str, history: list, verbose: bool):
+        safe_query = _make_starter_safe_query(query) if self.data_source == "wos" else query
+        if self.data_source == "wos" and safe_query != query:
+            row = {
+                "iteration": iteration,
+                "query": query,
+                "total": None,
+                "action": "sanitize",
+                "next_query": safe_query,
+                "message": "Converted the generated query to the stable WoS Starter subset before calling the API.",
+            }
+            history.append(row)
+            self._emit_stage("search", "processing", history=history, final_query=safe_query)
+            query = safe_query
+
+        if verbose:
+            print(f"[Iteration {iteration}] Query: {query}", file=sys.stderr)
+
+        server_error_variants = _server_error_query_variants(query)
+        while True:
+            try:
+                self._emit_stage(
+                    "search",
+                    "processing",
+                    iteration=iteration,
+                    query=query,
+                    history=history,
+                    final_query=query,
+                    source_accept_max_records=self.config.search_accept_max_records,
+                )
+                self._emit_log(f"{self._source_label()} request started: {self._source_request_label(query)}")
+                result = self._provider_search(query)
+                self._emit_log(self._source_response_log(result))
+                return query, result
+            except ApiException as e:
+                if e.status == 512 and server_error_variants:
+                    repaired_query = server_error_variants.pop(0)
+                    if repaired_query != query:
+                        action = "repair" if "NEAR/" in repaired_query.upper() else "simplify"
+                        row = {
+                            "iteration": iteration,
+                            "query": query,
+                            "total": None,
+                            "action": action,
+                            "next_query": repaired_query,
+                            "message": "WoS returned HTTP 512; rewrote the query into a simpler supported form and retried.",
+                        }
+                        history.append(row)
+                        self._emit_stage("search", "processing", history=history, final_query=repaired_query)
+                        query = repaired_query
+                        if verbose:
+                            print(f"[Iteration {iteration}] Rewrote query after 512: {query}", file=sys.stderr)
+                        continue
+                raise
+
+    def _source_count_is_acceptable(self, total: int) -> bool:
+        minimum = max(0, int(getattr(self.config, "target_min", 5) or 0))
+        maximum = max(int(getattr(self.config, "target_max", 50) or 50), int(getattr(self.config, "search_accept_max_records", 1000) or 1000))
+        return int(total or 0) >= minimum and int(total or 0) <= maximum
+
+    def _final_source_action(self, total: int) -> tuple:
+        total = int(total or 0)
+        if total == 0:
+            return "empty", "No records found before the fallback limit was reached."
+        if total < int(self.config.target_min or 0):
+            return "accept_low", f"Accepted {total} records after fallback, below the target minimum of {self.config.target_min}."
+        if total > int(self.config.search_accept_max_records or 1000):
+            return "accept_high", (
+                f"Accepted {total} records after fallback, still above the source candidate cap of "
+                f"{self.config.search_accept_max_records}. Ranking will use the returned page only."
+            )
+        if total > int(self.config.target_max or 50):
+            return "accept_relaxed", (
+                f"Accepted {total} source records after fallback, above the final output target of {self.config.target_max} "
+                f"but within the source candidate cap."
+            )
+        return "accept", f"Accepted {total} records within the target range."
+
+    def _fallback_query(self, question: str, history: list, current_query: str, total: int) -> str:
+        if self.data_source == "openalex":
+            system_prompt = SYSTEM_OPENALEX_QUERY_FALLBACK
+            purpose = "openalex_query_fallback"
+        elif self.data_source == "crossref":
+            system_prompt = SYSTEM_CROSSREF_QUERY_FALLBACK
+            purpose = "crossref_query_fallback"
+        else:
+            system_prompt = SYSTEM_QUERY_FALLBACK
+            purpose = "wos_query_fallback"
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": (
+                f"Research question: {question}\n"
+                f"Target final output range: {self.config.target_min}-{self.config.target_max}\n"
+                f"Acceptable source candidate cap: {self.config.search_accept_max_records}\n"
+                f"Latest query: {current_query}\n"
+                f"Latest total records: {total}\n\n"
+                f"Query history:\n{self._format_query_history(history)}\n\n"
+                f"Output ONLY the replacement query string."
+            )},
+        ]
+        self._llm_request_log(purpose)
+        raw = self.llm.chat(messages, temperature=0.4)
+        self._llm_response_log(purpose)
+        if self.data_source == "wos":
+            query = _make_starter_safe_query(_extract_query(raw))
+        else:
+            query = _extract_openalex_query(raw)
+        self._emit_stage("query", "complete", source=self.data_source, query=query, fallback=True)
+        return query
+
+    @staticmethod
+    def _format_query_history(history: list) -> str:
+        rows = []
+        for row in history or []:
+            rows.append(
+                f"- iteration={row.get('iteration')} action={row.get('action')} total={row.get('total')} "
+                f"query={row.get('query')} next={row.get('next_query')}"
+            )
+        return "\n".join(rows) if rows else "(no previous query history)"
 
     def _candidate_limit(self) -> int:
         output_limit = max(1, min(int(self.config.target_max or 50), 50))
@@ -437,33 +623,95 @@ class WosSearchAgent:
             self.citation_map.update({"status": "no_seeds"})
             return candidates
 
-        try:
-            citation_data = self.provider.citation_neighbors_with_graph(
-                seeds,
-                per_seed=getattr(self.config, "citation_per_seed", 4),
-                max_records=getattr(self.config, "citation_max_records", 40),
-            )
-        except ProviderError as exc:
-            self._emit_log(f"Citation expansion skipped after OpenAlex error: {exc}")
-            self.citation_map.update({"status": "error", "error": str(exc)})
-            return candidates
-
-        related = citation_data.get("records", [])
         before = len(candidates)
-        candidates = self._dedupe_documents(candidates + related)
+        threshold = max(1.0, min(float(getattr(self.config, "citation_relevance_threshold", 7.0) or 7.0), 10.0))
+        max_depth = max(1, int(getattr(self.config, "citation_max_depth", 3) or 3))
+        max_records = max(1, int(getattr(self.config, "citation_max_records", 40) or 40))
+        per_seed = max(1, int(getattr(self.config, "citation_per_seed", 4) or 4))
+        frontier = list(seeds)
+        cumulative_nodes = {}
+        cumulative_edges = []
+        edge_keys = set()
+        added_candidates = []
+        stop_reason = "max_depth"
+        depth_reached = 0
+
+        for depth in range(1, max_depth + 1):
+            remaining = max_records - len(added_candidates)
+            if remaining <= 0:
+                stop_reason = "max_records"
+                break
+            self._emit_log(
+                f"Citation expansion depth {depth}/{max_depth}: fetching references and citing works for {len(frontier)} seed papers."
+            )
+            try:
+                citation_data = self.provider.citation_neighbors_with_graph(
+                    frontier,
+                    per_seed=per_seed,
+                    max_records=remaining,
+                )
+            except ProviderError as exc:
+                self._emit_log(f"Citation expansion stopped after OpenAlex error: {exc}")
+                self.citation_map.update({"status": "error", "error": str(exc)})
+                stop_reason = "provider_error"
+                break
+
+            self._merge_citation_graph(cumulative_nodes, cumulative_edges, edge_keys, citation_data)
+            related = [
+                doc for doc in self._dedupe_documents(citation_data.get("records", []))
+                if not self._document_seen(doc, candidates + added_candidates)
+            ]
+            if not related:
+                stop_reason = "no_new_neighbors"
+                depth_reached = depth
+                self._emit_log(f"Citation expansion depth {depth}: no new citation-neighbor papers found.")
+                break
+
+            ranked_related = self._rank_results(question, related)
+            high_value = [
+                entry for entry in ranked_related
+                if entry.get("document") is not None and float(entry.get("score") or 0) >= threshold
+            ]
+            if not high_value:
+                stop_reason = "no_high_value_neighbors"
+                depth_reached = depth
+                self._emit_log(
+                    f"Citation expansion depth {depth}: fetched {len(related)} papers, but none reached relevance threshold {threshold:g}; traversal stopped."
+                )
+                break
+
+            high_docs = [entry["document"] for entry in high_value]
+            added_candidates = self._dedupe_documents(added_candidates + high_docs)
+            frontier = high_docs[:seed_limit]
+            depth_reached = depth
+            self._emit_log(
+                f"Citation expansion depth {depth}: added {len(high_docs)} high-value papers; candidate pool={len(candidates) + len(added_candidates)}."
+            )
+            if len(added_candidates) >= max_records:
+                stop_reason = "max_records"
+                break
+
+        candidates = self._dedupe_documents(candidates + added_candidates)
         added = len(candidates) - before
         self.citation_map.update({
             "enabled": True,
             "supported": True,
-            "status": "complete",
+            "status": "partial" if stop_reason == "provider_error" else "complete",
             "initial_candidates": len(hits or []),
             "seed_count": len(seeds),
             "added_candidates": added,
             "candidate_pool": len(candidates),
-            "nodes": citation_data.get("nodes", []),
-            "edges": citation_data.get("edges", []),
+            "max_depth": max_depth,
+            "depth_reached": depth_reached,
+            "relevance_threshold": threshold,
+            "stop_reason": stop_reason,
+            "nodes": list(cumulative_nodes.values()),
+            "edges": cumulative_edges,
         })
-        self._emit_log(f"Citation expansion completed: added {added} citation-neighbor candidates; candidate pool={len(candidates)}.")
+        self._emit_log(
+            f"Citation expansion completed: added {added} high-value citation-neighbor candidates; "
+            f"depth_reached={depth_reached}; stop_reason={stop_reason}; candidate pool={len(candidates)}."
+        )
         self._emit_stage("ranking", "processing", candidate_count=len(candidates))
         return candidates
 
@@ -476,9 +724,48 @@ class WosSearchAgent:
             "seed_count": 0,
             "added_candidates": 0,
             "candidate_pool": candidate_pool,
+            "max_depth": 0,
+            "depth_reached": 0,
+            "relevance_threshold": 0,
+            "stop_reason": "",
             "nodes": [],
             "edges": [],
         }
+
+    @staticmethod
+    def _document_key(doc) -> str:
+        identifiers = getattr(doc, "identifiers", None)
+        doi = (getattr(identifiers, "doi", "") if identifiers else "") or ""
+        return (doi or getattr(doc, "uid", "") or getattr(doc, "title", "")).strip().lower()
+
+    def _document_seen(self, doc, documents: list) -> bool:
+        key = self._document_key(doc)
+        if not key:
+            return True
+        return key in {self._document_key(item) for item in documents or []}
+
+    @staticmethod
+    def _merge_citation_graph(nodes: dict, edges: list, edge_keys: set, citation_data: dict) -> None:
+        for node in citation_data.get("nodes", []) or []:
+            node_id = node.get("id")
+            if not node_id:
+                continue
+            existing = nodes.get(node_id)
+            if not existing:
+                nodes[node_id] = dict(node)
+                continue
+            for role in node.get("roles", []) or []:
+                if role not in existing.setdefault("roles", []):
+                    existing["roles"].append(role)
+            for seed_uid in node.get("seed_uids", []) or []:
+                if seed_uid not in existing.setdefault("seed_uids", []):
+                    existing["seed_uids"].append(seed_uid)
+        for edge in citation_data.get("edges", []) or []:
+            edge_key = (edge.get("source"), edge.get("target"), edge.get("type"), edge.get("seed"))
+            if edge_key in edge_keys:
+                continue
+            edge_keys.add(edge_key)
+            edges.append(dict(edge))
 
     def _finalize_citation_map(self, ranked: list) -> None:
         if not self.citation_map:
@@ -756,7 +1043,19 @@ class WosSearchAgent:
     def _rank_results(self, question: str, documents: list) -> list:
         if not documents:
             return []
+        batch_size = 80
+        if len(documents) > batch_size:
+            ranked = []
+            total_batches = (len(documents) + batch_size - 1) // batch_size
+            for batch_index, start in enumerate(range(0, len(documents), batch_size), 1):
+                batch = documents[start:start + batch_size]
+                self._emit_log(f"LLM ranking batch {batch_index}/{total_batches} started: {len(batch)} candidate records.")
+                ranked.extend(self._rank_result_batch(question, batch))
+            return sorted(ranked, key=lambda item: float(item.get("score") or 0), reverse=True)
 
+        return self._rank_result_batch(question, documents)
+
+    def _rank_result_batch(self, question: str, documents: list) -> list:
         descriptions = []
         for i, doc in enumerate(documents, 1):
             descriptions.append(_describe_document(doc, i))

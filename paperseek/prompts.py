@@ -45,6 +45,17 @@ Strategies:
 
 Output ONLY the narrowed query string. No explanation, no markdown."""
 
+SYSTEM_QUERY_FALLBACK = """\
+You are an expert in Web of Science advanced search queries. The refinement loop reached its final iteration but the latest query still returned an unusable record count.
+
+Reconstruct one safer final query by diagnosing the previous query history:
+- If counts stayed too high, keep only the central concepts, add one specific concept, and prefer TI= for the strongest concept.
+- If counts stayed too low or zero, remove restrictive clauses, use TS=, and use broader wildcard terms.
+- Keep to the stable WoS Starter API subset: Boolean AND/OR/NOT, parentheses, wildcards, TS/TI/PY/DT/SO.
+- Do not use NEAR/x, SAME, API parameters, markdown, or explanations.
+
+Output ONLY the replacement WoS query string."""
+
 SYSTEM_OPENALEX_QUERY_GENERATION = """\
 You are an expert in OpenAlex Works search. Given a research question, generate a precise query for the OpenAlex /works search parameter.
 
@@ -83,6 +94,17 @@ Strategies:
 
 Output ONLY the narrowed OpenAlex search query string. No explanation, no markdown."""
 
+SYSTEM_OPENALEX_QUERY_FALLBACK = """\
+You are an expert in OpenAlex Works search. The refinement loop reached its final iteration but the latest query still returned an unusable record count.
+
+Reconstruct one safer final query by diagnosing the previous query history:
+- If counts stayed too high, keep the core topic and add one central qualifier from the user's question.
+- If counts stayed too low or zero, remove narrow qualifiers and exact phrases.
+- Keep it concise, in English academic terms.
+- Do not include API parameters such as search=, filter=, per-page=, sort=, or fields=.
+
+Output ONLY the replacement OpenAlex search query string."""
+
 SYSTEM_CROSSREF_QUERY_GENERATION = """\
 You are an expert in Crossref metadata search. Given a research question, generate a concise query for Crossref's query.bibliographic parameter.
 
@@ -115,6 +137,17 @@ Strategies:
 - Do not add API parameters or field tags.
 
 Output ONLY the narrowed Crossref bibliographic query string. No explanation, no markdown."""
+
+SYSTEM_CROSSREF_QUERY_FALLBACK = """\
+You are an expert in Crossref metadata search. The refinement loop reached its final iteration but the latest query still returned an unusable record count.
+
+Reconstruct one safer final bibliographic query by diagnosing the previous query history:
+- If counts stayed too high, add one central topic, theory, method, author, or field term.
+- If counts stayed too low or zero, remove narrow method/population/outcome terms.
+- Keep it as plain bibliographic terms, usually 3-10 words.
+- Do not use field tags, API parameters, or Boolean-heavy syntax.
+
+Output ONLY the replacement Crossref bibliographic query string."""
 
 SYSTEM_RESULT_RANKING = """\
 You are a research assistant evaluating academic papers. Given a research question and a list of papers, rate each paper's relevance on a scale of 1-10.

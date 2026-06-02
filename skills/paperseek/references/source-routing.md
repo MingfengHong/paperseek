@@ -33,7 +33,7 @@ Use WoS only when:
 
 ## Citation Expansion
 
-Citation expansion is OpenAlex-only. It can add forward and backward citation neighbors from high-scoring seed papers, then rerank the expanded candidate pool.
+Citation expansion is OpenAlex-only. It traverses forward citations and backward references from high-scoring seed papers across multiple depths. Each depth is reranked, and traversal stops when no newly fetched papers meet the relevance threshold, when the depth or record cap is reached, or when OpenAlex errors out.
 
 Use it when:
 

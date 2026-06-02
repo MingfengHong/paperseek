@@ -38,6 +38,10 @@ FIELD_LABELS = {
     "llm_api_key": "LLM API Key",
     "llm_api_type": "LLM API Type",
     "expand_citations": "Expand Citations",
+    "initial_query": "Initial Query",
+    "search_accept_max_records": "Source Candidate Cap",
+    "citation_max_depth": "Citation Max Depth",
+    "citation_relevance_threshold": "Citation Relevance Threshold",
     "target_min": "Min Results",
     "target_max": "Max Results",
     "max_iterations": "Iterations",
@@ -58,8 +62,13 @@ class SearchRequest(BaseModel):
     llm_base_url: Optional[str] = None
     wos_db: str = "WOS"
     search_field: Optional[str] = ""
+    initial_query: Optional[str] = ""
+    client_timezone: Optional[str] = ""
     fetch_abstracts: bool = False
     expand_citations: bool = True
+    search_accept_max_records: int = Field(default=1000, ge=1, le=100000)
+    citation_max_depth: int = Field(default=3, ge=1, le=8)
+    citation_relevance_threshold: float = Field(default=7.0, ge=1.0, le=10.0)
     target_min: int = Field(default=5, ge=0, le=50)
     target_max: int = Field(default=50, ge=1, le=50)
     max_iterations: int = Field(default=5, ge=1, le=10)
@@ -105,8 +114,13 @@ class DiagnosticRequest(BaseModel):
     llm_base_url: Optional[str] = None
     wos_db: str = "WOS"
     search_field: Optional[str] = ""
+    initial_query: Optional[str] = ""
+    client_timezone: Optional[str] = ""
     fetch_abstracts: bool = False
     expand_citations: bool = True
+    search_accept_max_records: int = Field(default=1000, ge=1, le=100000)
+    citation_max_depth: int = Field(default=3, ge=1, le=8)
+    citation_relevance_threshold: float = Field(default=7.0, ge=1.0, le=10.0)
     target_min: int = Field(default=5, ge=0, le=50)
     target_max: int = Field(default=50, ge=1, le=50)
     max_iterations: int = Field(default=5, ge=1, le=10)
@@ -212,6 +226,8 @@ def sources():
 def _validate_payload(payload: SearchRequest):
     if payload.target_min > payload.target_max:
         raise HTTPException(status_code=400, detail="Target minimum cannot exceed target maximum.")
+    if payload.search_accept_max_records < payload.target_max:
+        raise HTTPException(status_code=400, detail="Source candidate cap cannot be lower than Max Results.")
     if payload.data_source == "wos" and not (payload.wos_api_key or "").strip():
         raise HTTPException(status_code=400, detail="WoS API Key is required for WoS searches.")
 
@@ -235,6 +251,9 @@ def _config_from_payload(payload: SearchRequest) -> AgentConfig:
     config.search_field = payload.search_field or ""
     config.fetch_abstracts = payload.fetch_abstracts
     config.expand_citations = payload.expand_citations
+    config.search_accept_max_records = payload.search_accept_max_records
+    config.citation_max_depth = payload.citation_max_depth
+    config.citation_relevance_threshold = payload.citation_relevance_threshold
     config.target_min = payload.target_min
     config.target_max = payload.target_max
     config.max_iterations = payload.max_iterations
@@ -305,14 +324,14 @@ def history_clear(confirm: bool = Query(default=False)):
 def search(payload: SearchRequest):
     _validate_payload(payload)
     config = _config_from_payload(payload)
-    store = HistoryStore()
+    store = HistoryStore(timezone_name=payload.client_timezone)
     run_id = store.create_run(payload.question, safe_search_params_from_config(config))
 
     try:
         config.validate()
         llm = create_llm_client(config)
         agent = WosSearchAgent(config, llm)
-        result = agent.search(payload.question, verbose=False)
+        result = agent.search(payload.question, verbose=False, initial_query=payload.initial_query)
         response = _response_payload(result, payload.data_source)
         if run_id:
             response["run_id"] = run_id
@@ -348,7 +367,7 @@ def search_stream(payload: SearchRequest):
 
     def generator():
         events: Queue = Queue()
-        store = HistoryStore()
+        store = HistoryStore(timezone_name=payload.client_timezone)
         run_id = ""
 
         def send(event: dict):
@@ -369,7 +388,7 @@ def search_stream(payload: SearchRequest):
                     "message": (
                         f"Runtime config: source={config.data_source}; llm_provider={config.llm_provider}; "
                         f"api_type={config.llm_api_type}; model={config.llm_model}; target={config.target_min}-{config.target_max}; "
-                        f"iterations={config.max_iterations}."
+                        f"source_cap={config.search_accept_max_records}; iterations={config.max_iterations}."
                     ),
                 })
                 config.validate()
@@ -377,7 +396,12 @@ def search_stream(payload: SearchRequest):
                 llm = create_llm_client(config)
                 send({"type": "log", "message": "Initializing source adapter."})
                 agent = WosSearchAgent(config, llm)
-                result = agent.search(payload.question, verbose=False, event_handler=send)
+                result = agent.search(
+                    payload.question,
+                    verbose=False,
+                    event_handler=send,
+                    initial_query=payload.initial_query,
+                )
                 response = _response_payload(result, payload.data_source)
                 if run_id:
                     response["run_id"] = run_id

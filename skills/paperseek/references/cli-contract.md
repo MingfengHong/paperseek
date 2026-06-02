@@ -39,8 +39,12 @@ Common flags:
 | `--source openalex|crossref|wos` | Literature source. Default is OpenAlex. |
 | `--field FIELD` | Optional discipline or field hint. |
 | `--min N` / `--max N` | Target result range. |
+| `--accept-max N` | Source record cap accepted before ranking. Default is 1000. |
 | `--iterations N` | Maximum query broaden/narrow cycles. |
 | `--no-expand-citations` | Disable OpenAlex citation expansion. |
+| `--citation-depth N` | Maximum OpenAlex citation traversal depth. |
+| `--citation-threshold N` | Minimum relevance score required to continue citation traversal. |
+| `--initial-query QUERY` | Resume from a known source query and skip query generation. |
 | `--fetch-abstracts` | Try DOI-based external abstract enrichment for WoS. |
 | `--output json` or `--json` | Machine-readable output. |
 
@@ -132,8 +136,15 @@ Common variables:
 - `WOS_DB`
 - `TARGET_MIN`
 - `TARGET_MAX`
+- `SEARCH_ACCEPT_MAX_RECORDS`
 - `MAX_ITERATIONS`
 - `EXPAND_CITATIONS`
+- `CITATION_SEED_COUNT`
+- `CITATION_PER_SEED`
+- `CITATION_MAX_RECORDS`
+- `CITATION_MAX_DEPTH`
+- `CITATION_RELEVANCE_THRESHOLD`
+- `PAPERSEEK_TIMEZONE`
 - `PAPERSEEK_HISTORY_ENABLED`
 - `PAPERSEEK_DATA_DIR`
 - `PAPERSEEK_HISTORY_DB`
@@ -153,6 +164,8 @@ paperseek history clear --yes
 ```
 
 History records may include research questions, generated queries, run events, errors, citation-map metadata, and ranked paper metadata. They must not include raw API keys. Agents may use history for user-requested recall, but should not assume it is a cloud-synced account history.
+
+If a run fails after query generation, inspect `final_query` or the latest source-request event and rerun with `--initial-query`. This resumes from Source Request by skipping query generation. It is not a full arbitrary-stage checkpoint replay for cached candidates or ranking inputs.
 
 ## Diagnostics Contract
 

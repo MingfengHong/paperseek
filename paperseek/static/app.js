@@ -61,8 +61,51 @@ let historyStatus = { enabled: true, path: "" };
 let historyLoading = false;
 let historyError = "";
 
+const fallbackTimeZone = "Asia/Shanghai";
+const clientTimeZone = detectClientTimeZone();
+
+function detectClientTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || fallbackTimeZone;
+  } catch (_) {
+    return fallbackTimeZone;
+  }
+}
+
+function zonedDateParts(date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: clientTimeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
+    return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  } catch (_) {
+    const fallback = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+    return {
+      year: String(fallback.getUTCFullYear()),
+      month: String(fallback.getUTCMonth() + 1).padStart(2, "0"),
+      day: String(fallback.getUTCDate()).padStart(2, "0"),
+      hour: String(fallback.getUTCHours()).padStart(2, "0"),
+      minute: String(fallback.getUTCMinutes()).padStart(2, "0"),
+      second: String(fallback.getUTCSeconds()).padStart(2, "0"),
+    };
+  }
+}
+
 function nowStamp() {
-  return new Date().toLocaleTimeString("en-GB", { hour12: false });
+  const parts = zonedDateParts();
+  return `${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+function dateStamp() {
+  const parts = zonedDateParts();
+  return `${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}`;
 }
 
 function log(message) {
@@ -182,12 +225,28 @@ function updateExportButtons() {
   }
 }
 
-function slugPart(value) {
-  return String(value || "literature-search")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "literature-search";
+function filenamePart(value, fallback = "literature-search") {
+  const raw = String(value || fallback).normalize("NFKC").trim();
+  let cleaned = "";
+  try {
+    cleaned = raw
+      .replace(/[^\p{L}\p{N}]+/gu, "-")
+      .replace(/^-+|-+$/g, "");
+  } catch (_) {
+    cleaned = raw
+      .replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+  return cleaned.slice(0, 64) || fallback;
+}
+
+function exportQuestionTheme() {
+  return (
+    (latestResult && latestResult.question) ||
+    (latestPayload && latestPayload.question) ||
+    getValue("question") ||
+    "literature-search"
+  );
 }
 
 function downloadText(filename, content, type) {
@@ -1154,6 +1213,9 @@ function applyStageEvent(event) {
     stage.body = renderHistory(data.history || [], data.final_query || data.query || "", data.preview || []);
     if (data.total !== undefined && data.total !== null) {
       stage.description = `Latest source response returned ${data.total} records.`;
+      if (data.fetched_candidates) {
+        stage.description += ` Fetched ${data.fetched_candidates} candidates for ranking.`;
+      }
     }
   }
 
@@ -1275,8 +1337,22 @@ function validatePayload(payload) {
   if (payload.target_min > payload.target_max) {
     return { ok: false, message: "Min Results cannot exceed Max Results.", fieldId: "targetMin" };
   }
+  if (!Number.isFinite(payload.search_accept_max_records) || payload.search_accept_max_records < 1) {
+    return { ok: false, message: "Source Cap must be at least 1.", fieldId: "searchAcceptMaxRecords" };
+  }
+  if (payload.search_accept_max_records < payload.target_max) {
+    return { ok: false, message: "Source Cap cannot be lower than Max Results.", fieldId: "searchAcceptMaxRecords" };
+  }
   if (!Number.isFinite(payload.max_iterations) || payload.max_iterations < 1) {
     return { ok: false, message: "Iterations must be at least 1.", fieldId: "maxIterations" };
+  }
+  if (payload.data_source === "openalex") {
+    if (!Number.isFinite(payload.citation_max_depth) || payload.citation_max_depth < 1) {
+      return { ok: false, message: "Citation Depth must be at least 1.", fieldId: "citationMaxDepth" };
+    }
+    if (!Number.isFinite(payload.citation_relevance_threshold) || payload.citation_relevance_threshold < 1 || payload.citation_relevance_threshold > 10) {
+      return { ok: false, message: "Citation Threshold must be between 1 and 10.", fieldId: "citationRelevanceThreshold" };
+    }
   }
   return { ok: true };
 }
@@ -1310,9 +1386,14 @@ function buildPayload() {
     llm_base_url: getValue("llmBaseUrl"),
     wos_db: getValue("wosDb") || "WOS",
     search_field: getValue("searchField"),
+    initial_query: getValue("initialQuery"),
+    client_timezone: clientTimeZone,
     target_min: getNumber("targetMin"),
     target_max: getNumber("targetMax"),
+    search_accept_max_records: getNumber("searchAcceptMaxRecords"),
     max_iterations: getNumber("maxIterations"),
+    citation_max_depth: getNumber("citationMaxDepth"),
+    citation_relevance_threshold: getNumber("citationRelevanceThreshold"),
     fetch_abstracts: document.getElementById("fetchAbstracts").checked,
     expand_citations: document.getElementById("expandCitations").checked,
   };
@@ -1556,13 +1637,13 @@ workflow.addEventListener("input", (event) => {
 
 exportLogButton.addEventListener("click", () => {
   const source = latestPayload && latestPayload.data_source ? latestPayload.data_source : "source";
-  const filename = `${slugPart(runId.textContent)}-${slugPart(source)}-system-log.txt`;
+  const filename = `${filenamePart(exportQuestionTheme())}-${dateStamp()}-${filenamePart(source, "source")}-system-log.txt`;
   downloadText(filename, currentLogText(), "text/plain;charset=utf-8");
 });
 
 exportCsvButton.addEventListener("click", () => {
   const source = latestResult && latestResult.source ? latestResult.source : "source";
-  const filename = `${slugPart(runId.textContent)}-${slugPart(source)}-papers.csv`;
+  const filename = `${filenamePart(exportQuestionTheme())}-${dateStamp()}-${filenamePart(source, "source")}-papers.csv`;
   downloadText(filename, papersToCsv(getExportPapers()), "text/csv;charset=utf-8");
 });
 
@@ -1604,7 +1685,7 @@ form.addEventListener("submit", async (event) => {
   setBusy(true);
   log(`Run ${id} started.`);
   log(`Source: ${payload.data_source}; provider: ${payload.llm_provider}; api type: ${payload.llm_api_type}; model: ${payload.llm_model || "provider default"}.`);
-  log(`Target range: ${payload.target_min}-${payload.target_max}; max iterations: ${payload.max_iterations}.`);
+  log(`Target range: ${payload.target_min}-${payload.target_max}; source cap: ${payload.search_accept_max_records}; max iterations: ${payload.max_iterations}.`);
 
   try {
     const response = await fetch("/api/search/stream", {

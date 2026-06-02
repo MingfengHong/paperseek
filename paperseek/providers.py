@@ -263,8 +263,8 @@ class OpenAlexProvider:
         max_records: int = 40,
     ) -> Dict[str, Any]:
         """Fetch forward and backward citation neighbors for seed OpenAlex works."""
-        per_seed = max(1, min(int(per_seed or 4), 10))
-        max_records = max(1, min(int(max_records or 40), 100))
+        per_seed = max(1, min(int(per_seed or 4), 20))
+        max_records = max(1, min(int(max_records or 40), 500))
         output: List[PaperRecord] = []
         nodes: Dict[str, Dict[str, Any]] = {}
         edges: List[Dict[str, str]] = []
@@ -383,7 +383,7 @@ class OpenAlexProvider:
         params.update({
             "filter": f"cites:{seed_id}",
             "sort": "cited_by_count:desc",
-            "per-page": max(1, min(int(limit or 4), 10)),
+            "per-page": max(1, min(int(limit or 4), 20)),
             "select": ",".join([
                 "id",
                 "doi",
