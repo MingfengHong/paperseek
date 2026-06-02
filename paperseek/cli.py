@@ -136,7 +136,6 @@ Environment variables:
     parser.add_argument("--db", "-d", default=None, help="WoS database (WOS, MEDLINE, BIOABS, etc.)")
     parser.add_argument("--fetch-abstracts", action="store_true", default=None, help="Fetch abstracts via DOI from Crossref/Semantic Scholar")
     parser.add_argument("--no-expand-citations", action="store_true", default=False, help="Disable OpenAlex citation-neighbor expansion")
-    parser.add_argument("--initial-query", default=None, help="Resume from a known source query and skip LLM query generation")
     parser.add_argument("--llm-provider", default=None, choices=list(SUPPORTED_LLM_PROVIDERS), help="LLM service provider")
     parser.add_argument("--llm-api-type", default=None, choices=list(SUPPORTED_LLM_API_TYPES), help="LLM API protocol")
     parser.add_argument("--llm-key", default=None, help="LLM API key")
@@ -236,7 +235,7 @@ def _run_search(argv, prog: str):
     agent = WosSearchAgent(config, llm)
 
     try:
-        result = agent.search(args.question, verbose=args.verbose, initial_query=args.initial_query)
+        result = agent.search(args.question, verbose=args.verbose)
         history_payload = result_payload_from_search_result(result, config.data_source)
         if history_run_id:
             history_payload["run_id"] = history_run_id

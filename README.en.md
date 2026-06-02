@@ -285,7 +285,7 @@ A search usually has four stages:
 3. **Query Refinement**: if the hit count is too low or above the source candidate cap, the LLM adjusts the query and continues. If the final iteration is still unusable, PaperSeek reconstructs one fallback query from the previous query history.
 4. **Ranking & Results**: the candidate pool is scored by the LLM, and the top records are returned.
 
-When OpenAlex citation expansion is enabled, PaperSeek selects high-matching seed papers and traverses both references and citing works across multiple depths. Each depth is relevance-checked before continuing, and traversal stops when no high-value related papers remain. The default output cap is 50 papers; the source search stage accepts up to 1000 source records before ranking. Larger candidate pools are fetched by pages and scored in LLM batches.
+When OpenAlex citation expansion is enabled, PaperSeek selects high-matching seed papers and traverses both references and citing works across multiple depths. Each depth is relevance-checked before continuing, and traversal stops when no high-value related papers remain. The default output cap is 50 papers; the source search stage accepts up to 1000 source records before ranking. Larger candidate pools are fetched by pages and then scored by the LLM in one pass.
 
 ## Citation Map
 

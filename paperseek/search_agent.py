@@ -196,17 +196,16 @@ class WosSearchAgent:
         question: str,
         verbose: bool = False,
         event_handler: Optional[Callable[[dict], None]] = None,
-        initial_query: Optional[str] = None,
     ) -> dict:
         """Main entry: natural language question -> dict with results and metadata."""
         self.event_handler = event_handler
         try:
-            return self._search(question, verbose=verbose, initial_query=initial_query)
+            return self._search(question, verbose=verbose)
         finally:
             self.event_handler = None
 
-    def _search(self, question: str, verbose: bool = False, initial_query: Optional[str] = None) -> dict:
-        query = self._initial_query(question, initial_query)
+    def _search(self, question: str, verbose: bool = False) -> dict:
+        query = self._generate_query(question)
         history = []
         iteration = 0
         total = 0
@@ -422,6 +421,14 @@ class WosSearchAgent:
             return candidates
 
         page_size = self._candidate_limit()
+        if page_size < min(100, desired):
+            page_size = min(100, desired)
+            self._emit_log(f"Source candidate paging: refetching page=1 with limit={page_size} to reduce paging requests.")
+            result = self._provider_search(query, page=1, limit=page_size)
+            self._emit_log(self._source_response_log(result))
+            candidates = self._dedupe_documents(list(result.hits or []))[:desired]
+            if desired <= len(candidates):
+                return candidates
         page = 2
         self._emit_log(f"Source candidate paging started: fetching up to {desired} records for ranking.")
         while len(candidates) < desired:
@@ -445,17 +452,6 @@ class WosSearchAgent:
         self._emit_log(f"Source candidate paging completed: fetched {len(candidates)} records for ranking.")
         self._emit_stage("search", "complete", total=total, final_query=query, fetched_candidates=len(candidates), preview=self._preview_hits(candidates))
         return candidates
-
-    def _initial_query(self, question: str, initial_query: Optional[str]) -> str:
-        if not (initial_query or "").strip():
-            return self._generate_query(question)
-        if self.data_source == "wos":
-            query = _make_starter_safe_query(_extract_query(initial_query or ""))
-        else:
-            query = _extract_openalex_query(initial_query or "")
-        self._emit_stage("query", "complete", source=self.data_source, query=query, resumed=True)
-        self._emit_log("Query generation skipped: using supplied initial query checkpoint.")
-        return query
 
     def _run_source_iteration(self, iteration: int, query: str, history: list, verbose: bool):
         safe_query = _make_starter_safe_query(query) if self.data_source == "wos" else query
@@ -1042,19 +1038,7 @@ class WosSearchAgent:
     def _rank_results(self, question: str, documents: list) -> list:
         if not documents:
             return []
-        batch_size = 80
-        if len(documents) > batch_size:
-            ranked = []
-            total_batches = (len(documents) + batch_size - 1) // batch_size
-            for batch_index, start in enumerate(range(0, len(documents), batch_size), 1):
-                batch = documents[start:start + batch_size]
-                self._emit_log(f"LLM ranking batch {batch_index}/{total_batches} started: {len(batch)} candidate records.")
-                ranked.extend(self._rank_result_batch(question, batch))
-            return sorted(ranked, key=lambda item: float(item.get("score") or 0), reverse=True)
 
-        return self._rank_result_batch(question, documents)
-
-    def _rank_result_batch(self, question: str, documents: list) -> list:
         descriptions = []
         for i, doc in enumerate(documents, 1):
             descriptions.append(_describe_document(doc, i))

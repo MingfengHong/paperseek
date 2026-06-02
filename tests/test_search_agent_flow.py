@@ -59,7 +59,10 @@ class FakePagingProvider:
 
     def search(self, query, limit=50, page=1):
         self.pages.append(page)
-        records = [paper("P1")] if page == 1 else [paper("P2"), paper("P3")][:limit]
+        if page == 1:
+            records = [paper("P1"), paper("P2"), paper("P3")][:limit] if limit >= 3 else [paper("P1")]
+        else:
+            records = [paper("P2"), paper("P3")][:limit]
         return ProviderSearchResult(SearchMetadata(total=3, page=page, limit=limit), records)
 
 
@@ -103,18 +106,6 @@ def config(**overrides):
 
 
 class SearchAgentFlowTest(unittest.TestCase):
-    def test_initial_query_skips_query_generation(self):
-        llm = FakeLLM()
-        agent = WosSearchAgent(config(target_min=1), llm)
-        provider = FakeProvider()
-        agent.provider = provider
-
-        result = agent.search("open innovation", initial_query="saved query")
-
-        self.assertEqual(provider.queries[0], "saved query")
-        self.assertEqual(result["final_query"], "saved query")
-        self.assertNotIn("OpenAlex /works search parameter", "\n".join(llm.calls))
-
     def test_final_iteration_uses_fallback_query_when_source_count_is_unusable(self):
         llm = FakeLLM()
         agent = WosSearchAgent(config(search_accept_max_records=1000), llm)
@@ -129,14 +120,14 @@ class SearchAgentFlowTest(unittest.TestCase):
 
     def test_source_candidate_paging_fetches_records_within_accept_cap(self):
         llm = FakeLLM()
-        agent = WosSearchAgent(config(target_min=1, search_accept_max_records=3), llm)
+        agent = WosSearchAgent(config(target_min=1, target_max=1, search_accept_max_records=3), llm)
         provider = FakePagingProvider()
         agent.provider = provider
 
         result = agent.search("open innovation")
 
-        self.assertEqual(provider.pages, [1, 2])
-        self.assertEqual(len(result["ranked"]), 3)
+        self.assertEqual(provider.pages, [1, 1])
+        self.assertEqual(len(result["ranked"]), 1)
 
     def test_openalex_citation_expansion_traverses_until_no_high_value_neighbors(self):
         llm = FakeLLM()

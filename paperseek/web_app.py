@@ -38,7 +38,6 @@ FIELD_LABELS = {
     "llm_api_key": "LLM API Key",
     "llm_api_type": "LLM API Type",
     "expand_citations": "Expand Citations",
-    "initial_query": "Initial Query",
     "search_accept_max_records": "Source Candidate Cap",
     "citation_max_depth": "Citation Max Depth",
     "citation_relevance_threshold": "Citation Relevance Threshold",
@@ -62,7 +61,6 @@ class SearchRequest(BaseModel):
     llm_base_url: Optional[str] = None
     wos_db: str = "WOS"
     search_field: Optional[str] = ""
-    initial_query: Optional[str] = ""
     client_timezone: Optional[str] = ""
     fetch_abstracts: bool = False
     expand_citations: bool = True
@@ -114,7 +112,6 @@ class DiagnosticRequest(BaseModel):
     llm_base_url: Optional[str] = None
     wos_db: str = "WOS"
     search_field: Optional[str] = ""
-    initial_query: Optional[str] = ""
     client_timezone: Optional[str] = ""
     fetch_abstracts: bool = False
     expand_citations: bool = True
@@ -331,7 +328,7 @@ def search(payload: SearchRequest):
         config.validate()
         llm = create_llm_client(config)
         agent = WosSearchAgent(config, llm)
-        result = agent.search(payload.question, verbose=False, initial_query=payload.initial_query)
+        result = agent.search(payload.question, verbose=False)
         response = _response_payload(result, payload.data_source)
         if run_id:
             response["run_id"] = run_id
@@ -400,7 +397,6 @@ def search_stream(payload: SearchRequest):
                     payload.question,
                     verbose=False,
                     event_handler=send,
-                    initial_query=payload.initial_query,
                 )
                 response = _response_payload(result, payload.data_source)
                 if run_id:

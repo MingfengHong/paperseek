@@ -75,6 +75,6 @@ def _parse_utc_offset(value: str):
         minutes = int(minute_text)
     except ValueError:
         return None
-    if hours > 23 or minutes > 59:
+    if hours < 0 or minutes < 0 or hours > 23 or minutes > 59:
         return None
     return timezone(sign * timedelta(hours=hours, minutes=minutes))

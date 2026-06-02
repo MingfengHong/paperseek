@@ -230,8 +230,9 @@ function filenamePart(value, fallback = "literature-search") {
   const raw = (typeof text.normalize === "function" ? text.normalize("NFKC") : text).trim();
   let cleaned = "";
   try {
+    const unicodeWord = new RegExp("[^\\p{L}\\p{N}]+", "gu");
     cleaned = raw
-      .replace(/[^\p{L}\p{N}]+/gu, "-")
+      .replace(unicodeWord, "-")
       .replace(/^-+|-+$/g, "");
   } catch (_) {
     cleaned = raw
@@ -1387,7 +1388,6 @@ function buildPayload() {
     llm_base_url: getValue("llmBaseUrl"),
     wos_db: getValue("wosDb") || "WOS",
     search_field: getValue("searchField"),
-    initial_query: getValue("initialQuery"),
     client_timezone: clientTimeZone,
     target_min: getNumber("targetMin"),
     target_max: getNumber("targetMax"),
