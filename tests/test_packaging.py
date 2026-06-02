@@ -18,13 +18,23 @@ class PackagingTest(unittest.TestCase):
 
     def test_readme_uses_repository_url_and_docs_asset_screenshot(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertFalse(readme.startswith("---\n"))
         self.assertNotIn("<repo-url>", readme)
         self.assertIn("https://github.com/MingfengHong/paperseek", readme)
         self.assertIn("docs/assets/paperseek-web.png", readme)
         self.assertIn("docs/user-manual.md", readme)
         self.assertIn("docs/deployment.md", readme)
+        self.assertIn("[English](README.en.md)", readme)
         self.assertNotIn("img.shields.io/badge/OpenAlex", readme)
         self.assertNotIn("img.shields.io/badge/Crossref", readme)
+
+    def test_english_readme_exists_and_links_back_to_chinese(self):
+        readme = (ROOT / "README.en.md").read_text(encoding="utf-8")
+        self.assertIn("[简体中文](README.md)", readme)
+        self.assertIn("https://github.com/MingfengHong/paperseek", readme)
+        self.assertIn("docs/assets/paperseek-web.png", readme)
+        self.assertIn("Docker, Vercel, and ModelScope", readme)
+        self.assertIn("PaperSeek is licensed under the [Apache License 2.0](LICENSE).", readme)
 
     def test_user_manual_exists_and_covers_main_user_workflows(self):
         manual = (ROOT / "docs" / "user-manual.md").read_text(encoding="utf-8")

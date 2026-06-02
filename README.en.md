@@ -1,0 +1,390 @@
+# PaperSeek
+
+[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml/badge.svg)](https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml)
+[![Status](https://img.shields.io/badge/status-alpha-orange)](#project-status)
+
+**Language: [简体中文](README.md) | English**
+
+**LLM based Literature Search Agent.** PaperSeek helps researchers start literature searches in natural language, iteratively refine database queries, expand candidate papers through citation links, rank records, and export a reviewable paper list.
+
+![PaperSeek web interface](https://raw.githubusercontent.com/MingfengHong/paperseek/main/docs/assets/paperseek-web.png)
+
+Full Chinese user manual: [PaperSeek User Manual](docs/user-manual.md).
+Deployment guide: [Docker, Vercel, and ModelScope deployment](docs/deployment.md).
+Live demo: [ModelScope Studio](https://www.modelscope.cn/studios/HongMingfeng/paperseek).
+
+## Overview
+
+PaperSeek turns a research question into an observable search workflow:
+
+- Enter a research question in Chinese or English.
+- Let an LLM generate source-specific search queries.
+- Automatically broaden or narrow queries according to target result counts.
+- Normalize metadata such as title, authors, venue, year, DOI, abstract, citation count, keywords, and links.
+- Ask the LLM to score candidate papers for relevance.
+- Optionally expand high-matching OpenAlex records through forward citations and backward references.
+- Review the workflow, ranked results, and citation map in the Web UI, then export selected records as CSV.
+
+PaperSeek is designed for first-pass paper discovery and metadata organization. It does not replace systematic review protocols, full-text access, copyright checks, or expert judgement.
+
+## Features
+
+| Feature | Description |
+| --- | --- |
+| Natural-language search | Start from a research question instead of hand-writing database syntax. |
+| Iterative query refinement | Automatically adjusts queries to hit a target result range, with 5 iterations by default. |
+| Relevance ranking | Uses an LLM to score candidates and explain each score briefly. |
+| OpenAlex citation expansion | Adds references and citing works from high-matching seed papers. |
+| Result export | Select papers in the Results view and export them as CSV. |
+| Citation map | Shows citation direction with arrows; supports drag, zoom, and pan. |
+| CLI and Web UI | Run from the command line or through a local browser interface. |
+| Docker / Vercel / ModelScope deployment | Supports full Docker deployments, Vercel demos, and ModelScope Studio hosting. |
+| Diagnostics | `doctor`, `smoke`, and `sources` help debug API keys, source adapters, and protocol settings. |
+| Optional Agent Skill | `skills/paperseek/` can be copied into skill-aware agent platforms without being installed with the Python package. |
+
+## Quick Start
+
+```bash
+git clone https://github.com/MingfengHong/paperseek.git
+cd paperseek
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/MingfengHong/paperseek.git
+cd paperseek
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+Start the Web UI:
+
+```bash
+paperseek-web
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765/
+```
+
+You can also run a search directly from the CLI:
+
+```bash
+paperseek "open innovation and digital platforms" --source openalex
+```
+
+## Deployment
+
+Docker is the recommended path for the full Web UI:
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765/
+```
+
+Vercel can host quick demos and lightweight Web UI deployments:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMingfengHong%2Fpaperseek)
+
+ModelScope Studio can also host the full Web UI and is suitable for a public Chinese community demo. For long searches, citation expansion, and heavy repeated use, prefer Docker, ModelScope Studio, or a VPS. See the [deployment guide](docs/deployment.md) for details.
+
+## Minimal Configuration
+
+PaperSeek needs at least one LLM provider. OpenAlex is the default data source. Anonymous OpenAlex access is enough for quick tests, but a free API key is recommended for more stable use.
+
+DeepSeek example:
+
+```bash
+export LLM_PROVIDER=deepseek
+export LLM_API_TYPE=openai_chat
+export LLM_MODEL=deepseek-v4-flash
+export LLM_BASE_URL=https://api.deepseek.com
+export LLM_API_KEY=your-llm-api-key
+paperseek-web
+```
+
+ModelScope API-Inference example:
+
+```bash
+export LLM_PROVIDER=modelscope
+export LLM_API_TYPE=openai_chat
+export LLM_MODEL=Qwen/Qwen3-235B-A22B-Instruct-2507
+export LLM_BASE_URL=https://api-inference.modelscope.cn/v1
+export LLM_API_KEY=your-modelscope-token
+paperseek-web
+```
+
+Windows PowerShell:
+
+```powershell
+$env:LLM_PROVIDER = "deepseek"
+$env:LLM_API_TYPE = "openai_chat"
+$env:LLM_MODEL = "deepseek-v4-flash"
+$env:LLM_BASE_URL = "https://api.deepseek.com"
+$env:LLM_API_KEY = "your-llm-api-key"
+paperseek-web
+```
+
+Local Ollama does not require an LLM API key:
+
+```bash
+export LLM_PROVIDER=ollama
+export LLM_API_TYPE=openai_chat
+export LLM_MODEL=qwen3:8b
+export LLM_BASE_URL=http://127.0.0.1:11434/v1
+paperseek-web
+```
+
+The repository includes `.env.example`. Copy it to `.env` for local reference, but never commit real API keys.
+
+## Web UI
+
+The Web UI has three main workspaces:
+
+| View | Purpose |
+| --- | --- |
+| Search | Enter the research question, configure data source, LLM, iterations, and target result range; watch workflow stages and system logs. |
+| Results | Review ranked papers, search, filter, sort, select, and export paper CSV. |
+| Citation Map | Explore OpenAlex citation expansion as a directed graph. |
+
+API keys, base URLs, and run parameters entered in the Web UI are used only for the current browser session and are not written to local config files by PaperSeek.
+
+## CLI Usage
+
+Basic search:
+
+```bash
+paperseek "responsible AI governance in public sector" --source openalex
+```
+
+Explicit subcommand:
+
+```bash
+paperseek search "digital platforms and open innovation" --source openalex
+```
+
+JSON output:
+
+```bash
+paperseek search "open innovation" --source openalex --output json
+```
+
+Common options:
+
+```bash
+paperseek search "your research question" \
+  --source openalex \
+  --field management \
+  --min 5 \
+  --max 50 \
+  --iterations 5 \
+  --llm-provider deepseek \
+  --llm-api-type openai_chat \
+  --llm-model deepseek-v4-flash \
+  --llm-base-url https://api.deepseek.com \
+  --llm-key your-llm-api-key
+```
+
+Run diagnostics:
+
+```bash
+paperseek doctor
+paperseek doctor --source openalex --json
+```
+
+Run a minimal real data-source request:
+
+```bash
+paperseek smoke --source openalex --query "machine learning"
+paperseek smoke --source crossref --query "open innovation" --json
+```
+
+List source capabilities:
+
+```bash
+paperseek sources
+paperseek sources --json
+```
+
+Manage user-level CLI config:
+
+```bash
+paperseek config path
+paperseek config set LLM_API_KEY your-llm-api-key
+paperseek config list
+paperseek config unset LLM_API_KEY
+```
+
+Environment variables override user-level config. `paperseek config list` masks secret values.
+
+## Data Sources
+
+| Source | Default status | API key | Best for | Notes |
+| --- | --- | --- | --- | --- |
+| OpenAlex | Default | Recommended | Precise search, abstracts, citation counts, citation expansion, citation maps | Open scholarly metadata source for broad discovery and citation exploration. |
+| Crossref | Supported | Usually not required | DOI checks, publication metadata, journal and publisher validation | DOI and metadata registry; useful for metadata verification and DOI completion. |
+| Web of Science Starter | Adapter retained | Required | Users with approved Clarivate API access | Commercial database API; availability and returned fields depend on subscription and institutional entitlement. |
+
+## LLM Providers
+
+PaperSeek supports two mainstream API protocol families: OpenAI-style APIs and Anthropic Messages API. Provider selects service defaults; API Type selects request format.
+
+| Provider | Default API Type | Default model |
+| --- | --- | --- |
+| OpenAI | `openai_responses` | `gpt-5.4-mini` |
+| Anthropic | `anthropic_messages` | `claude-sonnet-4-6` |
+| Google Gemini | `openai_chat` | `gemini-3.5-flash` |
+| DeepSeek | `openai_chat` | `deepseek-v4-flash` |
+| DashScope | `openai_chat` | `qwen3.6-plus` |
+| Kimi Moonshot | `openai_chat` | `kimi-k2.6` |
+| Zhipu AI GLM | `openai_chat` | `glm-5.1` |
+| SiliconFlow | `openai_chat` | `deepseek-ai/DeepSeek-V4-Flash` |
+| OpenRouter | `openai_chat` | `openai/gpt-5.4-mini` |
+| Volcengine Ark | `openai_chat` | `doubao-seed-2-0-mini-260428` |
+| Tencent Hunyuan | `openai_chat` | `hunyuan-turbos-latest` |
+| Baidu Qianfan | `openai_chat` | `ernie-5.0` |
+| ModelScope | `openai_chat` | `Qwen/Qwen3-235B-A22B-Instruct-2507` |
+| Ollama | `openai_chat` | `qwen3:8b` |
+| Custom | `openai_chat` | Empty; fill in your own model |
+
+Default models initialize forms and examples. Actual availability depends on provider accounts, regions, billing, and compatibility layers.
+
+## Workflow
+
+A search usually has four stages:
+
+1. **Query Generation**: the LLM creates an initial query from the research question and optional field hint.
+2. **Source Search**: PaperSeek requests OpenAlex, Crossref, or WoS Starter and logs HTTP status and hit counts.
+3. **Query Refinement**: if the hit count is too low or too high, the LLM adjusts the query and continues.
+4. **Ranking & Results**: the candidate pool is scored by the LLM, and the top records are returned.
+
+When OpenAlex citation expansion is enabled, PaperSeek selects high-matching seed papers, adds references and citing works, then ranks the complete candidate pool. The current default maximum output is 50 papers.
+
+## Citation Map
+
+Citation Map uses arrows for citation direction:
+
+```text
+A -> B means A cites B
+```
+
+Graph nodes come from final results and OpenAlex citation expansion records. You can drag nodes, zoom and pan the canvas, and inspect node details. The citation map is useful for finding classic works, adjacent topics, and recent follow-up papers that keyword search may miss.
+
+## Environment Variables
+
+| Variable | Description |
+| --- | --- |
+| `DATA_SOURCE` | `openalex`, `crossref`, or `wos`; default is `openalex`. |
+| `LLM_PROVIDER` | LLM provider, such as `openai`, `deepseek`, `anthropic`, `modelscope`, or `ollama`. |
+| `LLM_API_TYPE` | `openai_responses`, `openai_chat`, or `anthropic_messages`. |
+| `LLM_MODEL` | Model name. |
+| `LLM_BASE_URL` | API base URL. |
+| `LLM_API_KEY` | LLM API key; optional for Ollama. |
+| `OPENALEX_API_KEY` | OpenAlex API key, recommended. |
+| `OPENALEX_EMAIL` | OpenAlex contact email. |
+| `CROSSREF_EMAIL` | Crossref polite pool email. |
+| `WOS_API_KEY` | Clarivate Web of Science Starter API key. |
+| `WOS_DB` | WoS database code, default `WOS`. |
+| `TARGET_MIN` / `TARGET_MAX` | Target result count range. |
+| `MAX_ITERATIONS` | Maximum query refinement iterations. |
+| `EXPAND_CITATIONS` | Enable OpenAlex citation expansion; default `true`. |
+| `FETCH_ABSTRACTS` | Try external DOI metadata for abstracts; default `false`. |
+| `CITATION_SEED_COUNT` | Number of seed papers used for citation expansion. |
+| `CITATION_PER_SEED` | Number of citation neighbors fetched per seed. |
+| `CITATION_MAX_RECORDS` | Candidate cap for citation expansion. |
+
+## Getting API Access
+
+### OpenAlex
+
+OpenAlex supports anonymous access, but a free API key is recommended:
+
+1. Open [OpenAlex](https://openalex.org/) and create an account.
+2. Visit [OpenAlex API settings](https://openalex.org/settings/api).
+3. Copy the API key.
+4. Fill `OpenAlex API Key` in the Web UI or set `OPENALEX_API_KEY`.
+
+### Crossref
+
+Crossref REST API usually does not require an API key. Set a contact email to enter the polite pool:
+
+```bash
+export CROSSREF_EMAIL=you@example.org
+```
+
+For higher quotas, priority support, or production SLA, consider Crossref Metadata Plus. PaperSeek uses the public or polite REST API path.
+
+### Web of Science Starter API
+
+WoS Starter requires approval in Clarivate Developer Portal and usually fits users with institutional Web of Science access:
+
+1. Open the [Clarivate Developer Portal signup page](https://developer.clarivate.com/signup) and register.
+2. Prefer an institutional email and, if possible, use the same identity as your Web of Science account.
+3. Go to [Applications](https://developer.clarivate.com/applications) and click `Register Application`.
+4. Fill application metadata:
+   - `Application ID` should use digits, lowercase letters, `-`, or `_`.
+   - `Application Name` can be your institution or project name.
+   - `Application Description` can mention Web of Science API search.
+   - Keep `Client Type` as `Public: Single Page Application`.
+   - Do not enable OAuth2.0 flows.
+5. Open [Web of Science Starter API](https://developer.clarivate.com/apis/wos-starter).
+6. Select the registered application and click `Subscribe`.
+7. Choose the plan that matches your identity and institutional entitlement.
+8. Wait for approval after `Subscription approval is pending`.
+9. After receiving the API key, fill `WoS API Key` in the Web UI or set `WOS_API_KEY`.
+
+WoS Starter limits, fields, and availability depend on plan and institutional entitlement. For HTTP 401, check HTTPS and the key. For Clarivate's non-standard HTTP 512, check Clarivate service status, subscription approval, and query compatibility.
+
+## Agent Skill
+
+The repository includes an optional PaperSeek Skill:
+
+```text
+skills/paperseek/
+```
+
+It teaches skill-aware AI agents how to call the `paperseek` CLI and local Web UI, choose data sources, run diagnostics, parse JSON results, and respect citation-map boundaries. The Skill uses progressive disclosure: `SKILL.md` stays short, while detailed command contracts live in `references/`.
+
+This Skill is **not installed automatically** with the Python package. If you need it, copy or link `skills/paperseek/` into the target agent platform's skill directory.
+
+The launcher:
+
+```text
+skills/paperseek/scripts/paperseek.py
+```
+
+only calls the full PaperSeek Python package. It does not maintain a dependency-free fallback implementation. For standalone Skill distribution, install PaperSeek first or set `PAPERSEEK_PROJECT_ROOT` to a local source checkout.
+
+## Project Status
+
+PaperSeek is currently alpha software. CLI, Web UI, OpenAlex, Crossref, citation expansion, CSV export, and the optional Skill are usable, but formal research conclusions should still be reviewed manually.
+
+Contributions are welcome:
+
+- New data-source adapters.
+- More robust query-generation and ranking prompts.
+- Better citation graph interactions.
+- Tests for Web API, CLI, provider parsing, and export behavior.
+- Documentation, examples, and error diagnostics.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing. Report security issues according to [SECURITY.md](SECURITY.md).
+
+## License
+
+PaperSeek is licensed under the [Apache License 2.0](LICENSE).
