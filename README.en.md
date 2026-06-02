@@ -9,11 +9,12 @@
 
 **LLM based Literature Search Agent.** PaperSeek helps researchers start literature searches in natural language, iteratively refine database queries, expand candidate papers through citation links, rank records, and export a reviewable paper list.
 
+Try it online: [Live Demo](https://www.paperseek.xyz/). Mainland China access: [ModelScope Studio](https://modelscope.cn/studios/HongMingfeng/paperseek).
+
 ![PaperSeek web interface](https://raw.githubusercontent.com/MingfengHong/paperseek/main/docs/assets/paperseek-web.png)
 
 Full Chinese user manual: [PaperSeek User Manual](docs/user-manual.md).
 Deployment guide: [Docker, Vercel, and ModelScope deployment](docs/deployment.md).
-Live demo: [https://www.paperseek.xyz/](https://www.paperseek.xyz/). Mainland China access: [ModelScope Studio](https://modelscope.cn/studios/HongMingfeng/paperseek).
 
 ## Overview
 

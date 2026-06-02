@@ -9,11 +9,12 @@
 
 **LLM based Literature Search Agent.** PaperSeek 是一个面向研究者的文献发现工具，支持用自然语言发起检索、自动迭代查询、扩展候选论文、排序结果并导出可复核的文献列表。
 
+在线体验：[点击体验](https://www.paperseek.xyz/)；或使用 [在魔搭创空间中体验](https://modelscope.cn/studios/HongMingfeng/paperseek)（中国大陆直接访问）。
+
 ![PaperSeek web interface](https://raw.githubusercontent.com/MingfengHong/paperseek/main/docs/assets/paperseek-web.png)
 
 完整使用说明见 [PaperSeek 用户手册](docs/user-manual.md)。
 部署说明见 [Docker、Vercel 与 ModelScope 部署指南](docs/deployment.md)。
-在线体验：[https://www.paperseek.xyz/](https://www.paperseek.xyz/)；或使用 [魔搭创空间](https://modelscope.cn/studios/HongMingfeng/paperseek)（中国大陆直接访问）。
 
 ## 概览
 
