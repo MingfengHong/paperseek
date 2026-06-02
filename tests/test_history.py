@@ -110,6 +110,36 @@ class HistoryApiTest(unittest.TestCase):
             else:
                 os.environ["PAPERSEEK_HISTORY_ENABLED"] = previous_enabled
 
+    def test_clear_history_requires_explicit_confirmation(self):
+        previous_db = os.environ.get("PAPERSEEK_HISTORY_DB")
+        previous_enabled = os.environ.get("PAPERSEEK_HISTORY_ENABLED")
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                os.environ["PAPERSEEK_HISTORY_DB"] = str(Path(tmp) / "paperseek.db")
+                os.environ["PAPERSEEK_HISTORY_ENABLED"] = "true"
+                store = HistoryStore()
+                run_id = store.create_run("platform governance", {"data_source": "openalex"})
+                self.assertTrue(run_id)
+
+                client = TestClient(app)
+                response = client.delete("/api/history")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(len(store.list_runs()), 1)
+
+                confirmed = client.delete("/api/history?confirm=true")
+                self.assertEqual(confirmed.status_code, 200)
+                self.assertEqual(confirmed.json()["deleted"], 1)
+                self.assertEqual(store.list_runs(), [])
+        finally:
+            if previous_db is None:
+                os.environ.pop("PAPERSEEK_HISTORY_DB", None)
+            else:
+                os.environ["PAPERSEEK_HISTORY_DB"] = previous_db
+            if previous_enabled is None:
+                os.environ.pop("PAPERSEEK_HISTORY_ENABLED", None)
+            else:
+                os.environ["PAPERSEEK_HISTORY_ENABLED"] = previous_enabled
+
 
 if __name__ == "__main__":
     unittest.main()

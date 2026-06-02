@@ -294,7 +294,9 @@ def history_delete(run_id: str):
 
 
 @app.delete("/api/history")
-def history_clear():
+def history_clear(confirm: bool = Query(default=False)):
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Pass confirm=true to clear all local history.")
     store = HistoryStore()
     return {"deleted": store.clear()}
 

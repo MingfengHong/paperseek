@@ -7,7 +7,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Union
 
 from paperseek.config import AgentConfig
 
@@ -146,9 +146,10 @@ def _authors_from_paper(paper: dict[str, Any]) -> list[str]:
 
 
 class HistoryStore:
-    def __init__(self, db_path: Optional[Path | str] = None, enabled: Optional[bool] = None):
+    def __init__(self, db_path: Optional[Union[Path, str]] = None, enabled: Optional[bool] = None):
         self.db_path = Path(db_path).expanduser() if db_path is not None else history_db_path()
         self._enabled = history_enabled() if enabled is None else enabled
+        self._schema_ready = False
 
     @property
     def enabled(self) -> bool:
@@ -164,10 +165,12 @@ class HistoryStore:
         if not self.enabled:
             raise RuntimeError("PaperSeek history is disabled.")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        self._ensure_schema(conn)
+        if not self._schema_ready:
+            self._ensure_schema(conn)
+            self._schema_ready = True
         return conn
 
     @contextmanager

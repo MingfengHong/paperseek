@@ -323,7 +323,7 @@ function renderWorkflow() {
   }
   if (activeView === "history") {
     workflow.innerHTML = renderHistoryView();
-    renderStepLabel();
+    stepLabel.textContent = "History";
     return;
   }
 
