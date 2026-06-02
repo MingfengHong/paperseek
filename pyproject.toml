@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paperseek"
+version = "0.1.0"
+description = "LLM based Literature Search Agent"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "MingfengHong", email = "hongmingfeng24@mails.ucas.ac.cn" },
+]
+maintainers = [
+    { name = "MingfengHong", email = "hongmingfeng24@mails.ucas.ac.cn" },
+]
+keywords = ["literature-search", "openalex", "crossref", "web-of-science", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Framework :: FastAPI",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "requests>=2.25",
+    "pydantic>=2",
+    "python-dateutil>=2.5",
+    "urllib3>=1.25.3,<3",
+    "typing-extensions>=4.7",
+    "fastapi>=0.100",
+    "uvicorn>=0.23",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.24",
+]
+
+[project.urls]
+Homepage = "https://paperseek.top"
+Repository = "https://github.com/MingfengHong/paperseek"
+Issues = "https://github.com/MingfengHong/paperseek/issues"
+Documentation = "https://github.com/MingfengHong/paperseek#readme"
+
+[project.scripts]
+paperseek = "paperseek.cli:main"
+paperseek-web = "paperseek.web_app:main"
+
+[tool.setuptools.packages.find]
+include = ["paperseek*"]
+
+[tool.setuptools.package-data]
+paperseek = ["static/*"]

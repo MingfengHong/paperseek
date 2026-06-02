@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PaperSeek</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">
+          <span class="mark-paper"></span>
+          <span class="mark-lens"></span>
+        </div>
+        <div>
+          <div class="brand-title">PaperSeek</div>
+          <div class="brand-subtitle">LLM based Literature Search Agent</div>
+        </div>
+      </div>
+      <nav class="mode-tabs" aria-label="Workspace section">
+        <button class="tab active" type="button" data-view="search">Search</button>
+        <button class="tab muted" type="button" data-view="results">Results</button>
+        <button class="tab muted" type="button" data-view="citations">Citation Map</button>
+      </nav>
+      <div class="status-strip">
+        <button id="exportCsvButton" class="result-export-button" type="button" disabled>Export Results CSV</button>
+        <span id="stepLabel">Step 0/4</span>
+        <strong id="stateLabel">Ready</strong>
+        <span class="ready-dot" aria-hidden="true"></span>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="left-pane" aria-label="Search controls">
+        <form id="searchForm" autocomplete="off" novalidate>
+          <section class="query-section">
+            <div class="section-kicker">Research Question</div>
+            <textarea id="question" name="question" rows="3" spellcheck="true" required placeholder="Paste a research question, gap paragraph, or plain language search intent."></textarea>
+            <div class="query-actions">
+              <button id="searchButton" class="primary-button" type="submit">
+                <span>Run Search</span>
+                <span aria-hidden="true">-></span>
+              </button>
+              <button id="checkConfigButton" class="secondary-button" type="button">Check Config</button>
+            </div>
+          </section>
+
+          <section class="config-section">
+            <div class="section-header">
+              <div>
+                <div class="section-kicker">Session Settings</div>
+                <h2>Temporary configuration</h2>
+              </div>
+              <span class="privacy-pill">Not saved</span>
+            </div>
+
+            <div class="config-group">
+              <div class="config-group-title">Data Source</div>
+              <div class="field-grid">
+                <label class="field span-2">
+                  <span>Data Source</span>
+                  <select id="dataSource">
+                    <option value="openalex" selected>OpenAlex (precise search)</option>
+                    <option value="crossref">Crossref (metadata / DOI registry)</option>
+                    <option value="wos">Web of Science Starter (temporarily unavailable)</option>
+                  </select>
+                </label>
+
+                <label id="wosKeyField" class="field span-2 source-field source-wos">
+                  <span>WoS API Key</span>
+                  <input id="wosApiKey" type="password" autocomplete="off">
+                </label>
+                <label id="openAlexKeyField" class="field span-2 source-field source-openalex">
+                  <span>OpenAlex API Key</span>
+                  <input id="openAlexApiKey" type="password" placeholder="Optional if anonymous access is available" autocomplete="off">
+                </label>
+                <label id="openAlexEmailField" class="field span-2 source-field source-openalex">
+                  <span>OpenAlex Email</span>
+                  <input id="openAlexEmail" type="email" placeholder="Optional polite-pool email" autocomplete="off">
+                </label>
+                <label id="crossrefEmailField" class="field span-2 source-field source-crossref">
+                  <span>Crossref Email</span>
+                  <input id="crossrefEmail" type="email" placeholder="Optional polite-pool email" autocomplete="off">
+                </label>
+                <label id="wosDbField" class="field source-field source-wos">
+                  <span>WoS DB</span>
+                  <input id="wosDb" type="text" value="WOS" autocomplete="off">
+                </label>
+                <label class="field">
+                  <span>Field Hint</span>
+                  <input id="searchField" type="text" placeholder="Optional discipline" autocomplete="off">
+                </label>
+              </div>
+            </div>
+
+            <div class="config-group">
+              <div class="config-group-title">LLM Settings</div>
+              <div class="field-grid">
+                <label class="field span-2">
+                  <span>Provider</span>
+                  <select id="llmProvider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="google">Google Gemini</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="dashscope">阿里云百炼（DashScope）</option>
+                    <option value="moonshot">Kimi（Moonshot）</option>
+                    <option value="zhipu">智谱 AI（GLM）</option>
+                    <option value="siliconflow">硅基流动（SiliconFlow）</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="volcengine">火山方舟</option>
+                    <option value="hunyuan">腾讯混元</option>
+                    <option value="qianfan">百度千帆</option>
+                    <option value="ollama">Ollama（本地）</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>API Type</span>
+                  <select id="llmApiType">
+                    <option value="openai_responses">OpenAI Responses API</option>
+                    <option value="openai_chat">OpenAI Chat Completions API</option>
+                    <option value="anthropic_messages">Anthropic Messages API</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Model</span>
+                  <input id="llmModel" type="text" value="gpt-5.4-mini" autocomplete="off">
+                </label>
+                <label class="field span-2">
+                  <span>Base URL</span>
+                  <input id="llmBaseUrl" type="url" placeholder="Provider default, editable for compatible endpoints" autocomplete="off">
+                </label>
+                <label class="field span-2">
+                  <span>API Key</span>
+                  <input id="llmApiKey" type="password" autocomplete="off">
+                </label>
+              </div>
+            </div>
+
+            <div class="config-group">
+              <div class="config-group-title">Run Parameters</div>
+              <div class="field-grid">
+                <label class="field">
+                  <span>Min Results</span>
+                  <input id="targetMin" type="number" value="5" min="0" max="50">
+                </label>
+                <label class="field">
+                  <span>Max Results</span>
+                  <input id="targetMax" type="number" value="50" min="1" max="50">
+                </label>
+                <label class="field">
+                  <span>Iterations</span>
+                  <input id="maxIterations" type="number" value="5" min="1" max="10">
+                </label>
+                <label id="fetchAbstractsField" class="toggle-field source-field source-wos">
+                  <input id="fetchAbstracts" type="checkbox">
+                  <span>Try external abstracts</span>
+                </label>
+                <label id="expandCitationsField" class="toggle-field source-field source-openalex">
+                  <input id="expandCitations" type="checkbox" checked>
+                  <span>Expand citations (OpenAlex)</span>
+                </label>
+              </div>
+            </div>
+          </section>
+        </form>
+      </section>
+
+      <section class="right-pane" aria-label="Workflow and results">
+        <div id="workflow" class="workflow"></div>
+        <aside class="log-panel" aria-label="System log">
+          <div class="log-header">
+            <span>System Dashboard</span>
+            <div class="log-actions">
+              <button id="exportLogButton" class="utility-button" type="button" disabled>Export Log</button>
+              <span id="runId">idle</span>
+            </div>
+          </div>
+          <pre id="logOutput"></pre>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
