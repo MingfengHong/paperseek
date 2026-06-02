@@ -36,11 +36,16 @@ from paperseek.config_store import (
 )
 from paperseek.diagnostics import dumps, render_doctor_text, render_smoke_text, run_doctor, smoke_source
 from paperseek.formatter import format_json, format_text
+from paperseek.history import (
+    HistoryStore,
+    result_payload_from_search_result,
+    safe_search_params_from_config,
+)
 from paperseek.llm_client import LLMError, create_llm_client
 from paperseek.search_agent import WosSearchAgent
 from paperseek.source_metadata import list_source_metadata, supported_source_ids
 
-COMMANDS = {"search", "doctor", "smoke", "sources", "config", "help"}
+COMMANDS = {"search", "doctor", "smoke", "sources", "config", "history", "help"}
 
 
 def main(argv=None):
@@ -64,6 +69,8 @@ def main(argv=None):
             return _run_sources(rest)
         if command == "config":
             return _run_config(rest)
+        if command == "history":
+            return _run_history(rest)
 
     # Legacy mode: `paperseek "question" ...`
     return _run_search(argv, prog="paperseek")
@@ -78,6 +85,7 @@ Usage:
   paperseek doctor [--source openalex] [--json]
   paperseek smoke [--source openalex] [--query "machine learning"] [--json]
   paperseek sources [--json]
+  paperseek history <list|show|delete|clear|path>
   paperseek config <path|list|keys|set|unset|import-env>
 
 Examples:
@@ -85,6 +93,7 @@ Examples:
   paperseek search "responsible AI policy" --source openalex --output json
   paperseek doctor --source openalex
   paperseek smoke --source crossref --query "open innovation"
+  paperseek history list
   paperseek config set LLM_API_KEY sk-...
 
 Run `paperseek search --help` for search options.
@@ -111,6 +120,8 @@ Environment variables:
   SEARCH_FIELD       Default discipline/field constraint
   EXPAND_CITATIONS   Set to "false" to skip OpenAlex citation expansion
   FETCH_ABSTRACTS    Set to "true" to enable DOI-based abstract fetching
+  PAPERSEEK_HISTORY_ENABLED
+                      Set to "false" to disable local SQLite search history
         """,
     )
     parser.add_argument("question", help="Research question in natural language")
@@ -188,10 +199,13 @@ def _run_search(argv, prog: str):
         args.output = "json"
 
     config = _apply_search_args(AgentConfig.from_env(), args)
+    history_store = HistoryStore()
+    history_run_id = history_store.create_run(args.question, safe_search_params_from_config(config))
 
     try:
         config.validate()
     except ValueError as exc:
+        history_store.fail_run(history_run_id, str(exc))
         print(f"Configuration error: {exc}", file=sys.stderr)
         print("Run `paperseek doctor` for diagnostics.", file=sys.stderr)
         sys.exit(1)
@@ -199,6 +213,7 @@ def _run_search(argv, prog: str):
     try:
         llm = create_llm_client(config)
     except Exception as exc:
+        history_store.fail_run(history_run_id, f"Failed to initialize LLM client: {exc}")
         print(f"Failed to initialize LLM client: {exc}", file=sys.stderr)
         sys.exit(1)
 
@@ -206,10 +221,16 @@ def _run_search(argv, prog: str):
 
     try:
         result = agent.search(args.question, verbose=args.verbose)
+        history_payload = result_payload_from_search_result(result, config.data_source)
+        if history_run_id:
+            history_payload["run_id"] = history_run_id
+        history_store.complete_run(history_run_id, history_payload)
     except LLMError as exc:
+        history_store.fail_run(history_run_id, str(exc))
         print(f"LLM error: {exc}", file=sys.stderr)
         sys.exit(1)
     except Exception as exc:
+        history_store.fail_run(history_run_id, str(exc))
         print(f"Search error: {exc}", file=sys.stderr)
         sys.exit(1)
 
@@ -357,6 +378,118 @@ Environment variables still override user-level config. Web UI values are not sa
         return
 
     print(f"Unknown config command: {command}", file=sys.stderr)
+    sys.exit(2)
+
+
+def _run_history(argv):
+    if not argv or argv[0] in ("-h", "--help"):
+        print("""paperseek history <command>
+
+Commands:
+  path                         Print the local history database path
+  list [--limit 50] [--json]    List recent search runs
+  show <RUN_ID> [--json]        Show one saved run, including events and papers
+  delete <RUN_ID>               Delete one run
+  clear --yes                   Delete all local history
+
+Environment variables:
+  PAPERSEEK_HISTORY_ENABLED     Set to false/0/no/off to disable local history
+  PAPERSEEK_DATA_DIR            Directory for local PaperSeek data
+  PAPERSEEK_HISTORY_DB          Explicit SQLite database path
+""")
+        return
+
+    store = HistoryStore()
+    command = argv[0]
+    rest = argv[1:]
+
+    if command == "path":
+        print(store.status()["path"])
+        return
+
+    if command == "list":
+        parser = argparse.ArgumentParser(prog="paperseek history list")
+        parser.add_argument("--limit", type=int, default=50, help="Number of runs to show")
+        parser.add_argument("--offset", type=int, default=0, help="Number of newest runs to skip")
+        parser.add_argument("--json", action="store_true", help="Print JSON")
+        args = parser.parse_args(rest)
+        data = {
+            **store.status(),
+            "history": store.list_runs(limit=args.limit, offset=args.offset),
+        }
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False, indent=2))
+            return
+        print(f"History DB: {data['path']}")
+        if not data["enabled"]:
+            print("History is disabled.")
+            return
+        if not data["history"]:
+            print("No saved search runs.")
+            return
+        for run in data["history"]:
+            question = " ".join(str(run["question"]).split())
+            if len(question) > 78:
+                question = question[:75].rstrip() + "..."
+            print(
+                f"{run['id']}  {run['status']:<7}  {run.get('source') or '-':<9}  "
+                f"{run.get('result_count') or 0:>3} papers  {run['created_at']}  {question}"
+            )
+        return
+
+    if command == "show":
+        parser = argparse.ArgumentParser(prog="paperseek history show")
+        parser.add_argument("run_id")
+        parser.add_argument("--json", action="store_true", help="Print JSON")
+        args = parser.parse_args(rest)
+        run = store.get_run(args.run_id)
+        if run is None:
+            print(f"History run not found: {args.run_id}", file=sys.stderr)
+            sys.exit(1)
+        if args.json:
+            print(json.dumps(run, ensure_ascii=False, indent=2))
+            return
+        print(f"Run:      {run['id']}")
+        print(f"Status:   {run['status']}")
+        print(f"Created:  {run['created_at']}")
+        print(f"Source:   {run.get('source') or '-'}")
+        print(f"Question: {run['question']}")
+        if run.get("final_query"):
+            print(f"Query:    {run['final_query']}")
+        if run.get("error_message"):
+            print(f"Error:    {run['error_message']}")
+        papers = run.get("ranked") or []
+        print(f"Results:  {len(papers)}")
+        for paper in papers[:20]:
+            title = paper.get("title") or "(no title)"
+            score = paper.get("score") if paper.get("score") is not None else paper.get("relevance_score", "")
+            year = paper.get("publish_year") or paper.get("year") or ""
+            print(f"  {paper.get('rank', '-')}. [{score}] {title} {f'({year})' if year else ''}")
+        if len(papers) > 20:
+            print(f"  ... {len(papers) - 20} more papers")
+        return
+
+    if command == "delete":
+        parser = argparse.ArgumentParser(prog="paperseek history delete")
+        parser.add_argument("run_id")
+        args = parser.parse_args(rest)
+        if not store.delete_run(args.run_id):
+            print(f"History run not found: {args.run_id}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Deleted {args.run_id}")
+        return
+
+    if command == "clear":
+        parser = argparse.ArgumentParser(prog="paperseek history clear")
+        parser.add_argument("--yes", action="store_true", help="Confirm deleting all local history")
+        args = parser.parse_args(rest)
+        if not args.yes:
+            print("Refusing to clear history without --yes.", file=sys.stderr)
+            sys.exit(1)
+        print(f"Deleted {store.clear()} runs.")
+        return
+
+    print(f"Unknown history command: {command}", file=sys.stderr)
     sys.exit(2)
 
 

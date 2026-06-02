@@ -11,6 +11,7 @@ paperseek "QUESTION" [options]
 paperseek doctor [--source SOURCE] [--json]
 paperseek smoke [--source SOURCE] [--query QUERY] [--limit N] [--json]
 paperseek sources [--json]
+paperseek history <list|show|delete|clear|path>
 paperseek config <path|keys|list|set|unset|import-env>
 paperseek-web
 python skills/paperseek/scripts/paperseek.py --help
@@ -133,8 +134,25 @@ Common variables:
 - `TARGET_MAX`
 - `MAX_ITERATIONS`
 - `EXPAND_CITATIONS`
+- `PAPERSEEK_HISTORY_ENABLED`
+- `PAPERSEEK_DATA_DIR`
+- `PAPERSEEK_HISTORY_DB`
 
 Do not echo real secret values. Use `paperseek config list` for masked status.
+
+## Local History Contract
+
+Self-hosted PaperSeek saves search runs to local SQLite by default. History commands:
+
+```bash
+paperseek history path
+paperseek history list --json
+paperseek history show RUN_ID --json
+paperseek history delete RUN_ID
+paperseek history clear --yes
+```
+
+History records may include research questions, generated queries, run events, errors, citation-map metadata, and ranked paper metadata. They must not include raw API keys. Agents may use history for user-requested recall, but should not assume it is a cloud-synced account history.
 
 ## Diagnostics Contract
 

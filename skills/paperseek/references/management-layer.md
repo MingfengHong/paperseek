@@ -41,6 +41,7 @@ paperseek doctor --json
 paperseek sources
 paperseek sources --json
 paperseek smoke --source openalex --query "machine learning" --json
+paperseek history list
 paperseek config list
 ```
 
@@ -50,6 +51,7 @@ paperseek config list
 | `paperseek doctor --json` | Machine-readable diagnostics | Agent needs to decide next action |
 | `paperseek smoke --source SOURCE --query QUERY --json` | Minimal live request to one literature source | Network, source availability, or key validity is uncertain |
 | `paperseek sources --json` | Source capability registry | Need to know supported fields and source limits |
+| `paperseek history list` | Local saved-run index | User asks to recall prior searches on this self-hosted instance |
 | `paperseek config list` | Masked user-level config view | Need to check whether values are configured |
 
 ## Configuration Sources
@@ -62,6 +64,8 @@ Priority:
 4. Built-in defaults.
 
 The Web UI uses request/session values only. It does not save API keys or endpoint settings.
+
+Local search history is separate from user-level config. It is stored in SQLite under `~/.paperseek/paperseek.db` by default and can be disabled with `PAPERSEEK_HISTORY_ENABLED=false`.
 
 ## User-Level Config
 

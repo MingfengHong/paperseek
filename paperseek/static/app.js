@@ -55,6 +55,11 @@ let resultFilters = {
 let selectedCitationNodeId = "";
 let resultSearchTimer = null;
 let citationGraphState = createCitationGraphState();
+let historyRuns = [];
+let historyDetail = null;
+let historyStatus = { enabled: true, path: "" };
+let historyLoading = false;
+let historyError = "";
 
 function nowStamp() {
   return new Date().toLocaleTimeString("en-GB", { hour12: false });
@@ -316,6 +321,11 @@ function renderWorkflow() {
     renderCitationGraph();
     return;
   }
+  if (activeView === "history") {
+    workflow.innerHTML = renderHistoryView();
+    renderStepLabel();
+    return;
+  }
 
   workflow.innerHTML = stageOrder.map((key) => {
     const item = workflowState[key];
@@ -346,6 +356,9 @@ function switchView(view) {
     tab.classList.toggle("muted", !isActive);
   });
   renderWorkflow();
+  if (view === "history") {
+    loadHistoryRuns();
+  }
 }
 
 function emptyState(text) {
@@ -546,6 +559,173 @@ function renderResultRows(papers) {
       }).join("")}
     </div>
   `;
+}
+
+function shortText(value, maxChars = 120) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return `${text.slice(0, maxChars - 3).trim()}...`;
+}
+
+function resultFromHistoryRun(run) {
+  if (!run) {
+    return null;
+  }
+  return {
+    run_id: run.id,
+    question: run.question || "",
+    source: run.source || "",
+    final_query: run.final_query || "",
+    db: run.db || "",
+    field: run.field || "",
+    total: run.total || 0,
+    iterations: run.iterations || 0,
+    history: run.history || [],
+    citation_map: run.citation_map || {},
+    ranked: run.ranked || [],
+  };
+}
+
+function renderHistoryView() {
+  const statusText = historyStatus.enabled ? `Local SQLite: ${historyStatus.path || "default path"}` : "Local history is disabled";
+  const selectedId = historyDetail && historyDetail.id ? historyDetail.id : "";
+  const listBody = historyLoading ? emptyState("Loading saved runs.") : historyError ? `<div class="error-box">${escapeHtml(historyError)}</div>` : historyRuns.length ? `
+    <div class="history-list">
+      ${historyRuns.map((run) => {
+        const active = run.id === selectedId ? " active" : "";
+        const pieces = [
+          run.status,
+          run.source || "source pending",
+          `${run.result_count || 0} papers`,
+          run.created_at,
+        ].filter(Boolean).join(" | ");
+        return `
+          <button class="history-run-button${active}" type="button" data-history-id="${escapeHtml(run.id)}">
+            <strong>${escapeHtml(shortText(run.question || "(no question)", 96))}</strong>
+            <span>${escapeHtml(pieces)}</span>
+            ${run.final_query ? `<span>${escapeHtml(shortText(run.final_query, 110))}</span>` : ""}
+          </button>
+        `;
+      }).join("")}
+    </div>
+  ` : emptyState("No saved search runs yet.");
+
+  return `
+    <section class="workspace-view history-view">
+      <div class="workspace-header">
+        <div>
+          <div class="section-kicker">History</div>
+          <h2>Local search records</h2>
+        </div>
+        <div class="view-actions">
+          <span>${escapeHtml(statusText)}</span>
+          <button class="secondary-button compact" type="button" data-history-action="refresh">Refresh</button>
+        </div>
+      </div>
+      <div class="history-layout">
+        <div>${listBody}</div>
+        ${renderHistoryDetail()}
+      </div>
+    </section>
+  `;
+}
+
+function renderHistoryDetail() {
+  if (!historyDetail) {
+    return `
+      <div class="history-detail-panel">
+        ${emptyState("Select a saved run to inspect query, events, and ranked papers.")}
+      </div>
+    `;
+  }
+
+  const run = historyDetail;
+  const papers = run.ranked || [];
+  const events = run.events || [];
+  const meta = [
+    run.status,
+    run.source || "source pending",
+    run.result_count !== undefined ? `${run.result_count} papers` : `${papers.length} papers`,
+    run.iterations ? `${run.iterations} iteration(s)` : "",
+    run.created_at,
+  ].filter(Boolean);
+  const eventRows = events.length ? `
+    <div class="history-event-list">
+      ${events.slice(-12).map((event) => `
+        <div class="history-event-row">
+          <span>${escapeHtml(String(event.created_at || "").slice(11, 19))}</span>
+          <span>${escapeHtml(event.message || [event.type, event.stage, event.status].filter(Boolean).join(" "))}</span>
+        </div>
+      `).join("")}
+    </div>
+  ` : emptyState("No event log was saved for this run.");
+
+  return `
+    <div class="history-detail-panel">
+      <div class="history-detail-head">
+        <div class="section-kicker">${escapeHtml(run.id)}</div>
+        <h3>${escapeHtml(run.question || "(no question)")}</h3>
+        <div class="history-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+        <div class="result-jump-actions">
+          <button class="primary-inline-button" type="button" data-history-action="open-results">Open Results</button>
+          <button class="secondary-button" type="button" data-history-action="open-citations">Open Citation Map</button>
+          <button class="secondary-button" type="button" data-history-action="delete" data-history-id="${escapeHtml(run.id)}">Delete</button>
+        </div>
+      </div>
+      ${run.final_query ? `
+        <div class="history-query">
+          <span>Final query</span>
+          <code>${escapeHtml(run.final_query)}</code>
+        </div>
+      ` : ""}
+      ${run.error_message ? `<div class="error-box">${escapeHtml(run.error_message)}</div>` : ""}
+      ${papers.length ? renderPapers(papers.slice(0, 8)) : emptyState("This run did not save ranked papers.")}
+      <div class="history-query">
+        <span>Recent log events</span>
+        ${eventRows}
+      </div>
+    </div>
+  `;
+}
+
+async function loadHistoryRuns() {
+  historyLoading = true;
+  historyError = "";
+  renderWorkflow();
+  try {
+    const response = await fetch("/api/history?limit=80");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(responseErrorMessage(data, response.status));
+    }
+    historyStatus = { enabled: data.enabled, path: data.path };
+    historyRuns = data.history || [];
+    if (historyDetail && !historyRuns.some((run) => run.id === historyDetail.id)) {
+      historyDetail = null;
+    }
+  } catch (error) {
+    historyError = error.message;
+  } finally {
+    historyLoading = false;
+    renderWorkflow();
+  }
+}
+
+async function loadHistoryDetail(runIdValue) {
+  historyError = "";
+  try {
+    const response = await fetch(`/api/history/${encodeURIComponent(runIdValue)}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(responseErrorMessage(data, response.status));
+    }
+    historyDetail = data;
+  } catch (error) {
+    historyError = error.message;
+  }
+  renderWorkflow();
 }
 
 function citationMap() {
@@ -1204,6 +1384,11 @@ async function readNdjsonStream(response) {
 function handleStreamEvent(event) {
   if (event.type === "log") {
     log(event.message || "");
+  } else if (event.type === "run") {
+    if (event.run_id) {
+      runId.textContent = event.run_id;
+      log(`Local history run: ${event.run_id}.`);
+    }
   } else if (event.type === "stage") {
     applyStageEvent(event);
   } else if (event.type === "result") {
@@ -1231,6 +1416,49 @@ workflow.addEventListener("click", (event) => {
   const switchTarget = event.target.closest("[data-switch-view]");
   if (switchTarget) {
     switchView(switchTarget.dataset.switchView);
+    return;
+  }
+
+  const historyRun = event.target.closest("[data-history-id]");
+  if (historyRun && historyRun.classList.contains("history-run-button")) {
+    loadHistoryDetail(historyRun.dataset.historyId);
+    return;
+  }
+
+  const historyAction = event.target.closest("[data-history-action]");
+  if (historyAction) {
+    const action = historyAction.dataset.historyAction;
+    if (action === "refresh") {
+      loadHistoryRuns();
+    } else if (action === "open-results" || action === "open-citations") {
+      const restored = resultFromHistoryRun(historyDetail);
+      if (restored) {
+        latestResult = restored;
+        selectedPaperIds = new Set();
+        selectedCitationNodeId = "";
+        citationGraphState = createCitationGraphState();
+        updateExportButtons();
+        switchView(action === "open-results" ? "results" : "citations");
+      }
+    } else if (action === "delete") {
+      const targetId = historyAction.dataset.historyId || (historyDetail && historyDetail.id);
+      if (targetId && window.confirm(`Delete local history run ${targetId}?`)) {
+        fetch(`/api/history/${encodeURIComponent(targetId)}`, { method: "DELETE" })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            if (historyDetail && historyDetail.id === targetId) {
+              historyDetail = null;
+            }
+            return loadHistoryRuns();
+          })
+          .catch((error) => {
+            historyError = error.message;
+            renderWorkflow();
+          });
+      }
+    }
     return;
   }
 

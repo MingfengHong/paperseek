@@ -6,7 +6,7 @@ from threading import Thread
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 from paperseek.client import ApiException
 from paperseek.config import AgentConfig, default_api_type, default_base_url, default_model
 from paperseek.diagnostics import run_doctor, smoke_source
-from paperseek.formatter import ranked_items_to_dict
+from paperseek.history import HistoryStore, result_payload_from_search_result, safe_search_params_from_config
 from paperseek.llm_client import LLMError, create_llm_client
 from paperseek.providers import ProviderError
 from paperseek.search_agent import WosSearchAgent
@@ -255,42 +255,86 @@ def smoke(payload: DiagnosticRequest):
 
 
 def _response_payload(result: dict, source: str) -> dict:
+    return result_payload_from_search_result(result, source)
+
+
+def _record_failure(store: HistoryStore, run_id: str, message: str) -> None:
+    store.fail_run(run_id, message)
+
+
+@app.get("/api/history/status")
+def history_status():
+    return HistoryStore().status()
+
+
+@app.get("/api/history")
+def history_list(limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0)):
+    store = HistoryStore()
     return {
-        "question": result["question"],
-        "source": result.get("source", source),
-        "final_query": result["final_query"],
-        "db": result["db"],
-        "field": result["field"],
-        "total": result["total"],
-        "iterations": result["iterations"],
-        "history": result.get("history", []),
-        "citation_map": result.get("citation_map", {}),
-        "ranked": ranked_items_to_dict(result["ranked"]),
+        **store.status(),
+        "history": store.list_runs(limit=limit, offset=offset),
     }
+
+
+@app.get("/api/history/{run_id}")
+def history_detail(run_id: str):
+    store = HistoryStore()
+    run = store.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="History run not found.")
+    return run
+
+
+@app.delete("/api/history/{run_id}")
+def history_delete(run_id: str):
+    store = HistoryStore()
+    if not store.delete_run(run_id):
+        raise HTTPException(status_code=404, detail="History run not found.")
+    return {"deleted": run_id}
+
+
+@app.delete("/api/history")
+def history_clear():
+    store = HistoryStore()
+    return {"deleted": store.clear()}
 
 
 @app.post("/api/search")
 def search(payload: SearchRequest):
     _validate_payload(payload)
     config = _config_from_payload(payload)
+    store = HistoryStore()
+    run_id = store.create_run(payload.question, safe_search_params_from_config(config))
 
     try:
         config.validate()
         llm = create_llm_client(config)
         agent = WosSearchAgent(config, llm)
         result = agent.search(payload.question, verbose=False)
+        response = _response_payload(result, payload.data_source)
+        if run_id:
+            response["run_id"] = run_id
+        store.complete_run(run_id, response)
     except ValueError as exc:
+        _record_failure(store, run_id, str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except LLMError as exc:
+        _record_failure(store, run_id, str(exc))
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ApiException as exc:
-        raise HTTPException(status_code=502, detail=_friendly_api_error(exc)) from exc
+        message = _friendly_api_error(exc)
+        _record_failure(store, run_id, message)
+        raise HTTPException(status_code=502, detail=message) from exc
     except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=_friendly_provider_error(exc)) from exc
+        message = _friendly_provider_error(exc)
+        _record_failure(store, run_id, message)
+        raise HTTPException(status_code=502, detail=message) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="Search failed. Check the local server logs for details.") from exc
+        message = "Search failed. Check the local server logs for details."
+        _record_failure(store, run_id, message)
+        raise HTTPException(status_code=500, detail=message) from exc
 
-    return _response_payload(result, payload.data_source)
+    return response
 
 
 @app.post("/api/search/stream")
@@ -302,14 +346,22 @@ def search_stream(payload: SearchRequest):
 
     def generator():
         events: Queue = Queue()
+        store = HistoryStore()
+        run_id = ""
 
         def send(event: dict):
+            if event.get("type") != "result":
+                store.record_event(run_id, event)
             events.put(event)
 
         def worker():
+            nonlocal run_id
             try:
-                send({"type": "log", "message": "Backend request accepted: POST /api/search/stream -> HTTP 200 OK."})
                 config = _config_from_payload(payload)
+                run_id = store.create_run(payload.question, safe_search_params_from_config(config))
+                if run_id:
+                    send({"type": "run", "run_id": run_id})
+                send({"type": "log", "message": "Backend request accepted: POST /api/search/stream -> HTTP 200 OK."})
                 send({
                     "type": "log",
                     "message": (
@@ -324,18 +376,32 @@ def search_stream(payload: SearchRequest):
                 send({"type": "log", "message": "Initializing source adapter."})
                 agent = WosSearchAgent(config, llm)
                 result = agent.search(payload.question, verbose=False, event_handler=send)
-                send({"type": "result", "data": _response_payload(result, payload.data_source)})
+                response = _response_payload(result, payload.data_source)
+                if run_id:
+                    response["run_id"] = run_id
+                store.complete_run(run_id, response)
+                send({"type": "result", "data": response})
                 send({"type": "log", "message": "Run completed successfully."})
             except ValueError as exc:
-                send({"type": "error", "message": str(exc)})
+                message = str(exc)
+                _record_failure(store, run_id, message)
+                send({"type": "error", "message": message})
             except LLMError as exc:
-                send({"type": "error", "message": str(exc)})
+                message = str(exc)
+                _record_failure(store, run_id, message)
+                send({"type": "error", "message": message})
             except ApiException as exc:
-                send({"type": "error", "message": _friendly_api_error(exc)})
+                message = _friendly_api_error(exc)
+                _record_failure(store, run_id, message)
+                send({"type": "error", "message": message})
             except ProviderError as exc:
-                send({"type": "error", "message": _friendly_provider_error(exc)})
+                message = _friendly_provider_error(exc)
+                _record_failure(store, run_id, message)
+                send({"type": "error", "message": message})
             except Exception:
-                send({"type": "error", "message": "Search failed. Check the local server logs for details."})
+                message = "Search failed. Check the local server logs for details."
+                _record_failure(store, run_id, message)
+                send({"type": "error", "message": message})
             finally:
                 events.put(None)
 

@@ -457,6 +457,9 @@ Web UI 运行时：
 | `CITATION_SEED_COUNT` | `3` | 引用扩展 seed 数量。 |
 | `CITATION_PER_SEED` | `4` | 每个 seed 的引用邻居数量。 |
 | `CITATION_MAX_RECORDS` | `40` | 引用扩展加入候选池的最大记录数。 |
+| `PAPERSEEK_HISTORY_ENABLED` | `true` | 是否启用本地 SQLite 历史记录。 |
+| `PAPERSEEK_DATA_DIR` | `~/.paperseek` | 本地数据目录。 |
+| `PAPERSEEK_HISTORY_DB` | `~/.paperseek/paperseek.db` | 本地历史数据库路径。 |
 
 布尔变量接受：
 
@@ -794,6 +797,7 @@ paperseek <question> [options]
 paperseek doctor [--source openalex] [--json]
 paperseek smoke [--source openalex] [--query "machine learning"] [--json]
 paperseek sources [--json]
+paperseek history <list|show|delete|clear|path>
 paperseek config <path|list|keys|set|unset|import-env>
 ```
 
@@ -960,6 +964,38 @@ paperseek sources --json
 
 该命令显示数据源能力，例如是否支持摘要、引用数、引用扩展、PDF 链接、必填配置和可选配置。
 
+### History 命令
+
+PaperSeek 默认把 CLI 和 Web UI 的搜索运行保存到本地 SQLite。查看数据库路径：
+
+```bash
+paperseek history path
+```
+
+列出最近运行：
+
+```bash
+paperseek history list
+paperseek history list --limit 20
+paperseek history list --json
+```
+
+查看一次运行的详情：
+
+```bash
+paperseek history show <RUN_ID>
+paperseek history show <RUN_ID> --json
+```
+
+删除记录：
+
+```bash
+paperseek history delete <RUN_ID>
+paperseek history clear --yes
+```
+
+历史记录保存研究问题、数据源、最终检索式、运行状态、日志事件、引用图元数据和排序后的论文结果。PaperSeek 不会把 LLM API Key、WoS API Key、OpenAlex API Key 或其它原始密钥写入历史数据库。
+
 ### Config 命令
 
 查看配置路径：
@@ -1026,11 +1062,12 @@ paperseek-web
 http://127.0.0.1:8765/
 ```
 
-Web UI 由三个页面组成：
+Web UI 由四个页面组成：
 
 - `Search`
 - `Results`
 - `Citation Map`
+- `History`
 
 顶部状态栏显示：
 
@@ -1203,6 +1240,28 @@ A -> B 表示 A 引用了 B
 ```
 
 Citation Map 依赖 OpenAlex 引用关系。Crossref 和 WoS Starter 当前不支持 PaperSeek 的引用扩展图。
+
+### History 页面
+
+History 页面读取本机 SQLite 历史数据库，用于回看自托管实例上的搜索运行。
+
+可查看内容：
+
+- 研究问题。
+- 运行状态和创建时间。
+- 数据源、命中数量和结果数量。
+- 最终检索式。
+- 排序后的论文结果。
+- 最近的运行日志事件。
+
+可执行操作：
+
+- `Refresh`：刷新本地历史列表。
+- `Open Results`：把该历史运行恢复到 Results 页面继续筛选和导出。
+- `Open Citation Map`：如果该运行包含引用图数据，恢复到 Citation Map 页面探索。
+- `Delete`：删除该条本地历史记录。
+
+History 页面不会显示搜索配置区和 System Dashboard，因为它查看的是已经完成或失败的历史运行，而不是新的搜索会话。
 
 ## Results and exports
 
@@ -1607,6 +1666,41 @@ PaperSeek Web UI 导出的 CSV 带 UTF-8 BOM。若仍乱码：
 - 不要把 `.env` 提交到 Git。
 - Web UI 表单中的 Key 只用于当前会话。
 - CLI 用户级配置会保存到本地配置文件，`paperseek config list` 会遮蔽密钥。
+
+### 本地历史数据库
+
+开源自托管版默认启用本地历史记录，默认路径：
+
+```text
+~/.paperseek/paperseek.db
+```
+
+历史数据库会保存：
+
+- 研究问题。
+- 数据源、Provider、Model、目标结果数等运行摘要。
+- 是否提供了相关 API Key 的布尔值。
+- 最终检索式、运行事件、错误信息。
+- 排序后的论文元数据、引用图元数据。
+
+历史数据库不会保存：
+
+- LLM API Key。
+- WoS API Key。
+- OpenAlex API Key。
+- 其它原始 token、authorization header 或密码字段。
+
+关闭本地历史：
+
+```bash
+export PAPERSEEK_HISTORY_ENABLED=false
+```
+
+自定义历史路径：
+
+```bash
+export PAPERSEEK_HISTORY_DB=/path/to/paperseek.db
+```
 
 ### Web UI 本地服务
 

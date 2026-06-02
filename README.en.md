@@ -41,6 +41,7 @@ PaperSeek is designed for first-pass paper discovery and metadata organization. 
 | Result export | Select papers in the Results view and export them as CSV. |
 | Citation map | Shows citation direction with arrows; supports drag, zoom, and pan. |
 | CLI and Web UI | Run from the command line or through a local browser interface. |
+| Local history | Self-hosted installs save search runs, events, and ranked records to local SQLite by default. |
 | Docker / Vercel / ModelScope deployment | Supports full Docker deployments, Vercel demos, and ModelScope Studio hosting. |
 | Diagnostics | `doctor`, `smoke`, and `sources` help debug API keys, source adapters, and protocol settings. |
 | Optional Agent Skill | `skills/paperseek/` can be copied into skill-aware agent platforms without being installed with the Python package. |
@@ -156,15 +157,16 @@ The repository includes `.env.example`. Copy it to `.env` for local reference, b
 
 ## Web UI
 
-The Web UI has three main workspaces:
+The Web UI has four main workspaces:
 
 | View | Purpose |
 | --- | --- |
 | Search | Enter the research question, configure data source, LLM, iterations, and target result range; watch workflow stages and system logs. |
 | Results | Review ranked papers, search, filter, sort, select, and export paper CSV. |
 | Citation Map | Explore OpenAlex citation expansion as a directed graph. |
+| History | Review locally saved runs, final queries, ranked records, and run events. |
 
-API keys, base URLs, and run parameters entered in the Web UI are used only for the current browser session and are not written to local config files by PaperSeek.
+API keys, base URLs, and run parameters entered in the Web UI are used only for the current browser session and are not written to local config files by PaperSeek. Local history saves run summaries, queries, events, and results, but never raw API keys.
 
 ## CLI Usage
 
@@ -221,6 +223,14 @@ List source capabilities:
 ```bash
 paperseek sources
 paperseek sources --json
+```
+
+Review local history:
+
+```bash
+paperseek history list
+paperseek history show <RUN_ID> --json
+paperseek history path
 ```
 
 Manage user-level CLI config:
@@ -309,6 +319,9 @@ Graph nodes come from final results and OpenAlex citation expansion records. You
 | `CITATION_SEED_COUNT` | Number of seed papers used for citation expansion. |
 | `CITATION_PER_SEED` | Number of citation neighbors fetched per seed. |
 | `CITATION_MAX_RECORDS` | Candidate cap for citation expansion. |
+| `PAPERSEEK_HISTORY_ENABLED` | Enable local history; default `true`. |
+| `PAPERSEEK_DATA_DIR` | Local PaperSeek data directory; default `~/.paperseek`. |
+| `PAPERSEEK_HISTORY_DB` | Local history SQLite path; default `~/.paperseek/paperseek.db`. |
 
 ## Getting API Access
 
