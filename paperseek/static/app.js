@@ -226,7 +226,8 @@ function updateExportButtons() {
 }
 
 function filenamePart(value, fallback = "literature-search") {
-  const raw = String(value || fallback).normalize("NFKC").trim();
+  const text = String(value || fallback);
+  const raw = (typeof text.normalize === "function" ? text.normalize("NFKC") : text).trim();
   let cleaned = "";
   try {
     cleaned = raw

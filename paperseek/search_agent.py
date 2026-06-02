@@ -249,9 +249,6 @@ class WosSearchAgent:
                         f"Accepted {total} source records. This is above the final output target of {self.config.target_max}, "
                         f"but within the source candidate cap of {self.config.search_accept_max_records}; ranking will select the best papers."
                     )
-                elif total < self.config.target_min:
-                    action = "accept_low"
-                    message = f"Accepted {total} records, below the target minimum of {self.config.target_min}, because no further refinement is needed."
                 else:
                     message = f"Accepted {total} records within the target range."
                 history.append({
@@ -374,7 +371,7 @@ class WosSearchAgent:
 
         if iteration > self.config.max_iterations or (not hits and total == 0):
             if verbose:
-                print(f"[Done] {total} total results after {self.config.max_iterations} iterations.", file=sys.stderr)
+                print(f"[Done] {total} total results after {iteration} iterations.", file=sys.stderr)
 
         hits = self._collect_source_candidates(query, hits, total)
         candidates = self._prepare_candidates(question, hits)
@@ -529,7 +526,8 @@ class WosSearchAgent:
         if total > int(self.config.search_accept_max_records or 1000):
             return "accept_high", (
                 f"Accepted {total} records after fallback, still above the source candidate cap of "
-                f"{self.config.search_accept_max_records}. Ranking will use the returned page only."
+                f"{self.config.search_accept_max_records}. Ranking will score up to the cap when paging is supported; "
+                "otherwise it will use the returned page only."
             )
         if total > int(self.config.target_max or 50):
             return "accept_relaxed", (
@@ -657,10 +655,17 @@ class WosSearchAgent:
                 break
 
             self._merge_citation_graph(cumulative_nodes, cumulative_edges, edge_keys, citation_data)
-            related = [
-                doc for doc in self._dedupe_documents(citation_data.get("records", []))
-                if not self._document_seen(doc, candidates + added_candidates)
-            ]
+            seen_keys = set()
+            for doc in candidates + added_candidates:
+                key = self._document_key(doc)
+                if key:
+                    seen_keys.add(key)
+            related = []
+            for doc in self._dedupe_documents(citation_data.get("records", [])):
+                key = self._document_key(doc)
+                if key and key not in seen_keys:
+                    related.append(doc)
+                    seen_keys.add(key)
             if not related:
                 stop_reason = "no_new_neighbors"
                 depth_reached = depth
@@ -737,12 +742,6 @@ class WosSearchAgent:
         identifiers = getattr(doc, "identifiers", None)
         doi = (getattr(identifiers, "doi", "") if identifiers else "") or ""
         return (doi or getattr(doc, "uid", "") or getattr(doc, "title", "")).strip().lower()
-
-    def _document_seen(self, doc, documents: list) -> bool:
-        key = self._document_key(doc)
-        if not key:
-            return True
-        return key in {self._document_key(item) for item in documents or []}
 
     @staticmethod
     def _merge_citation_graph(nodes: dict, edges: list, edge_keys: set, citation_data: dict) -> None:

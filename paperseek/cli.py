@@ -122,7 +122,10 @@ Environment variables:
                      Source record cap accepted before ranking (default: 1000)
   EXPAND_CITATIONS   Set to "false" to skip OpenAlex citation expansion
   CITATION_MAX_DEPTH OpenAlex citation traversal depth (default: 3)
+  CITATION_RELEVANCE_THRESHOLD
+                     Minimum relevance score required to continue citation traversal (default: 7.0)
   FETCH_ABSTRACTS    Set to "true" to enable DOI-based abstract fetching
+  PAPERSEEK_TIMEZONE Override history timestamps timezone, e.g. Asia/Shanghai
   PAPERSEEK_HISTORY_ENABLED
                       Set to "false" to disable local SQLite search history
         """,
