@@ -13,6 +13,7 @@
 
 ![PaperSeek web interface](https://raw.githubusercontent.com/MingfengHong/paperseek/main/docs/assets/paperseek-web.png)
 
+文档站：[PaperSeek Docs](https://mingfenghong.github.io/paperseek/)。
 完整使用说明见 [PaperSeek 用户手册](docs/user-manual.md)。
 部署说明见 [Docker 与 Vercel 部署指南](docs/deployment.md)。
 

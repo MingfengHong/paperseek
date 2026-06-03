@@ -13,6 +13,7 @@ Try it online: [Live Demo](https://www.paperseek.xyz/). The hosted demo uses Mod
 
 ![PaperSeek web interface](https://raw.githubusercontent.com/MingfengHong/paperseek/main/docs/assets/paperseek-web.png)
 
+Documentation site: [PaperSeek Docs](https://mingfenghong.github.io/paperseek/).
 Full Chinese user manual: [PaperSeek User Manual](docs/user-manual.md).
 Deployment guide: [Docker and Vercel deployment](docs/deployment.md).
 

@@ -1,14 +1,13 @@
 # Deployment
 
-PaperSeek Web UI can be deployed in three common ways:
+PaperSeek Web UI can be deployed in two common ways:
 
 - **Docker / Docker Compose**: recommended for the full Web UI experience, including long searches, streaming logs, citation expansion, and self-hosted control.
-- **ModelScope Studio**: Docker-based hosted deployment for public demos or Chinese community access.
 - **Vercel**: convenient one-click deployment for demos and lightweight use. It can run the FastAPI Web UI, but it uses a serverless function runtime, so long-running searches may hit function duration limits.
 
 ## Docker
 
-Docker is the recommended production-style deployment path for PaperSeek. It runs the FastAPI app with Uvicorn in a container. The container listens on `7860` by default for ModelScope compatibility; local examples map it to host port `8765`.
+Docker is the recommended production-style deployment path for PaperSeek. It runs the FastAPI app with Uvicorn in a container. The container listens on `7860` by default; local examples map it to host port `8765`.
 
 ### Build and run
 
@@ -96,46 +95,7 @@ http://127.0.0.1:8765
 
 Keep the service behind HTTPS when exposed publicly. The Web UI accepts API keys in browser form fields, so public deployments should use TLS and an access-control layer if the instance is not intended for everyone.
 
-## ModelScope Studio
-
-ModelScope Studio can host the full PaperSeek Web UI through Docker. The repository includes `ms_deploy.json` with:
-
-Current public demos:
-
-```text
-https://www.paperseek.xyz/
-https://modelscope.cn/studios/HongMingfeng/paperseek
-```
-
-Use the ModelScope Studio link for direct access from mainland China.
-
-| Field | Value |
-| --- | --- |
-| `sdk_type` | `docker` |
-| `resource_configuration` | `platform/2v-cpu-16g-mem` |
-| `port` | `7860` |
-
-The Docker image listens on `0.0.0.0:7860`, which matches the Studio Docker port requirement.
-
-### Deploy from ModelScope
-
-1. Create a ModelScope account and access token.
-2. Create a Studio and choose Docker SDK integration.
-3. Push the repository to the Studio Git remote, or use ModelScope's programmatic deployment flow.
-4. Add server-side environment variables only if you want shared defaults:
-   - `LLM_PROVIDER`
-   - `LLM_API_TYPE`
-   - `LLM_MODEL`
-   - `LLM_BASE_URL`
-   - `LLM_API_KEY`
-   - `OPENALEX_API_KEY`
-   - `CROSSREF_EMAIL`
-   - `WOS_API_KEY`
-5. Deploy or restart the Studio.
-
-Users can also enter LLM keys and data-source keys in the Web UI for the current browser session. Do not commit ModelScope tokens or LLM API keys to the repository.
-
-### ModelScope API-Inference
+## ModelScope API-Inference
 
 PaperSeek supports ModelScope API-Inference as an OpenAI Chat Completions-compatible provider:
 
@@ -243,12 +203,11 @@ PaperSeek includes:
 | Scenario | Recommended deployment |
 | --- | --- |
 | Full Web UI for repeated research use | Docker |
-| Long searches with citation expansion | Docker or ModelScope Studio |
+| Long searches with citation expansion | Docker |
 | Private lab or server deployment | Docker behind HTTPS |
-| Public Chinese community demo | ModelScope Studio |
 | Quick demo link | Vercel |
-| Users enter keys only in browser session | Docker, ModelScope Studio, or Vercel |
-| Need predictable long-running behavior | Docker or ModelScope Studio |
+| Users enter keys only in browser session | Docker or Vercel |
+| Need predictable long-running behavior | Docker |
 
 ## Health check
 

@@ -31,7 +31,7 @@ skills/
 ├── api/index.py            # Vercel Python 入口
 ├── docs/                   # 用户手册、部署指南和截图
 ├── tests/                  # 单元测试
-├── Dockerfile              # Docker / ModelScope Studio 部署
+├── Dockerfile              # Docker 部署
 ├── docker-compose.yml      # 本地 Docker Compose
 ├── vercel.json             # Vercel Python Function 配置
 ├── pyproject.toml          # Python 包元数据

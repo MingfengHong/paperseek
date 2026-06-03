@@ -269,7 +269,7 @@ python -m pip uninstall paperseek
 
 ## Deployment
 
-PaperSeek 支持 Docker、ModelScope Studio 和 Vercel 部署。完整步骤见 [部署指南](deployment.md)。
+PaperSeek 支持 Docker、Docker Compose 和 Vercel 部署。完整步骤见 [部署指南](deployment.md)。
 
 ### Docker 部署
 
@@ -336,12 +336,6 @@ curl https://your-project.vercel.app/api/sources
 ```
 
 确认 API 是否返回数据源列表。
-
-### ModelScope Studio 部署
-
-ModelScope Studio 适合把完整 Web UI 发布成在线体验地址。PaperSeek 仓库包含 `ms_deploy.json`，声明 Docker 创空间所需的 `sdk_type=docker`、`port=7860` 和免费 CPU 资源配置。部署时不要把 LLM Key、ModelScope Token 或数据源 Key 写入仓库；需要共享默认配置时，在 Studio 环境变量里配置。
-
-更多步骤见 [部署指南](deployment.md)。
 
 ## Core concepts
 

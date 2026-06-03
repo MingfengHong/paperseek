@@ -3,8 +3,22 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - "README.en.md"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/docs.yml"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - "README.en.md"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/docs.yml"
 
 jobs:
   test:

@@ -13,8 +13,9 @@ class PackagingTest(unittest.TestCase):
         self.assertIn('version = "0.1.0"', pyproject)
         self.assertIn('Homepage = "https://www.paperseek.xyz/"', pyproject)
         self.assertIn('Online-Demo = "https://www.paperseek.xyz/"', pyproject)
-        self.assertIn('ModelScope-Studio = "https://modelscope.cn/studios/HongMingfeng/paperseek"', pyproject)
         self.assertIn('Repository = "https://github.com/MingfengHong/paperseek"', pyproject)
+        self.assertIn('Documentation = "https://mingfenghong.github.io/paperseek/"', pyproject)
+        self.assertNotIn("modelscope.cn/studios", pyproject)
         self.assertNotRegex(pyproject, re.compile(r"^wos-search\s*=", re.MULTILINE))
         self.assertNotRegex(pyproject, re.compile(r"^wos-search-web\s*=", re.MULTILINE))
 
@@ -79,6 +80,14 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("ModelScope", guide)
         self.assertIn("API Inference", guide)
         self.assertIn("历史记录按登录账号隔离", guide)
+
+    def test_vitepress_docs_site_exists(self):
+        config = (ROOT / "docs" / ".vitepress" / "config.mts").read_text(encoding="utf-8")
+        package = (ROOT / "package.json").read_text(encoding="utf-8")
+        banner = (ROOT / "docs" / "public" / "README.md").read_text(encoding="utf-8")
+        self.assertIn("defineConfig", config)
+        self.assertIn("docs:build", package)
+        self.assertIn("This branch is generated for GitHub Pages. Do not develop here.", banner)
 
     def test_deployment_files_exist(self):
         for path in (
