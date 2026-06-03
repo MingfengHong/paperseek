@@ -50,7 +50,7 @@ dev = [
 Homepage = "https://www.paperseek.xyz/"
 Repository = "https://github.com/MingfengHong/paperseek"
 Issues = "https://github.com/MingfengHong/paperseek/issues"
-Documentation = "https://mingfenghong.github.io/paperseek/"
+Documentation = "https://docs.paperseek.xyz/"
 Online-Demo = "https://www.paperseek.xyz/"
 
 [project.scripts]

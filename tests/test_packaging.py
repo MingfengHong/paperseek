@@ -14,7 +14,7 @@ class PackagingTest(unittest.TestCase):
         self.assertIn('Homepage = "https://www.paperseek.xyz/"', pyproject)
         self.assertIn('Online-Demo = "https://www.paperseek.xyz/"', pyproject)
         self.assertIn('Repository = "https://github.com/MingfengHong/paperseek"', pyproject)
-        self.assertIn('Documentation = "https://mingfenghong.github.io/paperseek/"', pyproject)
+        self.assertIn('Documentation = "https://docs.paperseek.xyz/"', pyproject)
         self.assertNotIn("modelscope.cn/studios", pyproject)
         self.assertNotRegex(pyproject, re.compile(r"^wos-search\s*=", re.MULTILINE))
         self.assertNotRegex(pyproject, re.compile(r"^wos-search-web\s*=", re.MULTILINE))

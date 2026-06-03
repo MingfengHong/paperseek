@@ -49,7 +49,7 @@ jobs:
       - name: Build docs
         run: npm run docs:build
         env:
-          DOCS_BASE: /paperseek/
+          DOCS_BASE: /
 
       - name: Publish to gh-pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

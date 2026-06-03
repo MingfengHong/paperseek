@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitepress'
 
-const base = process.env.DOCS_BASE || '/paperseek/'
+const base = process.env.DOCS_BASE || '/'
 
 export default defineConfig({
   lang: 'zh-CN',
