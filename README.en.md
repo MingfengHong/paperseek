@@ -9,12 +9,12 @@
 
 **LLM based Literature Search Agent.** PaperSeek helps researchers start literature searches in natural language, iteratively refine database queries, expand candidate papers through citation links, rank records, and export a reviewable paper list.
 
-Try it online: [Live Demo](https://www.paperseek.xyz/). Mainland China access: [ModelScope Studio](https://modelscope.cn/studios/HongMingfeng/paperseek).
+Try it online: [Live Demo](https://www.paperseek.xyz/). The hosted demo uses ModelScope account sign-in, runs model calls with the signed-in user's API Inference quota, and stores search history in the hosted service. See the [hosted demo guide](docs/online-demo.md) for details.
 
 ![PaperSeek web interface](https://raw.githubusercontent.com/MingfengHong/paperseek/main/docs/assets/paperseek-web.png)
 
 Full Chinese user manual: [PaperSeek User Manual](docs/user-manual.md).
-Deployment guide: [Docker, Vercel, and ModelScope deployment](docs/deployment.md).
+Deployment guide: [Docker and Vercel deployment](docs/deployment.md).
 
 ## Overview
 
@@ -42,7 +42,7 @@ PaperSeek is designed for first-pass paper discovery and metadata organization. 
 | Citation map | Shows citation direction with arrows; supports drag, zoom, and pan. |
 | CLI and Web UI | Run from the command line or through a local browser interface. |
 | Local history | Self-hosted installs save search runs, events, and ranked records to local SQLite by default. |
-| Docker / Vercel / ModelScope deployment | Supports full Docker deployments, Vercel demos, and ModelScope Studio hosting. |
+| Docker / Vercel deployment | Supports full Docker deployments and Vercel demos. |
 | Diagnostics | `doctor`, `smoke`, and `sources` help debug API keys, source adapters, and protocol settings. |
 | Optional Agent Skill | `skills/paperseek/` can be copied into skill-aware agent platforms without being installed with the Python package. |
 
@@ -104,7 +104,7 @@ Vercel can host quick demos and lightweight Web UI deployments:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMingfengHong%2Fpaperseek)
 
-ModelScope Studio can also host the full Web UI and is suitable for a public Chinese community demo. For long searches, citation expansion, and heavy repeated use, prefer Docker, ModelScope Studio, or a VPS. See the [deployment guide](docs/deployment.md) for details.
+For long searches, citation expansion, and heavy repeated use, prefer Docker or a VPS. See the [deployment guide](docs/deployment.md) for details.
 
 ## Minimal Configuration
 
@@ -118,6 +118,17 @@ export LLM_API_TYPE=openai_chat
 export LLM_MODEL=deepseek-v4-flash
 export LLM_BASE_URL=https://api.deepseek.com
 export LLM_API_KEY=your-llm-api-key
+paperseek-web
+```
+
+CSTCloud example:
+
+```bash
+export LLM_PROVIDER=cstcloud
+export LLM_API_TYPE=openai_chat
+export LLM_MODEL=DeepSeek-V4-Flash
+export LLM_BASE_URL=https://uni-api.cstcloud.cn/v1
+export LLM_API_KEY=your-cstcloud-api-key
 paperseek-web
 ```
 
@@ -264,6 +275,7 @@ PaperSeek supports two mainstream API protocol families: OpenAI-style APIs and A
 | Anthropic | `anthropic_messages` | `claude-sonnet-4-6` |
 | Google Gemini | `openai_chat` | `gemini-3.5-flash` |
 | DeepSeek | `openai_chat` | `deepseek-v4-flash` |
+| CSTCloud | `openai_chat` | `DeepSeek-V4-Flash` |
 | DashScope | `openai_chat` | `qwen3.6-plus` |
 | Kimi Moonshot | `openai_chat` | `kimi-k2.6` |
 | Zhipu AI GLM | `openai_chat` | `glm-5.1` |
@@ -304,7 +316,7 @@ Graph nodes come from final results and OpenAlex citation expansion records. You
 | Variable | Description |
 | --- | --- |
 | `DATA_SOURCE` | `openalex`, `crossref`, or `wos`; default is `openalex`. |
-| `LLM_PROVIDER` | LLM provider, such as `openai`, `deepseek`, `anthropic`, `modelscope`, or `ollama`. |
+| `LLM_PROVIDER` | LLM provider, such as `openai`, `deepseek`, `cstcloud`, `anthropic`, `modelscope`, or `ollama`. |
 | `LLM_API_TYPE` | `openai_responses`, `openai_chat`, or `anthropic_messages`. |
 | `LLM_MODEL` | Model name. |
 | `LLM_BASE_URL` | API base URL. |
@@ -346,6 +358,20 @@ export CROSSREF_EMAIL=you@example.org
 ```
 
 For higher quotas, priority support, or production SLA, consider Crossref Metadata Plus. PaperSeek uses the public or polite REST API path.
+
+### CSTCloud LLM API
+
+CSTCloud provides an OpenAI API Compatible LLM endpoint. The Base URL is `https://uni-api.cstcloud.cn/v1`. PaperSeek's provider id is `cstcloud`, and its default model is `DeepSeek-V4-Flash`.
+
+To get an API key:
+
+1. Open [CSTCloud API Keys](https://uni-api.cstcloud.cn/api_keys).
+2. Sign in with CSTCloud unified authentication.
+3. Fill and submit the requested application information on the page to obtain an API key.
+4. Chinese Academy of Sciences intramural users can sign in with a CSTCloud Pass, usually their institutional email account and password.
+5. Fill `LLM API Key` in the Web UI, or set `LLM_PROVIDER=cstcloud` and `LLM_API_KEY=your-cstcloud-api-key`.
+
+See the [CSTCloud LLM API manual](https://uni-api.cstcloud.cn/doc/llm/) for endpoint details.
 
 ### Web of Science Starter API
 

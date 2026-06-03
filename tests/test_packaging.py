@@ -26,9 +26,10 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("docs/assets/paperseek-web.png", readme)
         self.assertIn("docs/user-manual.md", readme)
         self.assertIn("docs/deployment.md", readme)
+        self.assertIn("docs/online-demo.md", readme)
         self.assertIn("[English](README.en.md)", readme)
         self.assertIn("https://www.paperseek.xyz/", readme)
-        self.assertIn("https://modelscope.cn/studios/HongMingfeng/paperseek", readme)
+        self.assertNotIn("https://modelscope.cn/studios/HongMingfeng/paperseek", readme)
         self.assertNotIn("img.shields.io/badge/OpenAlex", readme)
         self.assertNotIn("img.shields.io/badge/Crossref", readme)
 
@@ -37,9 +38,10 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("[简体中文](README.md)", readme)
         self.assertIn("https://github.com/MingfengHong/paperseek", readme)
         self.assertIn("docs/assets/paperseek-web.png", readme)
-        self.assertIn("Docker, Vercel, and ModelScope", readme)
+        self.assertIn("docs/online-demo.md", readme)
+        self.assertIn("Docker / Vercel deployment", readme)
         self.assertIn("https://www.paperseek.xyz/", readme)
-        self.assertIn("https://modelscope.cn/studios/HongMingfeng/paperseek", readme)
+        self.assertNotIn("https://modelscope.cn/studios/HongMingfeng/paperseek", readme)
         self.assertIn("PaperSeek is licensed under the [Apache License 2.0](LICENSE).", readme)
 
     def test_readmes_acknowledge_reference_projects(self):
@@ -70,6 +72,13 @@ class PackagingTest(unittest.TestCase):
             "## Diagnostics and troubleshooting",
         ):
             self.assertIn(heading, manual)
+
+    def test_online_demo_guide_exists(self):
+        guide = (ROOT / "docs" / "online-demo.md").read_text(encoding="utf-8")
+        self.assertIn("https://www.paperseek.xyz/", guide)
+        self.assertIn("ModelScope", guide)
+        self.assertIn("API Inference", guide)
+        self.assertIn("历史记录按登录账号隔离", guide)
 
     def test_deployment_files_exist(self):
         for path in (

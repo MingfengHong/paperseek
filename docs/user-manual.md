@@ -94,6 +94,16 @@ export LLM_BASE_URL=https://api-inference.modelscope.cn/v1
 export LLM_API_KEY=your-modelscope-token
 ```
 
+中国科技云大模型 API 也使用 OpenAI Chat Completions 兼容接口：
+
+```bash
+export LLM_PROVIDER=cstcloud
+export LLM_API_TYPE=openai_chat
+export LLM_MODEL=DeepSeek-V4-Flash
+export LLM_BASE_URL=https://uni-api.cstcloud.cn/v1
+export LLM_API_KEY=your-cstcloud-api-key
+```
+
 启动：
 
 ```bash
@@ -365,7 +375,7 @@ Data Source 是论文元数据来源。当前支持：
 
 PaperSeek 将 LLM 配置拆成三个部分：
 
-- `LLM_PROVIDER`：服务商，例如 `openai`、`deepseek`、`anthropic`、`modelscope`、`ollama`。
+- `LLM_PROVIDER`：服务商，例如 `openai`、`deepseek`、`cstcloud`、`anthropic`、`modelscope`、`ollama`。
 - `LLM_API_TYPE`：接口协议，例如 `openai_chat`、`openai_responses`、`anthropic_messages`。
 - `LLM_MODEL`：模型名称，例如 `deepseek-v4-flash`、`gpt-5.4-mini`。
 
@@ -563,6 +573,16 @@ export LLM_BASE_URL=https://api.deepseek.com
 export LLM_API_KEY=your-key
 ```
 
+中国科技云：
+
+```bash
+export LLM_PROVIDER=cstcloud
+export LLM_API_TYPE=openai_chat
+export LLM_MODEL=DeepSeek-V4-Flash
+export LLM_BASE_URL=https://uni-api.cstcloud.cn/v1
+export LLM_API_KEY=your-cstcloud-api-key
+```
+
 OpenAI Responses API：
 
 ```bash
@@ -632,7 +652,7 @@ PaperSeek 当前支持三种 API Type：
 
 | API Type | 用途 |
 | --- | --- |
-| `openai_chat` | OpenAI Chat Completions 兼容接口。DeepSeek、DashScope、Moonshot、OpenRouter、Ollama 等通常使用此模式。 |
+| `openai_chat` | OpenAI Chat Completions 兼容接口。DeepSeek、中国科技云、DashScope、Moonshot、OpenRouter、Ollama 等通常使用此模式。 |
 | `openai_responses` | OpenAI Responses API。OpenAI 官方模型默认使用此模式。 |
 | `anthropic_messages` | Anthropic Messages API。Anthropic 官方接口默认使用此模式。 |
 
@@ -646,6 +666,7 @@ Provider 默认模型和 Base URL：
 | `anthropic` | `anthropic_messages` | `claude-sonnet-4-6` | `https://api.anthropic.com` |
 | `google` | `openai_chat` | `gemini-3.5-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` |
 | `deepseek` | `openai_chat` | `deepseek-v4-flash` | `https://api.deepseek.com` |
+| `cstcloud` | `openai_chat` | `DeepSeek-V4-Flash` | `https://uni-api.cstcloud.cn/v1` |
 | `dashscope` | `openai_chat` | `qwen3.6-plus` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `moonshot` | `openai_chat` | `kimi-k2.6` | `https://api.moonshot.ai/v1` |
 | `zhipu` | `openai_chat` | `glm-5.1` | `https://open.bigmodel.cn/api/paas/v4` |
@@ -659,6 +680,18 @@ Provider 默认模型和 Base URL：
 | `custom` | `openai_chat` | 空 | 空 |
 
 默认值用于快速填写表单和命令参数。实际可用模型由服务商账号权限、地区、计费方式和兼容层决定。
+
+### 中国科技云 API Key
+
+中国科技云大模型 API 的 Base URL 是 `https://uni-api.cstcloud.cn/v1`，接口文档说明其 API 为 OpenAI API Compatible。获取 Key：
+
+1. 打开 [中国科技云 API Keys](https://uni-api.cstcloud.cn/api_keys)。
+2. 登录中国科技云统一认证。
+3. 登录后按页面要求输入申请信息并提交，即可获取 API Key。
+4. 中国科学院院内用户可使用中国科技云通行证登录，通行证通常为院邮箱账号及密码。
+5. 在 PaperSeek 中选择 `cstcloud`，填入获取到的 API Key。
+
+接口文档见 [中国科技云大模型 API 接口使用手册](https://uni-api.cstcloud.cn/doc/llm/)。
 
 ### 选择模型的建议
 

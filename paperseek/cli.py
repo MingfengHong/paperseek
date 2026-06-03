@@ -113,7 +113,7 @@ Environment variables:
   OPENALEX_EMAIL     Optional email for OpenAlex contact/polite usage
   CROSSREF_EMAIL     Optional email for Crossref polite pool
   LLM_API_KEY        LLM API key; optional for Ollama
-  LLM_PROVIDER       Service provider, e.g. openai, anthropic, deepseek, ollama, custom
+  LLM_PROVIDER       Service provider, e.g. openai, anthropic, deepseek, cstcloud, ollama, custom
   LLM_API_TYPE       Protocol: openai_chat, openai_responses, anthropic_messages
   LLM_MODEL          Model name
   LLM_BASE_URL       Custom API endpoint URL
