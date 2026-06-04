@@ -13,6 +13,7 @@ RUN useradd --create-home --shell /bin/sh paperseek
 
 COPY pyproject.toml README.md LICENSE ./
 COPY paperseek ./paperseek
+COPY paperseek_core ./paperseek_core
 
 RUN python -m pip install --upgrade pip \
     && python -m pip install .
