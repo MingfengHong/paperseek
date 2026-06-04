@@ -35,6 +35,11 @@ class DeploymentTest(unittest.TestCase):
         self.assertIn("${PORT:-7860}", dockerfile)
         self.assertIn("HEALTHCHECK", dockerfile)
 
+    def test_dockerfile_copies_runtime_packages(self):
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("COPY paperseek ./paperseek", dockerfile)
+        self.assertIn("COPY paperseek_core ./paperseek_core", dockerfile)
+
     def test_compose_exposes_configurable_host_port(self):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
         self.assertIn("${PAPERSEEK_PORT:-8765}:${PAPERSEEK_CONTAINER_PORT:-7860}", compose)
