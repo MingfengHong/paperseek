@@ -24,6 +24,208 @@ const configAlertMessage = document.getElementById("configAlertMessage");
 const configAlertList = document.getElementById("configAlertList");
 const configAlertCloseButton = document.getElementById("configAlertCloseButton");
 const configAlertAdvancedButton = document.getElementById("configAlertAdvancedButton");
+const languageButtons = [...document.querySelectorAll("[data-language]")];
+const languageStorageKey = "paperseek.ui.language";
+
+const translations = {
+  zh: {
+    "LLM based Literature Search Agent": "基于大模型的文献检索助手",
+    "Search": "检索",
+    "Results": "结果",
+    "Citation Map": "引用图谱",
+    "History": "历史",
+    "Export Results CSV": "导出结果 CSV",
+    "Export Log": "导出日志",
+    "Ready": "就绪",
+    "Processing": "处理中",
+    "Searching": "检索中",
+    "Stopping": "停止中",
+    "Stopped": "已停止",
+    "Error": "错误",
+    "Research Question": "研究问题",
+    "Paste a research question, gap paragraph, or plain language search intent.": "粘贴研究问题、研究空白段落，或用自然语言描述检索意图。",
+    "Run Search": "开始检索",
+    "Stop": "停止",
+    "Check Config": "检查配置",
+    "Configuration": "配置",
+    "Model API and source": "模型 API 与数据源",
+    "Session only": "仅本次会话",
+    "Model API": "模型 API",
+    "Provider": "服务商",
+    "API Key": "API Key",
+    "Model": "模型",
+    "Source": "数据源",
+    "OpenAlex": "OpenAlex",
+    "OpenAlex (precise search)": "OpenAlex（精确检索）",
+    "Crossref (metadata / DOI registry)": "Crossref（元数据 / DOI 注册库）",
+    "Web of Science Starter (temporarily unavailable)": "Web of Science Starter（暂不可用）",
+    "Optional source keys are in Advanced settings.": "可选数据源 Key 在高级设置中。",
+    "Optional OpenAlex API key and email are in Advanced settings.": "可选 OpenAlex API Key 和邮箱在高级设置中。",
+    "Crossref email is optional but recommended in Advanced settings.": "Crossref 邮箱可选，但建议在高级设置中填写。",
+    "WoS requires an API key in Advanced settings.": "WoS 需要在高级设置中填写 API Key。",
+    "Source details are in Advanced settings.": "数据源详情在高级设置中。",
+    "Advanced settings": "高级设置",
+    "Protocol, source keys, and run controls": "协议、数据源 Key 和运行控制",
+    "Model protocol": "模型协议",
+    "API Type": "API 类型",
+    "OpenAI Responses API": "OpenAI Responses API",
+    "OpenAI Chat Completions API": "OpenAI Chat Completions API",
+    "Anthropic Messages API": "Anthropic Messages API",
+    "Base URL": "Base URL",
+    "Provider default, editable for compatible endpoints": "服务商默认地址，可为兼容端点修改",
+    "Source settings": "数据源设置",
+    "Data Source": "数据源",
+    "OpenAlex API Key": "OpenAlex API Key",
+    "Optional if anonymous access is available": "匿名访问可用时可选",
+    "OpenAlex Email": "OpenAlex 邮箱",
+    "Optional polite-pool email": "可选 polite-pool 邮箱",
+    "Crossref Email": "Crossref 邮箱",
+    "WoS API Key": "WoS API Key",
+    "WoS DB": "WoS 数据库",
+    "Field Hint": "领域提示",
+    "Optional discipline": "可选学科领域",
+    "Run controls": "运行控制",
+    "Min Results": "最少结果",
+    "Max Results": "最多结果",
+    "Iterations": "迭代次数",
+    "Try external abstracts": "尝试外部摘要",
+    "Expand citations": "扩展引用",
+    "System Dashboard": "系统面板",
+    "idle": "空闲",
+    "Configuration check": "配置检查",
+    "Configuration failed": "配置失败",
+    "Configuration check failed": "配置检查失败",
+    "PaperSeek found a configuration issue.": "PaperSeek 发现配置问题。",
+    "Open Advanced Settings": "打开高级设置",
+    "Close": "关闭",
+    "Query Generation": "查询生成",
+    "LLM will translate the research question into a source-specific search query.": "LLM 会把研究问题转换成适配数据源的检索式。",
+    "No query generated yet.": "尚未生成检索式。",
+    "Source Request": "数据源请求",
+    "The selected database will be queried and adjusted by result counts.": "系统会查询所选数据库，并根据结果数量调整检索式。",
+    "No source request has run.": "尚未请求数据源。",
+    "Metadata Ranking": "元数据排序",
+    "Returned records will be ranked with available metadata and abstracts when present.": "返回记录会基于可用元数据和摘要进行排序。",
+    "No ranking request has run.": "尚未执行排序。",
+    "Literature Results": "文献结果",
+    "Final ranked papers will appear here.": "最终排序后的论文会显示在这里。",
+    "Run a search to populate the result list.": "运行检索后会填充结果列表。",
+    "WAITING": "等待中",
+    "PROCESSING": "处理中",
+    "COMPLETE": "已完成",
+    "READY": "就绪",
+    "EMPTY": "空",
+    "ERROR": "错误",
+    "Calling the LLM to generate a source-specific query.": "正在调用 LLM 生成适配数据源的检索式。",
+    "No query returned": "未返回检索式",
+    "CANDIDATES": "候选",
+    "RANKED RECORDS": "已排序记录",
+    "RANKING STATUS": "排序状态",
+    "SOURCE": "数据源",
+    "TOTAL RECORDS": "总记录",
+    "TOP SCORE": "最高分",
+    "CANDIDATES SCORED": "已评分候选",
+    "CITATION ADDS": "引用新增",
+    "Review Results": "查看结果",
+    "Open Citation Map": "打开引用图谱",
+    "Input Required": "需要输入",
+    "Fill the required field and run the search again.": "请填写必填字段后重新运行检索。",
+    "Search Failed": "检索失败",
+    "The local backend or upstream service returned an error.": "本地后端或上游服务返回错误。",
+    "Search Stopped": "检索已停止",
+    "The request was stopped before completion.": "请求在完成前已停止。",
+    "No final result was produced for this run.": "本次运行没有生成最终结果。",
+    "Research Question is required.": "请填写研究问题。",
+    "WoS API Key is required for WoS searches.": "WoS 检索需要 WoS API Key。",
+    "LLM API Key is required for this provider.": "当前服务商需要 LLM API Key。",
+    "API Type is required.": "请填写 API 类型。",
+    "Min Results and Max Results must be numbers.": "最少结果和最多结果必须是数字。",
+    "Min Results cannot exceed Max Results.": "最少结果不能大于最多结果。",
+    "Iterations must be at least 1.": "迭代次数至少为 1。",
+    "Configuration check started.": "配置检查已开始。",
+    "Fix the items below before running a search.": "请先修复以下项目，再运行检索。",
+    "PaperSeek could not complete the configuration check.": "PaperSeek 无法完成配置检查。",
+    "Configuration check failed.": "配置检查失败。",
+    "Review the required model and source settings, then run Check Config again.": "检查必需的模型和数据源设置，然后再次运行检查配置。",
+    "TARGET_MIN cannot exceed TARGET_MAX.": "TARGET_MIN 不能大于 TARGET_MAX。",
+    "Lower TARGET_MIN or raise TARGET_MAX.": "降低 TARGET_MIN 或提高 TARGET_MAX。",
+    "LLM_BASE_URL is empty; provider defaults will be used when available.": "LLM_BASE_URL 为空；可用时将使用服务商默认地址。",
+    "Waiting for the first source response.": "正在等待首次数据源响应。",
+    "Current query": "当前检索式",
+    "Candidate preview": "候选预览",
+    "No ranked papers returned.": "未返回排序论文。",
+    "No author metadata": "无作者元数据",
+    "Open source record": "打开来源记录",
+    "Open PDF": "打开 PDF",
+    "Keywords:": "关键词：",
+    "Citations:": "引用数：",
+    "Abstract:": "摘要：",
+    "Reasoning:": "排序理由：",
+    "Ranked literature": "排序文献",
+    "Run a search before reviewing results.": "请先运行检索，再查看结果。",
+    "Search title, author, abstract, DOI": "搜索题名、作者、摘要、DOI",
+    "All scores": "全部分数",
+    "Score >= 7": "分数 >= 7",
+    "Score >= 8": "分数 >= 8",
+    "Score >= 9": "分数 >= 9",
+    "All metadata": "全部元数据",
+    "Has abstract": "有摘要",
+    "Has DOI": "有 DOI",
+    "Has PDF": "有 PDF",
+    "Sort by rank": "按排名排序",
+    "Sort by score": "按分数排序",
+    "Sort by citations": "按引用数排序",
+    "Sort by year": "按年份排序",
+    "Select all shown": "选择当前全部",
+    "Clear": "清空",
+    "No papers match the current filters.": "没有论文匹配当前筛选。",
+    "Select paper": "选择论文",
+    "Local history is disabled": "本地历史记录已禁用",
+    "Loading saved runs.": "正在加载保存的运行。",
+    "Loading saved runs...": "正在加载保存的运行...",
+    "No saved search runs yet.": "还没有保存的检索运行。",
+    "Local search records": "本地检索记录",
+    "Refresh": "刷新",
+    "Select a saved run to inspect query, events, and ranked papers.": "选择一个保存的运行，查看检索式、事件和排序论文。",
+    "source pending": "数据源待定",
+    "Final query": "最终检索式",
+    "Open Results": "打开结果",
+    "Delete": "删除",
+    "Recent log events": "最近日志事件",
+    "No event log was saved for this run.": "本次运行未保存事件日志。",
+    "This run did not save ranked papers.": "本次运行未保存排序论文。",
+    "No citation graph nodes are available for this run.": "本次运行没有可用的引用图谱节点。",
+    "Citation expansion": "引用扩展",
+    "INITIAL CANDIDATES": "初始候选",
+    "SEED PAPERS": "种子论文",
+    "ADDED CANDIDATES": "新增候选",
+    "PROMOTED RESULTS": "提升为结果",
+    "Result": "结果",
+    "Seed": "种子",
+    "Forward citation": "前向引用",
+    "Backward reference": "后向参考文献",
+    "Reset": "重置",
+    "All seeds": "全部种子",
+    "Seed papers": "种子论文",
+    "Select a node to inspect its metadata.": "选择一个节点以查看元数据。",
+    "No seed papers were recorded.": "没有记录种子论文。",
+    "Run an OpenAlex search with citation expansion enabled before exploring citations.": "请先运行启用引用扩展的 OpenAlex 检索，再查看引用图谱。",
+    "Citation expansion was disabled for this run.": "本次运行未启用引用扩展。",
+    "Citation traversal is currently available for OpenAlex runs only.": "引用遍历目前仅适用于 OpenAlex 运行。",
+    "Score:": "分数：",
+    "Rank:": "排名：",
+    "Open record": "打开记录",
+    "Record": "记录",
+    "PDF": "PDF",
+    "Submitting request to local backend.": "正在向本地后端提交请求。",
+    "Search stopped by user.": "检索已由用户停止。",
+    "Stop requested.": "已请求停止。",
+    "Unknown error": "未知错误",
+    "Ready. Keys and endpoint settings are held only in this browser session.": "就绪。Key 和端点设置仅保存在本次浏览器会话中。",
+    "Optional for local Ollama": "本地 Ollama 可选",
+    "Configured via environment": "已通过环境变量配置",
+  },
+};
 
 const providerDefaults = {
   openai: { model: "gpt-5.4-mini", apiType: "openai_responses", baseUrl: "https://api.openai.com/v1" },
@@ -87,6 +289,132 @@ let environmentConfig = {
   has_wos_api_key: false,
   llm_provider: "",
 };
+let activeLanguage = loadLanguage();
+
+function loadLanguage() {
+  const saved = window.localStorage ? window.localStorage.getItem(languageStorageKey) : "";
+  return saved === "zh" ? "zh" : "en";
+}
+
+function translatedText(text) {
+  const value = String(text ?? "");
+  if (activeLanguage !== "zh") {
+    return value;
+  }
+  return translations.zh[value] || value;
+}
+
+function translateWithWhitespace(value) {
+  const text = String(value ?? "");
+  const match = text.match(/^(\s*)(.*?)(\s*)$/s);
+  if (!match) {
+    return translatedText(text);
+  }
+  return `${match[1]}${translatedText(match[2])}${match[3]}`;
+}
+
+function setTranslatedText(node, englishText) {
+  if (!node) {
+    return;
+  }
+  node.dataset.i18nText = englishText;
+  node.textContent = translatedText(englishText);
+}
+
+function translatedAttrName(attribute) {
+  return `data-i18n-${attribute}-original`;
+}
+
+function setTranslatedAttribute(node, attribute, englishText) {
+  if (!node) {
+    return;
+  }
+  node.setAttribute(translatedAttrName(attribute), englishText);
+  node.setAttribute(attribute, translatedText(englishText));
+}
+
+function shouldSkipTranslationNode(node) {
+  const parent = node.parentElement;
+  return !parent || Boolean(parent.closest("script, style, pre, code, textarea, [data-no-i18n], [data-i18n-text]"));
+}
+
+function applyLanguage(root = document.body) {
+  if (!root) {
+    return;
+  }
+  document.documentElement.lang = activeLanguage === "zh" ? "zh-CN" : "en";
+  document.body.dataset.uiLanguage = activeLanguage;
+  languageButtons.forEach((button) => {
+    const active = button.dataset.language === activeLanguage;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+
+  const elementRoot = root.nodeType === Node.ELEMENT_NODE ? root : document.body;
+  const dynamicElements = [];
+  if (elementRoot.matches && elementRoot.matches("[data-i18n-text]")) {
+    dynamicElements.push(elementRoot);
+  }
+  if (elementRoot.querySelectorAll) {
+    dynamicElements.push(...elementRoot.querySelectorAll("[data-i18n-text]"));
+  }
+  dynamicElements.forEach((node) => {
+    node.textContent = translatedText(node.dataset.i18nText || "");
+  });
+
+  const attributes = ["placeholder", "title", "aria-label"];
+  const attrElements = elementRoot.querySelectorAll ? [elementRoot, ...elementRoot.querySelectorAll("*")] : [];
+  attrElements.forEach((node) => {
+    attributes.forEach((attribute) => {
+      if (!node.hasAttribute || !node.hasAttribute(attribute)) {
+        return;
+      }
+      const originalName = translatedAttrName(attribute);
+      if (!node.hasAttribute(originalName)) {
+        node.setAttribute(originalName, node.getAttribute(attribute));
+      }
+      node.setAttribute(attribute, translatedText(node.getAttribute(originalName)));
+    });
+  });
+
+  const walkerRoot = root.nodeType === Node.TEXT_NODE ? root.parentNode : root;
+  if (!walkerRoot) {
+    return;
+  }
+  const walker = document.createTreeWalker(walkerRoot, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (shouldSkipTranslationNode(node) || !node.nodeValue.trim()) {
+      continue;
+    }
+    if (!node.__paperseekI18nOriginal) {
+      node.__paperseekI18nOriginal = node.nodeValue;
+    }
+    node.nodeValue = translateWithWhitespace(node.__paperseekI18nOriginal);
+  }
+}
+
+function setLanguage(language) {
+  activeLanguage = language === "zh" ? "zh" : "en";
+  if (window.localStorage) {
+    window.localStorage.setItem(languageStorageKey, activeLanguage);
+  }
+  applyLanguage();
+  if (activeView === "history") {
+    setTranslatedText(stepLabel, "History");
+  } else {
+    renderStepLabel();
+  }
+  updateSourceSummary();
+  updateCredentialPlaceholders();
+}
+
+function initLanguageControls() {
+  languageButtons.forEach((button) => {
+    button.addEventListener("click", () => setLanguage(button.dataset.language));
+  });
+  applyLanguage();
+}
 
 const fallbackTimeZone = "Asia/Shanghai";
 const clientTimeZone = detectClientTimeZone();
@@ -158,11 +486,11 @@ function setBusy(isBusy) {
   if (stopButton) {
     stopButton.disabled = !isBusy;
   }
-  searchButton.querySelector("span").textContent = isBusy ? "Searching" : "Run Search";
+  setTranslatedText(searchButton.querySelector("span"), isBusy ? "Searching" : "Run Search");
   if (isBusy) {
-    stateLabel.textContent = "Processing";
-  } else if (!["Error", "Stopped"].includes(stateLabel.textContent)) {
-    stateLabel.textContent = "Ready";
+    setTranslatedText(stateLabel, "Processing");
+  } else if (!["Error", "Stopped"].includes(stateLabel.dataset.i18nText || stateLabel.textContent)) {
+    setTranslatedText(stateLabel, "Ready");
   }
   document.body.classList.toggle("is-busy", isBusy);
 }
@@ -187,10 +515,10 @@ function getNumber(id) {
 function updateSourceSummary() {
   const source = dataSourceSelect.value || "openalex";
   if (basicSourceName) {
-    basicSourceName.textContent = compactSourceLabels[source] || source.toUpperCase();
+    setTranslatedText(basicSourceName, compactSourceLabels[source] || source.toUpperCase());
   }
   if (basicSourceMeta) {
-    basicSourceMeta.textContent = sourceMetaLabels[source] || "Source details are in Advanced settings.";
+    setTranslatedText(basicSourceMeta, sourceMetaLabels[source] || "Source details are in Advanced settings.");
   }
 }
 
@@ -204,18 +532,18 @@ function updateCredentialPlaceholders() {
   const openAlexKeyInput = document.getElementById("openAlexApiKey");
   if (llmKeyInput) {
     if (providerSelect.value === "ollama") {
-      llmKeyInput.placeholder = "Optional for local Ollama";
+      setTranslatedAttribute(llmKeyInput, "placeholder", "Optional for local Ollama");
     } else if (envLlmKeyApplies(providerSelect.value)) {
-      llmKeyInput.placeholder = "Configured via environment";
+      setTranslatedAttribute(llmKeyInput, "placeholder", "Configured via environment");
     } else {
-      llmKeyInput.placeholder = "";
+      setTranslatedAttribute(llmKeyInput, "placeholder", "");
     }
   }
   if (wosKeyInput && environmentConfig.has_wos_api_key) {
-    wosKeyInput.placeholder = "Configured via environment";
+    setTranslatedAttribute(wosKeyInput, "placeholder", "Configured via environment");
   }
   if (openAlexKeyInput && environmentConfig.has_openalex_api_key) {
-    openAlexKeyInput.placeholder = "Configured via environment";
+    setTranslatedAttribute(openAlexKeyInput, "placeholder", "Configured via environment");
   }
 }
 
@@ -493,18 +821,21 @@ function workflowCard(number, title, status, description, body, extraClass = "")
 function renderWorkflow() {
   if (activeView === "results") {
     workflow.innerHTML = renderResultsView();
+    applyLanguage(workflow);
     renderStepLabel();
     return;
   }
   if (activeView === "citations") {
     workflow.innerHTML = renderCitationView();
+    applyLanguage(workflow);
     renderStepLabel();
     renderCitationGraph();
     return;
   }
   if (activeView === "history") {
     workflow.innerHTML = renderHistoryView();
-    stepLabel.textContent = "History";
+    applyLanguage(workflow);
+    setTranslatedText(stepLabel, "History");
     return;
   }
 
@@ -514,17 +845,18 @@ function renderWorkflow() {
     return workflowCard(item.number, item.title, item.status, item.description, item.body, extra);
   }).join("");
 
+  applyLanguage(workflow);
   renderStepLabel();
 }
 
 function renderStepLabel() {
   const activeIndex = stageOrder.findIndex((key) => workflowState[key].status === "PROCESSING");
   if (activeIndex >= 0) {
-    stepLabel.textContent = `Step ${activeIndex + 1}/4`;
+    stepLabel.textContent = activeLanguage === "zh" ? `步骤 ${activeIndex + 1}/4` : `Step ${activeIndex + 1}/4`;
   } else if (workflowState.results.status === "READY" || workflowState.results.status === "EMPTY") {
-    stepLabel.textContent = "Step 4/4";
+    stepLabel.textContent = activeLanguage === "zh" ? "步骤 4/4" : "Step 4/4";
   } else {
-    stepLabel.textContent = "Step 0/4";
+    stepLabel.textContent = activeLanguage === "zh" ? "步骤 0/4" : "Step 0/4";
   }
 }
 
@@ -1069,6 +1401,7 @@ function renderCitationGraph() {
   const { nodes, edges } = filteredCitationGraph();
   if (!nodes.length) {
     container.innerHTML = emptyState("No citation graph nodes are available for this run.");
+    applyLanguage(container);
     return;
   }
 
@@ -1423,7 +1756,7 @@ function showClientError(message, fieldId) {
 function showRunError(message) {
   latestError = message;
   updateExportButtons();
-  stateLabel.textContent = "Error";
+  setTranslatedText(stateLabel, "Error");
   workflowState.results.status = "ERROR";
   workflowState.results.title = "Search Failed";
   workflowState.results.description = "The local backend or upstream service returned an error.";
@@ -1442,23 +1775,24 @@ function showConfigAlert(title, message, checks = []) {
   if (!configAlert || !configAlertTitle || !configAlertMessage || !configAlertList) {
     return;
   }
-  configAlertTitle.textContent = title;
-  configAlertMessage.textContent = message;
+  setTranslatedText(configAlertTitle, title);
+  setTranslatedText(configAlertMessage, message);
   configAlertList.textContent = "";
   const displayChecks = checks.length ? checks : [{ summary: message, actions: [] }];
   displayChecks.slice(0, 6).forEach((check) => {
     const item = document.createElement("li");
     const summary = document.createElement("strong");
-    summary.textContent = check.summary || check.id || "Configuration check failed.";
+    setTranslatedText(summary, check.summary || check.id || "Configuration check failed.");
     item.appendChild(summary);
     const actions = Array.isArray(check.actions) ? check.actions : [];
     actions.slice(0, 4).forEach((action) => {
       const actionNode = document.createElement("span");
-      actionNode.textContent = action;
+      setTranslatedText(actionNode, action);
       item.appendChild(actionNode);
     });
     configAlertList.appendChild(item);
   });
+  applyLanguage(configAlert);
   configAlert.classList.remove("is-hidden");
   if (configAlertCloseButton) {
     configAlertCloseButton.focus();
@@ -1468,7 +1802,7 @@ function showConfigAlert(title, message, checks = []) {
 function showRunStopped() {
   latestError = "Search stopped by user.";
   updateExportButtons();
-  stateLabel.textContent = "Stopped";
+  setTranslatedText(stateLabel, "Stopped");
   workflowState.results.status = "EMPTY";
   workflowState.results.title = "Search Stopped";
   workflowState.results.description = "The request was stopped before completion.";
@@ -1656,7 +1990,7 @@ if (stopButton) {
     if (!activeSearchController) {
       return;
     }
-    stateLabel.textContent = "Stopping";
+    setTranslatedText(stateLabel, "Stopping");
     log("Stop requested.");
     activeSearchController.abort();
   });
@@ -1779,6 +2113,7 @@ workflow.addEventListener("click", (event) => {
     const node = map && map.nodes ? map.nodes.find((item) => item.id === selectedCitationNodeId) : null;
     if (detail) {
       detail.innerHTML = renderCitationNodeDetail(node);
+      applyLanguage(detail);
     }
     renderCitationGraph();
   }
@@ -1907,6 +2242,7 @@ form.addEventListener("submit", async (event) => {
 });
 
 async function initializeApp() {
+  initLanguageControls();
   if (advancedSettings) {
     advancedSettings.open = false;
   }
@@ -1918,6 +2254,7 @@ async function initializeApp() {
   document.body.dataset.view = activeView;
   renderWorkflow();
   log("Ready. Keys and endpoint settings are held only in this browser session.");
+  applyLanguage();
 }
 
 initializeApp();

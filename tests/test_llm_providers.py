@@ -32,6 +32,15 @@ class LLMProviderTest(unittest.TestCase):
         self.assertIn("Qwen/Qwen3-235B-A22B-Instruct-2507", app_js)
         self.assertIn("https://api-inference.modelscope.cn/v1", app_js)
 
+    def test_web_ui_exposes_language_switch(self):
+        html = (ROOT / "paperseek" / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (ROOT / "paperseek" / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('data-language="en"', html)
+        self.assertIn('data-language="zh"', html)
+        self.assertIn("paperseek.ui.language", app_js)
+        self.assertIn("开始检索", app_js)
+        self.assertIn("高级设置", app_js)
+
     def test_cstcloud_provider_is_available_in_web_ui(self):
         html = (ROOT / "paperseek" / "static" / "index.html").read_text(encoding="utf-8")
         app_js = (ROOT / "paperseek" / "static" / "app.js").read_text(encoding="utf-8")
