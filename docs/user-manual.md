@@ -1553,19 +1553,21 @@ PaperSeek 提供可选 Skill：
 skills/paperseek/
 ```
 
-Skill 用于指导支持 Skill 的 AI agent 调用 PaperSeek CLI 和 Web UI。它包括：
+Skill 用于指导支持 Skill 的 AI agent 调用自包含 runtime 或完整 PaperSeek 包。它包括：
 
 - `SKILL.md`
 - `references/cli-contract.md`
 - `references/management-layer.md`
 - `references/source-routing.md`
 - `scripts/paperseek.py`
+- `scripts/paperseek_skill_runtime.py`
 
 ### Skill 的定位
 
-Skill 不替代 PaperSeek 包。它是 agent 操作说明和 launcher：
+Skill 不再只是一份操作说明。它包含一个自包含 runtime：
 
-- 告诉 agent 如何运行 `paperseek doctor`、`paperseek smoke`、`paperseek search`。
+- 不安装 PaperSeek 包时，也能运行核心 `search`、`smoke`、`sources`、`doctor`。
+- 优先调用完整 PaperSeek 包；包不可用时回退到 `scripts/paperseek_skill_runtime.py`。
 - 告诉 agent 如何选择 OpenAlex、Crossref、WoS。
 - 告诉 agent 如何解析 JSON 输出。
 - 告诉 agent 不要保存 API Key、不要编造论文元数据、不要下载受限 PDF。
@@ -1596,14 +1598,15 @@ skills/paperseek/scripts/paperseek.py
 python skills/paperseek/scripts/paperseek.py --install-help
 ```
 
-调用 PaperSeek：
+调用 PaperSeek Skill runtime：
 
 ```bash
 python skills/paperseek/scripts/paperseek.py sources --json
 python skills/paperseek/scripts/paperseek.py smoke --source openalex --query "machine learning" --json
+python skills/paperseek/scripts/paperseek.py search "open innovation and digital platforms" --source openalex --json
 ```
 
-如果 PaperSeek 包未安装，可设置：
+如果 PaperSeek 包未安装，上述 `sources`、`smoke`、`search`、`doctor` 仍可通过自包含 runtime 运行。若你希望使用完整包的 Web UI、引用图或完整历史管理，可设置：
 
 ```bash
 export PAPERSEEK_PROJECT_ROOT=/path/to/paperseek
@@ -1615,7 +1618,7 @@ Windows PowerShell：
 $env:PAPERSEEK_PROJECT_ROOT = "C:\path\to\paperseek"
 ```
 
-launcher 会调用完整 PaperSeek 包，不维护无依赖降级版搜索实现。
+launcher 会优先调用完整 PaperSeek 包；没有安装包时，会自动使用 Skill 自带 runtime 运行核心检索。
 
 ## Diagnostics and troubleshooting
 
@@ -1966,7 +1969,7 @@ paperseek search "your question" --source openalex --json > papers.json
 
 ### Skill 是必须安装的吗？
 
-不是。Skill 只用于支持 Skill 的 agent 平台。普通 CLI 和 Web UI 用户不需要安装 Skill。
+不是。Skill 只用于支持 Skill 的 agent 平台。普通 CLI 和 Web UI 用户不需要安装 Skill。若只复制 `skills/paperseek/` 到 agent 平台，Skill 自带 runtime 也可以直接完成核心文献检索；但 Web UI、引用图和完整历史管理仍需要完整 PaperSeek 包。
 
 ### Web UI 会保存我的 Key 吗？
 

@@ -431,17 +431,18 @@ The repository includes an optional PaperSeek Skill:
 skills/paperseek/
 ```
 
-It teaches skill-aware AI agents how to call the `paperseek` CLI and local Web UI, choose data sources, run diagnostics, parse JSON results, and respect citation-map boundaries. The Skill uses progressive disclosure: `SKILL.md` stays short, while detailed command contracts live in `references/`.
+It teaches skill-aware AI agents how to call PaperSeek, choose data sources, run diagnostics, parse JSON results, and respect citation-map boundaries. The Skill uses progressive disclosure: `SKILL.md` stays short, while detailed command contracts live in `references/`.
 
 This Skill is **not installed automatically** with the Python package. If you need it, copy or link `skills/paperseek/` into the target agent platform's skill directory.
 
-The launcher:
+The launcher and standalone runtime:
 
 ```text
 skills/paperseek/scripts/paperseek.py
+skills/paperseek/scripts/paperseek_skill_runtime.py
 ```
 
-only calls the full PaperSeek Python package. It does not maintain a dependency-free fallback implementation. For standalone Skill distribution, install PaperSeek first or set `PAPERSEEK_PROJECT_ROOT` to a local source checkout.
+For standalone Skill distribution, copy `skills/paperseek/`. `paperseek.py` first tries the full PaperSeek package; if the package is unavailable, it falls back to `paperseek_skill_runtime.py`, a Python standard-library runtime that can run core OpenAlex, Crossref, and key-backed WoS Starter literature search without installing the package. The full package is still required for the Web UI, citation maps, and complete history management.
 
 ## Project Status
 

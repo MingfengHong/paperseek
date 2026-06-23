@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
-"""
-PaperSeek Skill CLI launcher.
-
-This script intentionally does not reimplement PaperSeek. It locates and runs
-the full `paperseek` Python package so a standalone Skill distribution can keep
-one stable script entrypoint while preserving the complete CLI/Web/source logic
-in the package itself.
-"""
+"""PaperSeek Skill CLI launcher with a self-contained helper fallback."""
 
 from __future__ import annotations
 
 import os
 import sys
+import importlib.util
 from pathlib import Path
 from typing import List, Optional
 
@@ -24,8 +18,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     package_main = locate_package_main()
     if package_main is None:
-        print(missing_package_message(), file=sys.stderr)
-        return 2
+        return run_standalone_helper(argv)
 
     package_main(argv)
     return 0
@@ -74,18 +67,19 @@ def find_project_root(start: Path) -> Optional[Path]:
 
 
 def install_help() -> str:
-    return """PaperSeek package installation
+    return """PaperSeek Skill and package installation
 
-The PaperSeek Skill script is a launcher for the full PaperSeek Python package.
-It does not vendor a partial CLI implementation.
+The PaperSeek Skill folder is self-contained for agent guidance, source
+metadata, static doctor checks, masked config inspection, and local path lookup.
+
+Real literature search, live smoke checks, and the Web UI still require the
+full PaperSeek Python package.
 
 If this Skill is inside the PaperSeek repository:
-
   python -m pip install -e .
   python skills/paperseek/scripts/paperseek.py doctor
 
 If this Skill was published separately:
-
   1. Install the PaperSeek Python package from its project repository or package index.
   2. Confirm the command works:
 
@@ -101,12 +95,16 @@ or the Web UI session fields. Do not write secrets into Skill files.
 """
 
 
-def missing_package_message() -> str:
-    return (
-        "The full PaperSeek Python package is not importable. "
-        "This Skill script intentionally does not provide a reduced fallback CLI.\n\n"
-        + install_help()
-    )
+def run_standalone_helper(argv: List[str]) -> int:
+    script_dir = Path(__file__).resolve().parent
+    runtime_path = script_dir / "paperseek_skill_runtime.py"
+    spec = importlib.util.spec_from_file_location("paperseek_skill_runtime", runtime_path)
+    if spec is None or spec.loader is None:
+        print(f"Standalone Skill helper is missing: {runtime_path}", file=sys.stderr)
+        return 2
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return int(module.run(argv))
 
 
 if __name__ == "__main__":

@@ -15,11 +15,12 @@ paperseek history <list|show|delete|clear|path>
 paperseek config <path|keys|list|set|unset|import-env>
 paperseek-web
 python skills/paperseek/scripts/paperseek.py --help
+python skills/paperseek/scripts/paperseek.py search "QUESTION" [options]
 ```
 
 `paperseek "QUESTION"` is legacy-compatible and equivalent to `paperseek search "QUESTION"` for search tasks.
 
-The bundled Skill script is a package launcher. It delegates to the full `paperseek` Python package and must not be treated as a separate implementation.
+The bundled Skill script is self-contained. It delegates to the full `paperseek` Python package when available; otherwise `scripts/paperseek_skill_runtime.py` performs core search/smoke/sources/doctor/config/history-path commands with the Python standard library.
 
 ## Search Command
 
@@ -30,6 +31,15 @@ paperseek search "QUESTION" \
   --max 50 \
   --iterations 5 \
   --output json
+
+Standalone Skill equivalent:
+
+```bash
+python skills/paperseek/scripts/paperseek.py search "QUESTION" \
+  --source openalex \
+  --max 20 \
+  --json
+```
 ```
 
 Common flags:
@@ -177,3 +187,5 @@ History records may include research questions, generated queries, run events, e
 - `message` and `body` on failure
 
 Use `doctor` before consuming live quota. Use `smoke` when a real source/network check is needed.
+
+Standalone runtime note: citation expansion, the Web UI, and full saved-run history management require the full PaperSeek package. Core OpenAlex/Crossref/WoS source search and JSON result export are available directly from `scripts/paperseek_skill_runtime.py`.

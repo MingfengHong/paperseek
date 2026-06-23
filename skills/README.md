@@ -14,16 +14,18 @@ skills/
     │   ├── management-layer.md
     │   └── source-routing.md
     └── scripts/
-        └── paperseek.py
+        ├── paperseek.py
+        └── paperseek_skill_runtime.py
 ```
 
 `skills/paperseek/` 是真正的 Skill 文件夹。它采用 progressive disclosure：
 
 - `SKILL.md`：短指令、触发条件、核心工作流。
 - `references/`：只有在需要时才读取的命令契约、数据源选择和诊断说明。
-- `scripts/paperseek.py`：Skill 可调用的启动器，负责定位并调用完整 PaperSeek CLI。
+- `scripts/paperseek.py`：Skill 可调用的启动器，优先调用完整 PaperSeek CLI，包不可用时回退到自包含 runtime。
+- `scripts/paperseek_skill_runtime.py`：无第三方依赖的核心检索 runtime，可直接检索 OpenAlex、Crossref 和带 key 的 WoS Starter。
 
-对应到仓库根目录时，Skill 依赖的完整 PaperSeek 项目结构包括：
+如果完整 PaperSeek 仓库也在本地，launcher 会优先使用完整包能力；但单独发布 Skill 时不需要复制下列项目文件：
 
 ```text
 .
@@ -38,7 +40,7 @@ skills/
 └── skills/                 # Agent Skill，可单独复制发布
 ```
 
-单独发布 Skill 时，只复制 `skills/paperseek/` 即可；但它不是完整应用包，仍需要目标环境能安装或找到 PaperSeek Python 包。
+单独发布 Skill 时，只复制 `skills/paperseek/` 即可。它已经包含核心检索 runtime，不安装 PaperSeek Python 包也可以运行 `search`、`smoke`、`sources`、`doctor`、`config list/path/keys` 和 `history path`。完整包仍用于 Web UI、引用图和完整本地历史管理。
 
 ## 用途
 
@@ -50,7 +52,7 @@ skills/
 - 读取 JSON 输出和稳定结果字段。
 - 明确不做 PDF 下载、不绕过付费墙、不保存密钥。
 
-`skills/paperseek/scripts/paperseek.py` 是一个完整包启动器，而不是最小降级版 CLI。它会调用完整的 `paperseek` Python 包；如果包没有安装，会给出安装指引。这样 Skill 可以单独发布并保留稳定 script 入口，同时避免维护两套检索实现。
+`skills/paperseek/scripts/paperseek.py` 是一个 package-aware 启动器。它会优先调用完整的 `paperseek` Python 包；如果包没有安装，会自动使用同目录的 `paperseek_skill_runtime.py` 执行核心检索。这样 Skill 可以单独发布并保留可用的检索能力。
 
 ## 安装思路
 
@@ -63,6 +65,7 @@ pip install -e .
 paperseek doctor
 paperseek smoke --source openalex --query "machine learning"
 python .\skills\paperseek\scripts\paperseek.py doctor
+python .\skills\paperseek\scripts\paperseek.py search "open innovation and digital platforms" --source openalex --json
 ```
 
 API Key 应通过环境变量、`paperseek config set ...` 或 Web UI 本次会话配置。不要把真实 key 写入 `skills/` 目录。

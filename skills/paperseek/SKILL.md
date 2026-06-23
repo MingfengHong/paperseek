@@ -2,12 +2,12 @@
 name: paperseek
 description: LLM literature-search workflow router for PaperSeek CLI and local Web UI. Use when users ask to search papers, find literature, run natural-language academic search, diagnose PaperSeek configuration, inspect OpenAlex/Crossref/WoS results, export ranked paper lists, or explore citation maps. Guides agents to call paperseek commands, parse JSON output, choose data sources, and avoid storing secrets or downloading paywalled PDFs.
 license: Apache-2.0
-compatibility: Requires PaperSeek CLI in the local environment and network access for selected literature sources and LLM providers.
+compatibility: Bundles a self-contained Python standard-library runtime for core OpenAlex/Crossref/WoS literature search. The full PaperSeek package is optional and used automatically when installed.
 ---
 
 # PaperSeek
 
-You are using PaperSeek as an LLM-based literature search agent. This Skill is a routing and operating guide for the `paperseek` CLI and local Web UI. It helps an agent run natural-language literature search, diagnostics, result export, and citation-map workflows without inventing metadata or storing credentials.
+You are using PaperSeek as an LLM-based literature search agent. This Skill includes a self-contained runtime under `scripts/` and can run core literature search even when the PaperSeek Python package is not installed. When the package is installed, the launcher automatically delegates to the full CLI/Web/source implementation.
 
 ## Reference Rules
 
@@ -21,29 +21,23 @@ You are using PaperSeek as an LLM-based literature search agent. This Skill is a
 When the environment is uncertain, start with:
 
 ```bash
-paperseek doctor
-paperseek sources
+python skills/paperseek/scripts/paperseek.py doctor
+python skills/paperseek/scripts/paperseek.py sources
 ```
 
 For a minimal live source test:
 
 ```bash
-paperseek smoke --source openalex --query "machine learning" --json
+python skills/paperseek/scripts/paperseek.py smoke --source openalex --query "machine learning" --json
 ```
 
-If `paperseek` is missing, use the bundled launcher for install guidance:
+For install guidance or full Web UI/citation-map features:
 
 ```bash
 python skills/paperseek/scripts/paperseek.py --install-help
 ```
 
-If the current repository is available, install locally:
-
-```bash
-pip install -e .
-```
-
-The launcher `skills/paperseek/scripts/paperseek.py` calls the full PaperSeek package. It does not implement a reduced fallback CLI, so single-Skill distribution still needs the PaperSeek package installed or discoverable through `PAPERSEEK_PROJECT_ROOT`.
+The launcher `skills/paperseek/scripts/paperseek.py` first tries the full PaperSeek package. If that package is unavailable, it falls back to `scripts/paperseek_skill_runtime.py`, which implements standalone `search`, `smoke`, `sources`, `doctor`, `config list/path/keys`, and `history path` using only the Python standard library.
 
 Do not ask the user to paste API keys into chat. Ask them to configure keys locally with environment variables, `paperseek config set ...`, or the Web UI session fields.
 
@@ -51,11 +45,11 @@ Do not ask the user to paste API keys into chat. Ask them to configure keys loca
 
 | User intent | Workflow | First command |
 | --- | --- | --- |
-| Find papers from a research question | Natural-language literature search | `paperseek search "QUESTION" --source openalex --output json` |
-| Inspect whether PaperSeek is usable | Diagnostics | `paperseek doctor --json` |
-| Test a source with a small real query | Smoke check | `paperseek smoke --source openalex --query "machine learning" --json` |
-| Choose source and parameters | Source capability lookup | `paperseek sources --json` |
-| Start interactive UI | Local Web UI | `paperseek-web` |
+| Find papers from a research question | Natural-language literature search | `python skills/paperseek/scripts/paperseek.py search "QUESTION" --source openalex --json` |
+| Inspect whether PaperSeek is usable | Diagnostics | `python skills/paperseek/scripts/paperseek.py doctor --json` |
+| Test a source with a small real query | Smoke check | `python skills/paperseek/scripts/paperseek.py smoke --source openalex --query "machine learning" --json` |
+| Choose source and parameters | Source capability lookup | `python skills/paperseek/scripts/paperseek.py sources --json` |
+| Start interactive UI | Local Web UI | `paperseek-web` after installing the full package |
 
 ## Default Search Procedure
 
@@ -64,7 +58,7 @@ Do not ask the user to paste API keys into chat. Ask them to configure keys loca
 3. Run search with JSON output for machine parsing:
 
 ```bash
-paperseek search "open innovation and digital platforms" --source openalex --output json
+python skills/paperseek/scripts/paperseek.py search "open innovation and digital platforms" --source openalex --json
 ```
 
 4. Parse `ranked` results. Prefer stable fields such as `relevance_score`, `citation_count`, `venue`, `doi`, `url`, `abstract`, and `relevance_reason`.
@@ -77,14 +71,14 @@ paperseek search "open innovation and digital platforms" --source openalex --out
 - It may return links to records, DOI pages, OpenAlex records, or available PDF URLs from metadata, but those are not guaranteed access rights.
 - WoS Starter should be treated as key-backed and currently marked temporarily unavailable in the UI.
 - Crossref is good for DOI and bibliographic metadata; it is not the best sole source for semantic recall.
-- Citation expansion is currently OpenAlex-only.
+- The standalone Skill runtime does not perform citation expansion. Install the full PaperSeek package for citation maps and the Web UI.
 
 ## Failure Handling
 
 | Situation | Action |
 | --- | --- |
-| CLI missing | If in repository, run `pip install -e .`; otherwise tell user PaperSeek CLI is not installed. |
-| Missing LLM key | Tell user to set `LLM_API_KEY` or use local Ollama; do not request the raw key in chat. |
+| CLI missing | Use `python skills/paperseek/scripts/paperseek.py ...`; install the full package only for Web UI/citation maps/full workflow parity. |
+| Missing LLM key | Standalone search still works with deterministic query/ranking heuristics; tell user to set `LLM_API_KEY` for LLM query refinement and ranking. |
 | OpenAlex warning about key | Explain that OpenAlex can be tested without a key but stable usage should configure `OPENALEX_API_KEY`. |
 | Crossref warning about email | Suggest `CROSSREF_EMAIL` for polite-pool requests. |
 | WoS 401 or missing key | Check `WOS_API_KEY` and Starter API entitlement. |
