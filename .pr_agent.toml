@@ -1,0 +1,11 @@
+[config]
+model = "deepseek-v4-pro"
+fallback_models = ["deepseek-v4-pro"]
+
+[github_action_config]
+auto_describe = true
+auto_review = true
+auto_improve = false
+
+[openai]
+api_base = "https://api.deepseek.com"
