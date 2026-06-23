@@ -10,12 +10,13 @@ The Skill includes:
 python skills/paperseek/scripts/paperseek.py
 ```
 
-This script is a launcher for the full PaperSeek Python package. It intentionally does not vendor or reimplement a reduced CLI. This avoids maintaining two search engines and keeps Web UI, CLI, providers, diagnostics, and JSON output contracts in one codebase.
+This script is a package-aware launcher with a self-contained fallback runtime. It first tries the full PaperSeek Python package. If the package is not importable, it falls back to `scripts/paperseek_skill_runtime.py`, which can run core `search`, `smoke`, `sources`, `doctor`, `config`, and `history path` commands without third-party dependencies.
 
 Use the launcher when a standalone Skill distribution needs a stable script entrypoint:
 
 ```bash
 python skills/paperseek/scripts/paperseek.py --help
+python skills/paperseek/scripts/paperseek.py search "platform governance and user innovation" --source openalex --json
 python skills/paperseek/scripts/paperseek.py doctor
 python skills/paperseek/scripts/paperseek.py smoke --source openalex --query "machine learning" --json
 ```
@@ -26,7 +27,7 @@ If the full package is not importable:
 python skills/paperseek/scripts/paperseek.py --install-help
 ```
 
-When the Skill is distributed separately from the repository, install the full PaperSeek package from the project repository or package index first. If the package source exists locally but is not importable, set:
+When the Skill is distributed separately from the repository, the bundled runtime can still search OpenAlex/Crossref/WoS directly. Install the full PaperSeek package only when the user needs the Web UI, citation maps, full history commands, or exact package parity. If the package source exists locally but is not importable, set:
 
 ```bash
 PAPERSEEK_PROJECT_ROOT=/path/to/paperseek
@@ -35,12 +36,12 @@ PAPERSEEK_PROJECT_ROOT=/path/to/paperseek
 ## Health Commands
 
 ```bash
-paperseek --help
-paperseek doctor
-paperseek doctor --json
-paperseek sources
-paperseek sources --json
-paperseek smoke --source openalex --query "machine learning" --json
+python skills/paperseek/scripts/paperseek.py --help
+python skills/paperseek/scripts/paperseek.py doctor
+python skills/paperseek/scripts/paperseek.py doctor --json
+python skills/paperseek/scripts/paperseek.py sources
+python skills/paperseek/scripts/paperseek.py sources --json
+python skills/paperseek/scripts/paperseek.py smoke --source openalex --query "machine learning" --json
 paperseek history list
 paperseek config list
 ```
@@ -91,6 +92,8 @@ Start the UI:
 ```bash
 paperseek-web
 ```
+
+The Web UI requires the full PaperSeek package. The standalone Skill runtime is CLI-only.
 
 Fallback:
 

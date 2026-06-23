@@ -431,17 +431,18 @@ from paperseek import PaperSeekAgent
 skills/paperseek/
 ```
 
-它用于指导支持 Skill 的 AI agent 正确调用 `paperseek` CLI 和本地 Web UI，包括数据源选择、配置诊断、JSON 结果解析和引用图边界。Skill 使用 progressive disclosure：`SKILL.md` 保持简短，详细命令契约放在 `references/`。
+它用于指导支持 Skill 的 AI agent 正确调用 PaperSeek，包括数据源选择、配置诊断、JSON 结果解析和引用图边界。Skill 使用 progressive disclosure：`SKILL.md` 保持简短，详细命令契约放在 `references/`。
 
 这个 Skill **不会随 Python 包自动安装**。如果需要在 agent 平台中使用，可以手动复制或链接 `skills/paperseek/` 到对应平台的 Skill 目录。
 
-Skill 中的 launcher：
+Skill 中的 launcher 与自包含 runtime：
 
 ```text
 skills/paperseek/scripts/paperseek.py
+skills/paperseek/scripts/paperseek_skill_runtime.py
 ```
 
-只负责调用完整的 PaperSeek Python 包，不维护无依赖降级版检索实现。单独发布 Skill 时，应先安装 PaperSeek 包，或设置 `PAPERSEEK_PROJECT_ROOT` 指向本地源码。
+单独发布 Skill 时，复制 `skills/paperseek/` 即可。`paperseek.py` 会优先调用完整 PaperSeek 包；如果未安装包，会回退到 `paperseek_skill_runtime.py`，使用 Python 标准库直接完成 OpenAlex、Crossref 和带 key 的 WoS Starter 核心文献检索。Web UI、引用图和完整历史管理仍需要安装完整包。
 
 ## 项目状态
 
