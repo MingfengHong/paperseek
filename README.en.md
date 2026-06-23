@@ -1,5 +1,3 @@
-# PaperSeek
-
 <p align="center">
   <img src="docs/assets/paperseek_logo_with_text.png" alt="PaperSeek" width="560">
 </p>
