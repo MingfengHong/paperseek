@@ -25,6 +25,9 @@ class PackagingTest(unittest.TestCase):
         self.assertNotIn("<repo-url>", readme)
         self.assertIn("https://github.com/MingfengHong/paperseek", readme)
         self.assertIn("docs/assets/paperseek-web.png", readme)
+        self.assertIn("docs/assets/deploy-modelscope.svg", readme)
+        self.assertIn("ModelScope%20visits", readme)
+        self.assertIn("modelscope.cn/studios/HongMingfeng/PaperSeek", readme)
         self.assertIn("docs/user-manual.md", readme)
         self.assertIn("docs/deployment.md", readme)
         self.assertIn("docs/online-demo.md", readme)
@@ -39,8 +42,11 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("[简体中文](README.md)", readme)
         self.assertIn("https://github.com/MingfengHong/paperseek", readme)
         self.assertIn("docs/assets/paperseek-web.png", readme)
+        self.assertIn("docs/assets/deploy-modelscope.svg", readme)
+        self.assertIn("ModelScope%20visits", readme)
+        self.assertIn("modelscope.cn/studios/HongMingfeng/PaperSeek", readme)
         self.assertIn("docs/online-demo.md", readme)
-        self.assertIn("Docker / Vercel deployment", readme)
+        self.assertIn("Docker / Vercel / ModelScope deployment", readme)
         self.assertIn("https://www.paperseek.xyz/", readme)
         self.assertNotIn("https://modelscope.cn/studios/HongMingfeng/paperseek", readme)
         self.assertIn("PaperSeek is licensed under the [Apache License 2.0](LICENSE).", readme)
@@ -97,7 +103,9 @@ class PackagingTest(unittest.TestCase):
             "app.py",
             "api/index.py",
             "vercel.json",
+            "ms_deploy.json",
             "docs/deployment.md",
+            "docs/assets/deploy-modelscope.svg",
         ):
             self.assertTrue((ROOT / path).exists(), path)
 
