@@ -364,7 +364,7 @@ Basic flow:
 2. Copy the Studio Git remote, usually:
 
    ```text
-   https://www.modelscope.cn/studios/<namespace>/<studio-name>.git
+   https://www.modelscope.cn/studios/YOUR_NAMESPACE/YOUR_STUDIO_NAME.git
    ```
 
 3. Push PaperSeek to that remote:
