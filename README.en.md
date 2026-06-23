@@ -1,54 +1,75 @@
 # PaperSeek
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![PyPI](https://img.shields.io/pypi/v/paperseek?color=3775A9&label=PyPI)](https://pypi.org/project/paperseek/)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![CI](https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml/badge.svg)](https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-alpha-orange)](#project-status)
-[![ModelScope visits](https://img.shields.io/badge/ModelScope%20visits-2.6k-624AFF?logo=modelscope&logoColor=white)](https://modelscope.cn/studios/HongMingfeng/PaperSeek)
+<p align="center">
+  <img src="docs/assets/paperseek_logo_with_text.png" alt="PaperSeek" width="560">
+</p>
 
-**Docs: [PaperSeek Docs](https://docs.paperseek.xyz/) | Language: [简体中文](README.md) | English**
+<p align="center">
+  <strong>AI-powered literature search and discovery at research speed.</strong>
+</p>
 
-**LLM based Literature Search Agent.** PaperSeek helps researchers start literature searches in natural language, iteratively refine database queries, expand candidate papers through citation links, rank records, and export a reviewable paper list.
+<p align="center">
+  Describe a research question once. PaperSeek generates database queries, calibrates result counts, expands citation links, ranks candidate papers, and exports a reviewable paper list.
+  <br>
+  An open-source literature-search workflow for topic exploration, reviews, interdisciplinary discovery, and daily paper tracking.
+</p>
 
-Try it online: [Live Demo](https://www.paperseek.xyz/). The hosted edition has three modes: `Quick Start` for signed-in users with a daily free quota provided by PaperSeek, `ModelScope Service` using the signed-in user's ModelScope API-Inference authorization, and `Use your own API` for user-supplied model and source keys. See the [hosted demo guide](docs/online-demo.md) for details.
+<p align="center">
+  <a href="https://www.paperseek.xyz/">Online</a>
+  ·
+  <a href="https://docs.paperseek.xyz/">Docs</a>
+  ·
+  <a href="https://modelscope.cn/studios/HongMingfeng/PaperSeek">ModelScope Studio</a>
+  ·
+  <a href="https://modelscope.cn/learn/434408">Community Article</a>
+  ·
+  <a href="https://modelscope.cn/skills/HongMingfeng/paperseek">Skill</a>
+</p>
 
-![PaperSeek web interface](https://raw.githubusercontent.com/MingfengHong/paperseek/main/docs/assets/paperseek-web.png)
+<p align="center">
+  <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white"></a>
+  <a href="https://pypi.org/project/paperseek/"><img alt="PyPI" src="https://img.shields.io/pypi/v/paperseek?color=3775A9&label=PyPI"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a>
+  <a href="https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="#project-status"><img alt="Status" src="https://img.shields.io/badge/status-alpha-orange"></a>
+  <a href="https://modelscope.cn/studios/HongMingfeng/PaperSeek"><img alt="ModelScope visits" src="https://img.shields.io/badge/ModelScope%20visits-2.6k-624AFF?logo=modelscope&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/paperseek-banner.png" alt="PaperSeek banner">
+</p>
+
+<p align="center">
+  <strong>Language:</strong>
+  <a href="README.md">简体中文</a>
+  ·
+  English
+</p>
+
+## Why PaperSeek
+
+The hard part of literature search is often not finding papers at all. It is knowing whether your search is complete and accurate when synonyms, disciplinary boundaries, and database-specific query rules all collide. PaperSeek turns an imprecise research intent into an executable, observable, and revisitable search workflow.
+
+PaperSeek is built for first-pass paper discovery and metadata organization. It does not replace systematic review protocols, full-text access, copyright checks, or expert judgement.
+
+## What PaperSeek Does
+
+- **Understands research questions**: generate source-specific queries for OpenAlex, Crossref, or WoS Starter from Chinese or English input.
+- **Calibrates search strings**: broaden or narrow queries according to target result counts, with 5 iterations by default.
+- **Builds structured candidate sets**: normalize title, authors, venue, year, DOI, abstract, citation count, keywords, and links.
+- **Ranks with reasons**: ask an LLM to score candidates and explain each score briefly.
+- **Expands citation networks**: add references and citing works from high-matching OpenAlex records, then inspect them in Citation Map.
+- **Limits by discipline**: select OpenAlex Fields in the Web UI or CLI; OpenAlex uses native field filters, WoS maps them to WC categories, and Crossref uses them as query context.
+- **Keeps the process reviewable**: inspect workflow stages, ranked results, citation maps, local history, and CSV exports in the Web UI.
+
+## Choose Your Path
+
+- **Hosted online edition**: use [paperseek.xyz](https://www.paperseek.xyz/) with Quick Start, ModelScope Service, or Use your own API; see the [hosted demo guide](docs/online-demo.md).
+- **Self-hosted open-source edition**: install from PyPI or source, or run with Docker/VPS for longer searches, citation expansion, and heavier request volume.
+- **ModelScope Studio**: use the public [PaperSeek Studio](https://modelscope.cn/studios/HongMingfeng/PaperSeek) or deploy your own Docker Studio from the guide.
+- **Agent Skill**: copy `skills/paperseek/` into a skill-aware agent platform; the Skill includes a lightweight runtime for core search without installing the full package.
 
 Full Chinese user manual: [PaperSeek User Manual](docs/user-manual.md); deployment guide: [Docker, Vercel, and ModelScope deployment](docs/deployment.md).
-
-## Overview
-
-PaperSeek turns a research question into an observable search workflow:
-
-- Enter a research question in Chinese or English.
-- Let an LLM generate source-specific search queries.
-- Automatically broaden or narrow queries according to target result counts.
-- Normalize metadata such as title, authors, venue, year, DOI, abstract, citation count, keywords, and links.
-- Ask the LLM to score candidate papers for relevance.
-- Optionally expand high-matching OpenAlex records through forward citations and backward references.
-- Optionally constrain searches to one or more Discipline Fields.
-- Review the workflow, ranked results, and citation map in the Web UI, then export selected records as CSV.
-
-PaperSeek is designed for first-pass paper discovery and metadata organization. It does not replace systematic review protocols, full-text access, copyright checks, or expert judgement.
-
-## Features
-
-| Feature | Description |
-| --- | --- |
-| Natural-language search | Start from a research question instead of hand-writing database syntax. |
-| Iterative query refinement | Automatically adjusts queries to hit a target result range, with 5 iterations by default. |
-| Relevance ranking | Uses an LLM to score candidates and explain each score briefly. |
-| Discipline Fields | Select OpenAlex Field disciplines in the Web UI or CLI; OpenAlex uses native field filters, WoS maps them to WC categories, and Crossref uses them as query context. |
-| OpenAlex citation expansion | Adds references and citing works from high-matching seed papers. |
-| Result export | Select papers in the Results view and export them as CSV. |
-| Citation map | Shows citation direction with arrows; supports drag, zoom, and pan. |
-| CLI and Web UI | Run from the command line or through a local browser interface. |
-| English / Chinese UI | The Web UI can switch between `EN` and `中文`, with the choice saved in the current browser. |
-| Local history | Self-hosted installs save search runs, events, and ranked records to local SQLite by default. |
-| Docker / Vercel / ModelScope deployment | Supports full Docker deployments, Vercel demos, and ModelScope Docker Studios. |
-| Diagnostics | `doctor`, `smoke`, and `sources` help debug API keys, source adapters, and protocol settings. |
-| Optional Agent Skill | `skills/paperseek/` can be copied into skill-aware agent platforms without being installed with the Python package. |
 
 ## Quick Start
 
@@ -204,6 +225,8 @@ The Web UI has four main workspaces:
 | Results | Review ranked papers, search, filter, sort, select, and export paper CSV. |
 | Citation Map | Explore OpenAlex citation expansion as a directed graph. |
 | History | Review locally saved runs, final queries, ranked records, and run events. |
+
+![PaperSeek web interface](docs/assets/paperseek-web.png)
 
 If API keys are already configured through system environment variables or `.env`, the Web UI shows that the environment is configured without sending secret values to the browser. API keys, base URLs, and run parameters entered in the Web UI are used only for the current browser session and are not written to local config files by PaperSeek. Local history saves run summaries, queries, events, and results, but never raw API keys.
 
@@ -471,6 +494,16 @@ Contributions are welcome:
 - Documentation, examples, and error diagnostics.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing. Report security issues according to [SECURITY.md](SECURITY.md).
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=MingfengHong%2Fpaperseek&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&legend=top-left" />
+ </picture>
+</a>
 
 ## Acknowledgements
 

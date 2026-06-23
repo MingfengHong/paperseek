@@ -13,13 +13,14 @@ export default defineConfig({
     lineNumbers: true
   },
   head: [
+    ['link', { rel: 'icon', href: '/paperseek-mark.png' }],
     ['meta', { name: 'theme-color', content: '#0f172a' }],
     ['meta', { property: 'og:title', content: 'PaperSeek Docs' }],
     ['meta', { property: 'og:description', content: 'Natural language literature search with PaperSeek.' }]
   ],
   themeConfig: {
     siteTitle: 'PaperSeek Docs',
-    logo: '/paperseek-icon.svg',
+    logo: '/paperseek-mark.png',
     search: {
       provider: 'local'
     },

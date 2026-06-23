@@ -6,7 +6,7 @@ hero:
   text: LLM based Literature Search Agent
   tagline: 用自然语言发起文献检索，自动迭代查询、扩展引用、排序结果，并导出可复核的候选论文列表。
   image:
-    src: /paperseek-icon.svg
+    src: /paperseek-hero.png
     alt: PaperSeek
   actions:
     - theme: brand

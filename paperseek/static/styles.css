@@ -64,60 +64,19 @@ textarea {
 .mark {
   width: 32px;
   height: 32px;
-  position: relative;
   flex: 0 0 auto;
   background: #ffffff;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 
-.mark-paper {
-  position: absolute;
-  left: 8px;
-  top: 6px;
-  width: 13px;
-  height: 17px;
-  border: 2px solid var(--blue);
-  border-radius: 3px;
-  background: #eef5ff;
-}
-
-.mark-paper::after {
-  content: "";
-  position: absolute;
-  right: -2px;
-  top: -2px;
-  width: 6px;
-  height: 6px;
-  background: #ffffff;
-  border-left: 2px solid var(--blue);
-  border-bottom: 2px solid var(--blue);
-  border-radius: 0 2px 0 2px;
-}
-
-.mark-lens {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--orange);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.mark-lens::after {
-  content: "";
-  position: absolute;
-  right: -5px;
-  bottom: -3px;
-  width: 7px;
-  height: 2px;
-  background: var(--orange);
-  border-radius: 999px;
-  transform: rotate(45deg);
-  transform-origin: left center;
+.mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .brand-title {
