@@ -372,7 +372,7 @@ Basic flow:
    ```bash
    git clone https://github.com/MingfengHong/paperseek.git
    cd paperseek
-   git remote add modelscope https://oauth2:<MODELSCOPE_TOKEN>@www.modelscope.cn/studios/<namespace>/<studio-name>.git
+   git remote add modelscope "https://oauth2:YOUR_MODELSCOPE_TOKEN@www.modelscope.cn/studios/YOUR_NAMESPACE/YOUR_STUDIO_NAME.git"
    git push modelscope main:master
    ```
 
