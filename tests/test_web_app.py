@@ -1,41 +1,10 @@
 import unittest
-import os
-from contextlib import contextmanager
 
 from fastapi.testclient import TestClient
 
 from paperseek.web_app import app
 from paperseek.web_app import SearchRequest, _config_from_payload
-
-
-ENV_KEYS = (
-    "DATA_SOURCE",
-    "WOS_API_KEY",
-    "OPENALEX_API_KEY",
-    "OPENALEX_EMAIL",
-    "CROSSREF_EMAIL",
-    "LLM_API_KEY",
-    "LLM_PROVIDER",
-    "LLM_API_TYPE",
-    "LLM_MODEL",
-    "LLM_BASE_URL",
-    "DISCIPLINE_FIELDS",
-)
-
-
-@contextmanager
-def patched_env(values):
-    old_values = {key: os.environ.get(key) for key in ENV_KEYS}
-    try:
-        for key in ENV_KEYS:
-            os.environ.pop(key, None)
-        os.environ.update(values)
-        yield
-    finally:
-        for key in ENV_KEYS:
-            os.environ.pop(key, None)
-            if old_values[key] is not None:
-                os.environ[key] = old_values[key]
+from tests.helpers import CONFIG_ENV_KEYS, temporary_env
 
 
 class WebAppTest(unittest.TestCase):
@@ -111,7 +80,7 @@ class WebAppTest(unittest.TestCase):
         self.assertIn("Target minimum cannot exceed", response.json()["detail"])
 
     def test_config_from_payload_preserves_environment_credentials_when_form_keys_are_blank(self):
-        with patched_env({
+        with temporary_env({
             "DATA_SOURCE": "openalex",
             "OPENALEX_API_KEY": "oa-env-test",
             "LLM_PROVIDER": "deepseek",
@@ -119,7 +88,7 @@ class WebAppTest(unittest.TestCase):
             "LLM_MODEL": "deepseek-test",
             "LLM_BASE_URL": "https://api.deepseek.com",
             "LLM_API_KEY": "sk-env-test",
-        }):
+        }, clear=CONFIG_ENV_KEYS):
             payload = SearchRequest(
                 question="open innovation",
                 data_source="openalex",
@@ -139,7 +108,7 @@ class WebAppTest(unittest.TestCase):
             self.assertEqual(config.discipline_fields, ("17", "14"))
 
     def test_config_defaults_reports_configured_secrets_without_exposing_values(self):
-        with patched_env({
+        with temporary_env({
             "DATA_SOURCE": "openalex",
             "OPENALEX_API_KEY": "oa-env-test",
             "LLM_PROVIDER": "deepseek",
@@ -147,7 +116,7 @@ class WebAppTest(unittest.TestCase):
             "LLM_MODEL": "deepseek-test",
             "LLM_BASE_URL": "https://api.deepseek.com",
             "LLM_API_KEY": "sk-env-test",
-        }):
+        }, clear=CONFIG_ENV_KEYS):
             response = self.client.get("/api/config/defaults")
             self.assertEqual(response.status_code, 200)
             payload = response.json()
