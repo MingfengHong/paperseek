@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible PaperSeek bug.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve PaperSeek. Do not paste API keys, tokens, cookies, private search history, or protected full-text content.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug and the behavior you expected.
+      placeholder: PaperSeek failed when...
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - CLI
+        - Web UI
+        - Agent Skill
+        - OpenAlex source
+        - Crossref source
+        - Web of Science source
+        - Docker or deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include exact commands or UI steps when possible. Redact secrets.
+      placeholder: |
+        1. Run `paperseek ...`
+        2. Configure ...
+        3. See error ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Paste the relevant traceback, browser console message, or diagnostic output. Redact secrets.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: PaperSeek version or commit
+      placeholder: e.g. main@abcdef0, v0.1.0, or pip package version
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: OS, Python version, browser, deployment platform, Docker/Vercel details
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checks
+      options:
+        - label: I have removed API keys, tokens, cookies, and private data from this issue.
+          required: true
+        - label: I searched existing issues and documentation before opening this report.
+          required: true

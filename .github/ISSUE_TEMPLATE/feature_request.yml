@@ -1,0 +1,61 @@
+name: Feature request
+description: Suggest a PaperSeek improvement or new capability.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please keep requests focused on literature search, source adapters, ranking, diagnostics, export, deployment, or agent workflows.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What research or user workflow would this improve?
+      placeholder: I need PaperSeek to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you want.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI
+        - Web UI
+        - Agent Skill
+        - Source adapter
+        - Query generation
+        - Ranking or relevance scoring
+        - Citation map
+        - Export or history
+        - Deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Mention workarounds, related tools, or why the current workflow is not enough.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add examples, screenshots, API docs, or related papers when useful. Do not include secrets.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checks
+      options:
+        - label: This request does not involve paywall bypass, protected PDF downloading, or credential sharing.
+          required: true
+        - label: I searched existing issues and documentation before opening this request.
+          required: true

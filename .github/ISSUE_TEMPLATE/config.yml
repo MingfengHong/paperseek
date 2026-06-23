@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability or leaked credential
+    url: https://github.com/MingfengHong/paperseek/security/policy
+    about: Please report security issues privately through the security policy.
+  - name: Documentation site
+    url: https://docs.paperseek.xyz/
+    about: Check the user manual and deployment guide before opening a support issue.
