@@ -109,7 +109,7 @@ Vercel can host quick demos and lightweight Web UI deployments:
 
 ModelScope Studio can also deploy PaperSeek as a Docker Studio. Use this guide button for the required Studio Git workflow:
 
-<a href="docs/deployment.md#modelscope-studio"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
+<a href="docs/deployment.md#modelscope-studio-english"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
 
 For long searches, citation expansion, and heavy repeated use, prefer Docker or a VPS. See the [deployment guide](docs/deployment.md) for details.
 
