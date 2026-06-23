@@ -352,7 +352,7 @@ docker compose up --build
 
 The Docker image accepts the same environment variables as the CLI and Web UI backend, including `DISCIPLINE_FIELDS` for default Discipline Field selections such as `17;14`. If you do not want server-side secrets, users can enter LLM and data-source keys in the Web UI for the current browser session.
 
-## ModelScope Studio
+## ModelScope Studio (English)
 
 ModelScope Studio deployment is supported through Docker. It is not the same as Vercel's prefilled one-click clone flow: users normally create a Studio first, then push code to the Git remote assigned by ModelScope. PaperSeek is ready for that flow because the root directory already contains `Dockerfile` and `ms_deploy.json`.
 
