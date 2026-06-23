@@ -1,6 +1,6 @@
 [config]
-model = "deepseek-v4-pro"
-fallback_models = ["deepseek-v4-pro"]
+model = "openai/deepseek-v4-pro"
+fallback_models = ["openai/deepseek-v4-pro"]
 custom_model_max_tokens = 32000
 
 [github_action_config]

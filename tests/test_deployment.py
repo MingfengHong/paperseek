@@ -54,10 +54,16 @@ class DeploymentTest(unittest.TestCase):
         self.assertEqual(config["resource_configuration"], "platform/2v-cpu-16g-mem")
 
     def test_github_community_standard_files_exist(self):
-        self.assertTrue((ROOT / "CODE_OF_CONDUCT.md").is_file())
-        self.assertTrue((ROOT / ".github" / "pull_request_template.md").is_file())
-        self.assertTrue((ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").is_file())
-        self.assertTrue((ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml").is_file())
+        required_files = [
+            "CODE_OF_CONDUCT.md",
+            ".github/pull_request_template.md",
+            ".github/ISSUE_TEMPLATE/bug_report.yml",
+            ".github/ISSUE_TEMPLATE/feature_request.yml",
+            ".github/ISSUE_TEMPLATE/config.yml",
+        ]
+        for relative_path in required_files:
+            with self.subTest(relative_path=relative_path):
+                self.assertTrue((ROOT / relative_path).is_file())
 
 
 if __name__ == "__main__":
