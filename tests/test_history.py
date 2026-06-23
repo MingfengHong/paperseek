@@ -1,5 +1,4 @@
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +8,7 @@ from fastapi.testclient import TestClient
 from paperseek.config import AgentConfig
 from paperseek.history import HistoryStore, safe_search_params_from_config
 from paperseek.web_app import app
+from tests.helpers import temporary_env
 
 
 class HistoryStoreTest(unittest.TestCase):
@@ -108,12 +108,11 @@ class HistoryStoreTest(unittest.TestCase):
 
 class HistoryApiTest(unittest.TestCase):
     def test_history_endpoint_reads_configured_local_database(self):
-        previous_db = os.environ.get("PAPERSEEK_HISTORY_DB")
-        previous_enabled = os.environ.get("PAPERSEEK_HISTORY_ENABLED")
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                os.environ["PAPERSEEK_HISTORY_DB"] = str(Path(tmp) / "paperseek.db")
-                os.environ["PAPERSEEK_HISTORY_ENABLED"] = "true"
+        with tempfile.TemporaryDirectory() as tmp:
+            with temporary_env({
+                "PAPERSEEK_HISTORY_DB": str(Path(tmp) / "paperseek.db"),
+                "PAPERSEEK_HISTORY_ENABLED": "true",
+            }):
                 store = HistoryStore()
                 run_id = store.create_run("responsible AI", {"data_source": "openalex"})
                 store.fail_run(run_id, "Missing LLM key")
@@ -127,23 +126,13 @@ class HistoryApiTest(unittest.TestCase):
 
                 detail = client.get(f"/api/history/{run_id}").json()
                 self.assertEqual(detail["error_message"], "Missing LLM key")
-        finally:
-            if previous_db is None:
-                os.environ.pop("PAPERSEEK_HISTORY_DB", None)
-            else:
-                os.environ["PAPERSEEK_HISTORY_DB"] = previous_db
-            if previous_enabled is None:
-                os.environ.pop("PAPERSEEK_HISTORY_ENABLED", None)
-            else:
-                os.environ["PAPERSEEK_HISTORY_ENABLED"] = previous_enabled
 
     def test_clear_history_requires_explicit_confirmation(self):
-        previous_db = os.environ.get("PAPERSEEK_HISTORY_DB")
-        previous_enabled = os.environ.get("PAPERSEEK_HISTORY_ENABLED")
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                os.environ["PAPERSEEK_HISTORY_DB"] = str(Path(tmp) / "paperseek.db")
-                os.environ["PAPERSEEK_HISTORY_ENABLED"] = "true"
+        with tempfile.TemporaryDirectory() as tmp:
+            with temporary_env({
+                "PAPERSEEK_HISTORY_DB": str(Path(tmp) / "paperseek.db"),
+                "PAPERSEEK_HISTORY_ENABLED": "true",
+            }):
                 store = HistoryStore()
                 run_id = store.create_run("platform governance", {"data_source": "openalex"})
                 self.assertTrue(run_id)
@@ -157,15 +146,6 @@ class HistoryApiTest(unittest.TestCase):
                 self.assertEqual(confirmed.status_code, 200)
                 self.assertEqual(confirmed.json()["deleted"], 1)
                 self.assertEqual(store.list_runs(), [])
-        finally:
-            if previous_db is None:
-                os.environ.pop("PAPERSEEK_HISTORY_DB", None)
-            else:
-                os.environ["PAPERSEEK_HISTORY_DB"] = previous_db
-            if previous_enabled is None:
-                os.environ.pop("PAPERSEEK_HISTORY_ENABLED", None)
-            else:
-                os.environ["PAPERSEEK_HISTORY_ENABLED"] = previous_enabled
 
 
 if __name__ == "__main__":

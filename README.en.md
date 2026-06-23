@@ -1,6 +1,7 @@
 # PaperSeek
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyPI](https://img.shields.io/pypi/v/paperseek?color=3775A9&label=PyPI)](https://pypi.org/project/paperseek/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml/badge.svg)](https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/status-alpha-orange)](#project-status)
@@ -50,6 +51,26 @@ PaperSeek is designed for first-pass paper discovery and metadata organization. 
 | Optional Agent Skill | `skills/paperseek/` can be copied into skill-aware agent platforms without being installed with the Python package. |
 
 ## Quick Start
+
+Install the stable release from PyPI:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install paperseek
+```
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install paperseek
+```
+
+You can also clone the repository and install from source when you want to inspect or edit the code:
 
 ```bash
 git clone https://github.com/MingfengHong/paperseek.git

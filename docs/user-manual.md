@@ -46,6 +46,26 @@ PaperSeek 是一个 LLM based Literature Search Agent。它面向研究者、学
 
 ### 5 分钟启动 Web UI
 
+从 PyPI 安装稳定发布版：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install paperseek
+```
+
+Windows PowerShell：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install paperseek
+```
+
+也可以 clone 仓库从源码安装：
+
 ```bash
 git clone https://github.com/MingfengHong/paperseek.git
 cd paperseek
@@ -170,6 +190,33 @@ PaperSeek 的核心依赖包括：
 - `uvicorn`
 - `python-dateutil`
 
+### 从 PyPI 安装（推荐）
+
+PaperSeek 已发布到 PyPI，普通用户推荐直接安装稳定发布版：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install paperseek
+```
+
+Windows PowerShell：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install paperseek
+```
+
+安装后可使用：
+
+```bash
+paperseek --help
+paperseek-web
+```
+
 ### 从源码安装
 
 ```bash
@@ -196,7 +243,7 @@ python -m pip install -e .
 
 ### 从 GitHub 安装
 
-如果你不需要编辑源码，可以直接从 GitHub 安装：
+如果你希望安装最新 GitHub 代码，但不需要编辑源码，可以直接从 GitHub 安装：
 
 ```bash
 python -m pip install "git+https://github.com/MingfengHong/paperseek.git"
@@ -1899,6 +1946,12 @@ PaperSeek 返回元数据和链接。它不负责：
 - 需要复现时保存 JSON 输出和日志。
 
 ## Upgrade and maintenance
+
+### 更新 PyPI 安装
+
+```bash
+python -m pip install --upgrade paperseek
+```
 
 ### 更新源码安装
 

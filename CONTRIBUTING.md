@@ -37,6 +37,63 @@ paperseek smoke --source openalex --query "machine learning"
 paperseek smoke --source crossref --query "open innovation"
 ```
 
+## Package Release
+
+PaperSeek is published on PyPI as `paperseek`. Do not reuse a released version number; PyPI versions are immutable, so fixes must bump `pyproject.toml` to the next version such as `0.1.1`.
+
+Before uploading:
+
+```bash
+python -m pip install --upgrade build twine packaging pkginfo
+rm -rf dist build paperseek.egg-info
+python -m build
+python -m twine check dist/*
+```
+
+Install the built wheel in a fresh virtual environment and verify the CLI and Web app:
+
+```bash
+python -m venv .venv-pkg-test
+source .venv-pkg-test/bin/activate
+python -m pip install --upgrade pip
+python -m pip install dist/paperseek-*.whl
+paperseek --help
+python -c "import paperseek, paperseek_core"
+```
+
+Publish to TestPyPI first:
+
+```bash
+TWINE_USERNAME=__token__ TWINE_PASSWORD=$TESTPYPI_TOKEN \
+python -m twine upload --disable-progress-bar --repository-url https://test.pypi.org/legacy/ dist/*
+```
+
+When testing TestPyPI, avoid dependency confusion from test packages with the same dependency names. Install PaperSeek from TestPyPI without dependencies, then install dependencies from PyPI:
+
+```bash
+python -m pip install --index-url https://test.pypi.org/simple/ --no-deps paperseek==<version>
+python -m pip install --index-url https://pypi.org/simple/ \
+  "requests>=2.25" "pydantic>=2" "python-dateutil>=2.5" \
+  "urllib3>=1.25.3,<3" "typing-extensions>=4.7" "fastapi>=0.100" "uvicorn>=0.23"
+```
+
+After TestPyPI install and smoke tests pass, publish to PyPI:
+
+```bash
+TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPI_TOKEN \
+python -m twine upload --disable-progress-bar --repository-url https://upload.pypi.org/legacy/ dist/*
+```
+
+Then verify the public package:
+
+```bash
+python -m venv .venv-pypi-test
+source .venv-pypi-test/bin/activate
+python -m pip install --upgrade pip
+python -m pip install paperseek==<version>
+paperseek --help
+```
+
 ## Scope Guidelines
 
 - Keep API keys, cookies, and private credentials out of commits.

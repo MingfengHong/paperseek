@@ -9,8 +9,7 @@ import tempfile
 import unittest
 from urllib.parse import unquote_plus
 
-
-ROOT = Path(__file__).resolve().parents[1]
+from tests.helpers import ROOT, read_text
 
 
 class SkillLauncherTest(unittest.TestCase):
@@ -142,7 +141,7 @@ class SkillLauncherTest(unittest.TestCase):
         self.assertEqual(captured["headers"]["X-ApiKey"], "wos-key")
 
     def test_skill_readme_documents_current_layout(self):
-        readme = (ROOT / "skills" / "README.md").read_text(encoding="utf-8")
+        readme = read_text("skills/README.md")
         self.assertIn("scripts/", readme)
         self.assertIn("paperseek.py", readme)
         self.assertIn("paperseek_skill_runtime.py", readme)

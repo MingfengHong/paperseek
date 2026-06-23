@@ -1,5 +1,4 @@
 import unittest
-from pathlib import Path
 
 from paperseek.config import (
     SUPPORTED_LLM_PROVIDERS,
@@ -7,9 +6,7 @@ from paperseek.config import (
     default_base_url,
     default_model,
 )
-
-
-ROOT = Path(__file__).resolve().parents[1]
+from tests.helpers import read_text, temporary_env
 
 
 class LLMProviderTest(unittest.TestCase):
@@ -26,15 +23,15 @@ class LLMProviderTest(unittest.TestCase):
         self.assertEqual(default_base_url("cstcloud"), "https://uni-api.cstcloud.cn/v1")
 
     def test_modelscope_provider_is_available_in_web_ui(self):
-        html = (ROOT / "paperseek" / "static" / "index.html").read_text(encoding="utf-8")
-        app_js = (ROOT / "paperseek" / "static" / "app.js").read_text(encoding="utf-8")
+        html = read_text("paperseek/static/index.html")
+        app_js = read_text("paperseek/static/app.js")
         self.assertIn('value="modelscope"', html)
         self.assertIn("Qwen/Qwen3-235B-A22B-Instruct-2507", app_js)
         self.assertIn("https://api-inference.modelscope.cn/v1", app_js)
 
     def test_web_ui_exposes_language_switch(self):
-        html = (ROOT / "paperseek" / "static" / "index.html").read_text(encoding="utf-8")
-        app_js = (ROOT / "paperseek" / "static" / "app.js").read_text(encoding="utf-8")
+        html = read_text("paperseek/static/index.html")
+        app_js = read_text("paperseek/static/app.js")
         self.assertIn('data-language="en"', html)
         self.assertIn('data-language="zh"', html)
         self.assertIn("paperseek.ui.language", app_js)
@@ -42,35 +39,29 @@ class LLMProviderTest(unittest.TestCase):
         self.assertIn("高级设置", app_js)
 
     def test_cstcloud_provider_is_available_in_web_ui(self):
-        html = (ROOT / "paperseek" / "static" / "index.html").read_text(encoding="utf-8")
-        app_js = (ROOT / "paperseek" / "static" / "app.js").read_text(encoding="utf-8")
+        html = read_text("paperseek/static/index.html")
+        app_js = read_text("paperseek/static/app.js")
         self.assertIn('value="cstcloud"', html)
         self.assertIn("DeepSeek-V4-Flash", app_js)
         self.assertIn("https://uni-api.cstcloud.cn/v1", app_js)
 
     def test_llm_timeout_is_configurable_and_keeps_safe_minimum(self):
         import importlib
-        import os
         import paperseek_core.llm as core_llm
 
-        previous = os.environ.get("LLM_TIMEOUT_SECONDS")
         try:
-            os.environ.pop("LLM_TIMEOUT_SECONDS", None)
-            reloaded = importlib.reload(core_llm)
-            self.assertEqual(reloaded.DEFAULT_LLM_TIMEOUT_SECONDS, 180)
+            with temporary_env(clear=("LLM_TIMEOUT_SECONDS",)):
+                reloaded = importlib.reload(core_llm)
+                self.assertEqual(reloaded.DEFAULT_LLM_TIMEOUT_SECONDS, 180)
 
-            os.environ["LLM_TIMEOUT_SECONDS"] = "240"
-            reloaded = importlib.reload(core_llm)
-            self.assertEqual(reloaded.DEFAULT_LLM_TIMEOUT_SECONDS, 240)
+            with temporary_env({"LLM_TIMEOUT_SECONDS": "240"}):
+                reloaded = importlib.reload(core_llm)
+                self.assertEqual(reloaded.DEFAULT_LLM_TIMEOUT_SECONDS, 240)
 
-            os.environ["LLM_TIMEOUT_SECONDS"] = "10"
-            reloaded = importlib.reload(core_llm)
-            self.assertEqual(reloaded.DEFAULT_LLM_TIMEOUT_SECONDS, 30)
+            with temporary_env({"LLM_TIMEOUT_SECONDS": "10"}):
+                reloaded = importlib.reload(core_llm)
+                self.assertEqual(reloaded.DEFAULT_LLM_TIMEOUT_SECONDS, 30)
         finally:
-            if previous is None:
-                os.environ.pop("LLM_TIMEOUT_SECONDS", None)
-            else:
-                os.environ["LLM_TIMEOUT_SECONDS"] = previous
             importlib.reload(core_llm)
 
 

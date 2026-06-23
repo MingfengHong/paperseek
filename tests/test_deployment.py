@@ -1,15 +1,12 @@
 import importlib.util
-import json
 import unittest
-from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parents[1]
+from tests.helpers import ROOT, read_json, read_text
 
 
 class DeploymentTest(unittest.TestCase):
     def test_vercel_config_uses_fastapi_auto_detection(self):
-        config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+        config = read_json("vercel.json")
         self.assertEqual(config["$schema"], "https://openapi.vercel.sh/vercel.json")
         self.assertNotIn("functions", config)
         self.assertNotIn("rewrites", config)
@@ -27,7 +24,7 @@ class DeploymentTest(unittest.TestCase):
         self.assertEqual(module.app.title, "PaperSeek")
 
     def test_dockerfile_runs_web_app_on_container_port(self):
-        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        dockerfile = read_text("Dockerfile")
         self.assertIn("EXPOSE 7860", dockerfile)
         self.assertIn("PORT=7860", dockerfile)
         self.assertIn("--shell /bin/sh paperseek", dockerfile)
@@ -36,19 +33,19 @@ class DeploymentTest(unittest.TestCase):
         self.assertIn("HEALTHCHECK", dockerfile)
 
     def test_dockerfile_copies_runtime_packages(self):
-        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        dockerfile = read_text("Dockerfile")
         self.assertIn("COPY paperseek ./paperseek", dockerfile)
         self.assertIn("COPY paperseek_core ./paperseek_core", dockerfile)
 
     def test_compose_exposes_configurable_host_port(self):
-        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        compose = read_text("docker-compose.yml")
         self.assertIn("${PAPERSEEK_PORT:-8765}:${PAPERSEEK_CONTAINER_PORT:-7860}", compose)
         self.assertIn("PORT: ${PAPERSEEK_CONTAINER_PORT:-7860}", compose)
         self.assertIn("LLM_PROVIDER", compose)
         self.assertIn("OPENALEX_API_KEY", compose)
 
     def test_modelscope_deploy_config_uses_docker_port(self):
-        config = json.loads((ROOT / "ms_deploy.json").read_text(encoding="utf-8"))
+        config = read_json("ms_deploy.json")
         self.assertEqual(config["sdk_type"], "docker")
         self.assertEqual(config["port"], 7860)
         self.assertEqual(config["resource_configuration"], "platform/2v-cpu-16g-mem")
