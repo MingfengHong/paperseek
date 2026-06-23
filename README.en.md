@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml/badge.svg)](https://github.com/MingfengHong/paperseek/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/status-alpha-orange)](#project-status)
+[![ModelScope visits](https://img.shields.io/badge/ModelScope%20visits-2.6k-624AFF?logo=modelscope&logoColor=white)](https://modelscope.cn/studios/HongMingfeng/PaperSeek)
 
 **Docs: [PaperSeek Docs](https://docs.paperseek.xyz/) | Language: [简体中文](README.md) | English**
 
@@ -13,7 +14,7 @@ Try it online: [Live Demo](https://www.paperseek.xyz/). The hosted edition has t
 
 ![PaperSeek web interface](https://raw.githubusercontent.com/MingfengHong/paperseek/main/docs/assets/paperseek-web.png)
 
-Full Chinese user manual: [PaperSeek User Manual](docs/user-manual.md); deployment guide: [Docker and Vercel deployment](docs/deployment.md).
+Full Chinese user manual: [PaperSeek User Manual](docs/user-manual.md); deployment guide: [Docker, Vercel, and ModelScope deployment](docs/deployment.md).
 
 ## Overview
 
@@ -44,7 +45,7 @@ PaperSeek is designed for first-pass paper discovery and metadata organization. 
 | CLI and Web UI | Run from the command line or through a local browser interface. |
 | English / Chinese UI | The Web UI can switch between `EN` and `中文`, with the choice saved in the current browser. |
 | Local history | Self-hosted installs save search runs, events, and ranked records to local SQLite by default. |
-| Docker / Vercel deployment | Supports full Docker deployments and Vercel demos. |
+| Docker / Vercel / ModelScope deployment | Supports full Docker deployments, Vercel demos, and ModelScope Docker Studios. |
 | Diagnostics | `doctor`, `smoke`, and `sources` help debug API keys, source adapters, and protocol settings. |
 | Optional Agent Skill | `skills/paperseek/` can be copied into skill-aware agent platforms without being installed with the Python package. |
 
@@ -105,6 +106,10 @@ http://127.0.0.1:8765/
 Vercel can host quick demos and lightweight Web UI deployments:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMingfengHong%2Fpaperseek)
+
+ModelScope Studio can also deploy PaperSeek as a Docker Studio. Use this guide button for the required Studio Git workflow:
+
+<a href="docs/deployment.md#modelscope-studio"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
 
 For long searches, citation expansion, and heavy repeated use, prefer Docker or a VPS. See the [deployment guide](docs/deployment.md) for details.
 
@@ -302,6 +307,8 @@ PaperSeek supports two mainstream API protocol families: OpenAI-style APIs and A
 
 Default models initialize forms and examples. Actual availability depends on provider accounts, regions, billing, and compatibility layers.
 
+CSTCloud provides an OpenAI API Compatible LLM endpoint. The Base URL is `https://uni-api.cstcloud.cn/v1`. PaperSeek's provider id is `cstcloud`, and its default model is `DeepSeek-V4-Flash`. To get a key, open [CSTCloud API Keys](https://uni-api.cstcloud.cn/api_keys), sign in with CSTCloud unified authentication, and submit the requested application information. Chinese Academy of Sciences intramural users can sign in with a CSTCloud Pass, usually their institutional email account and password. See the [CSTCloud LLM API manual](https://uni-api.cstcloud.cn/doc/llm/) for endpoint details.
+
 ## Workflow
 
 A search usually has four stages:
@@ -377,20 +384,6 @@ export CROSSREF_EMAIL=you@example.org
 ```
 
 For higher quotas, priority support, or production SLA, consider Crossref Metadata Plus. PaperSeek uses the public or polite REST API path.
-
-### CSTCloud LLM API
-
-CSTCloud provides an OpenAI API Compatible LLM endpoint. The Base URL is `https://uni-api.cstcloud.cn/v1`. PaperSeek's provider id is `cstcloud`, and its default model is `DeepSeek-V4-Flash`.
-
-To get an API key:
-
-1. Open [CSTCloud API Keys](https://uni-api.cstcloud.cn/api_keys).
-2. Sign in with CSTCloud unified authentication.
-3. Fill and submit the requested application information on the page to obtain an API key.
-4. Chinese Academy of Sciences intramural users can sign in with a CSTCloud Pass, usually their institutional email account and password.
-5. Fill `LLM API Key` in the Web UI, or set `LLM_PROVIDER=cstcloud` and `LLM_API_KEY=your-cstcloud-api-key`.
-
-See the [CSTCloud LLM API manual](https://uni-api.cstcloud.cn/doc/llm/) for endpoint details.
 
 ### Web of Science Starter API
 

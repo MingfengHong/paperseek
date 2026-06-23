@@ -271,7 +271,7 @@ python -m pip uninstall paperseek
 
 ## Deployment
 
-PaperSeek 支持 Docker、Docker Compose 和 Vercel 部署。完整步骤见 [部署指南](deployment.md)。
+PaperSeek 支持 Docker、Docker Compose、Vercel 和 ModelScope 创空间部署。完整步骤见 [部署指南](deployment.md)。
 
 ### Docker 部署
 
@@ -338,6 +338,28 @@ curl https://your-project.vercel.app/api/sources
 ```
 
 确认 API 是否返回数据源列表。
+
+### ModelScope 创空间部署
+
+PaperSeek 社区版支持以 Docker 创空间的方式部署到 ModelScope。它不是 Vercel 那种完整预填参数的一键克隆流程；通常需要先在 ModelScope 创建创空间，再把本仓库代码推送到创空间分配的 Git 仓库。
+
+<a href="deployment.md#modelscope-studio"><img src="./assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
+
+社区版已经包含部署所需文件：
+
+| 文件 | 说明 |
+| --- | --- |
+| `Dockerfile` | 构建并启动 PaperSeek Web UI。 |
+| `ms_deploy.json` | 声明 Docker SDK、`7860` 端口和 CPU 资源规格。 |
+
+基本流程是：
+
+1. 在 ModelScope 创建 Docker 创空间。
+2. 将 PaperSeek 仓库推送到创空间 Git 远程。
+3. 在创空间设置中配置 `LLM_PROVIDER`、`LLM_API_TYPE`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY` 等环境变量。
+4. 发布或深度重启创空间。
+
+如果没有在服务端配置密钥，用户仍可在 Web UI 里为当前浏览器会话填写自己的 LLM 和数据源 Key。完整命令和注意事项见 [部署指南](deployment.md#modelscope-studio)。
 
 ## Core concepts
 
@@ -689,9 +711,9 @@ Provider 默认模型和 Base URL：
 
 默认值用于快速填写表单和命令参数。实际可用模型由服务商账号权限、地区、计费方式和兼容层决定。
 
-### 中国科技云 API Key
+### 中国科技云 CSTCloud
 
-中国科技云大模型 API 的 Base URL 是 `https://uni-api.cstcloud.cn/v1`，接口文档说明其 API 为 OpenAI API Compatible。获取 Key：
+中国科技云大模型 API 使用 OpenAI API Compatible 协议，Base URL 是 `https://uni-api.cstcloud.cn/v1`。PaperSeek 内置的 provider 为 `cstcloud`，默认模型为 `DeepSeek-V4-Flash`。获取 Key：
 
 1. 打开 [中国科技云 API Keys](https://uni-api.cstcloud.cn/api_keys)。
 2. 登录中国科技云统一认证。

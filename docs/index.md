@@ -41,10 +41,10 @@ features:
 
 PaperSeek 的社区文档分为两个主要入口：
 
-- **开源自托管版**：阅读 [开源版完整用户手册](user-manual.md)，适合本地运行、Docker/VPS 部署、配置自己的 LLM Key、数据源 Key 和默认 Discipline Fields。
+- **开源自托管版**：阅读 [开源版完整用户手册](user-manual.md)，适合本地运行、Docker/VPS/ModelScope 创空间部署、配置自己的 LLM Key、数据源 Key 和默认 Discipline Fields。
 - **在线体验版**：阅读 [在线体验版用户手册](online-demo.md)，适合直接访问 [paperseek.xyz](https://www.paperseek.xyz/) 试用完整 Web UI。在线版支持 Quick Start、ModelScope Service 和 Use your own API 三种模式，并提供与自托管版一致的 Discipline Fields 选择器；登录影响 Quick Start、ModelScope Service 与云端历史。
 
-部署 Docker、Docker Compose 或 Vercel 时，阅读 [部署指南](deployment.md)。
+部署 Docker、Docker Compose、Vercel 或 ModelScope 创空间时，阅读 [部署指南](deployment.md)。
 
 ## 社区维护方式
 
