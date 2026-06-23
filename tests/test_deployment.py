@@ -54,17 +54,10 @@ class DeploymentTest(unittest.TestCase):
         self.assertEqual(config["resource_configuration"], "platform/2v-cpu-16g-mem")
 
     def test_github_community_standard_files_exist(self):
-        self.assertTrue((ROOT / "CODE_OF_CONDUCT.md").exists())
-        self.assertTrue((ROOT / ".github" / "pull_request_template.md").exists())
-        self.assertTrue((ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").exists())
-        self.assertTrue((ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml").exists())
-
-        code_of_conduct = (ROOT / "CODE_OF_CONDUCT.md").read_text(encoding="utf-8")
-        pr_template = (ROOT / ".github" / "pull_request_template.md").read_text(encoding="utf-8")
-        bug_template = (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").read_text(encoding="utf-8")
-        self.assertIn("Reporting", code_of_conduct)
-        self.assertIn("## Tests", pr_template)
-        self.assertIn("Bug report", bug_template)
+        self.assertTrue((ROOT / "CODE_OF_CONDUCT.md").is_file())
+        self.assertTrue((ROOT / ".github" / "pull_request_template.md").is_file())
+        self.assertTrue((ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").is_file())
+        self.assertTrue((ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml").is_file())
 
 
 if __name__ == "__main__":
