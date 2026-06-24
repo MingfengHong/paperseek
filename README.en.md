@@ -66,6 +66,7 @@ PaperSeek is built for first-pass paper discovery and metadata organization. It 
 - **Self-hosted open-source edition**: install from PyPI or source, or run with Docker/VPS for longer searches, citation expansion, and heavier request volume.
 - **ModelScope Studio**: use the public [PaperSeek Studio](https://modelscope.cn/studios/HongMingfeng/PaperSeek) or deploy your own Docker Studio from the guide.
 - **Agent Skill**: copy `skills/paperseek/` into a skill-aware agent platform; the Skill includes a lightweight runtime for core search without installing the full package.
+- **MCP Server**: install `paperseek[mcp]` and run `paperseek-mcp` to expose literature search, diagnostics, and history as MCP tools for MCP-compatible AI agents.
 
 Full Chinese user manual: [PaperSeek User Manual](docs/user-manual.md); deployment guide: [Docker, Vercel, and ModelScope deployment](docs/deployment.md).
 
@@ -147,9 +148,9 @@ Vercel can host quick demos and lightweight Web UI deployments:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMingfengHong%2Fpaperseek)
 
-ModelScope Studio can also deploy PaperSeek as a Docker Studio. Use this guide button for the required Studio Git workflow:
+ModelScope Studio can also deploy PaperSeek as a Docker Studio. Use this button to fork the official Studio and create your own copy:
 
-<a href="docs/deployment.md#modelscope-studio-english"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
+<a href="https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
 
 For long searches, citation expansion, and heavy repeated use, prefer Docker or a VPS. See the [deployment guide](docs/deployment.md) for details.
 
@@ -479,9 +480,59 @@ skills/paperseek/scripts/paperseek_skill_runtime.py
 
 For standalone Skill distribution, copy `skills/paperseek/`. `paperseek.py` first tries the full PaperSeek package; if the package is unavailable, it falls back to `paperseek_skill_runtime.py`, a Python standard-library runtime that can run core OpenAlex, Crossref, and key-backed WoS Starter literature search without installing the package. The full package is still required for the Web UI, citation maps, and complete history management.
 
+## MCP Server
+
+PaperSeek provides an optional MCP (Model Context Protocol) server that exposes literature search, configuration diagnostics, source connectivity tests, and search history as MCP tools for MCP-compatible AI agents.
+
+Install the MCP optional dependency (requires Python 3.10+):
+
+```bash
+pip install paperseek[mcp]
+```
+
+Start the MCP server (stdio transport):
+
+```bash
+paperseek-mcp
+```
+
+Configuration is identical to the CLI and Web UI — set LLM and data source parameters via environment variables or `.env`. API keys are never exposed to the LLM; they are held only by the MCP server process.
+
+Available MCP tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `search_papers` | Search literature from a research question with the full LLM workflow |
+| `check_config` | Check whether PaperSeek configuration (source, LLM, API keys) is ready |
+| `smoke_test` | Send a minimal live request to test source connectivity |
+| `list_sources` | List all supported data sources and their capabilities |
+| `list_history` | List locally saved search runs |
+| `get_history_run` | View full details of a specific search run |
+
+Configure in MCP-compatible clients such as Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "paperseek": {
+      "command": "paperseek-mcp",
+      "env": {
+        "LLM_PROVIDER": "deepseek",
+        "LLM_API_TYPE": "openai_chat",
+        "LLM_MODEL": "deepseek-v4-flash",
+        "LLM_BASE_URL": "https://api.deepseek.com",
+        "LLM_API_KEY": "your-llm-api-key"
+      }
+    }
+  }
+}
+```
+
+You can also start the server with `python -m paperseek.mcp_server`. The MCP server reuses the same `PaperSeekAgent` core logic as the CLI, and search results are automatically saved to local history.
+
 ## Project Status
 
-PaperSeek is currently alpha software. CLI, Web UI, OpenAlex, Crossref, citation expansion, CSV export, and the optional Skill are usable, but formal research conclusions should still be reviewed manually.
+PaperSeek is currently alpha software. CLI, Web UI, OpenAlex, Crossref, citation expansion, CSV export, the optional Skill, and MCP Server are usable, but formal research conclusions should still be reviewed manually.
 
 Contributions are welcome:
 
@@ -492,16 +543,6 @@ Contributions are welcome:
 - Documentation, examples, and error diagnostics.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing. Report security issues according to [SECURITY.md](SECURITY.md).
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=MingfengHong%2Fpaperseek&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&legend=top-left" />
- </picture>
-</a>
 
 ## Acknowledgements
 
