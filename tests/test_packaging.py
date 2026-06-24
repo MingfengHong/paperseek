@@ -12,7 +12,7 @@ class PackagingTest(unittest.TestCase):
             pyproject,
             (
                 'name = "paperseek"',
-                'version = "0.1.0"',
+                'version = "0.1.1"',
                 'Homepage = "https://www.paperseek.xyz/"',
                 'Repository = "https://github.com/MingfengHong/paperseek"',
                 'Documentation = "https://docs.paperseek.xyz/"',
@@ -73,6 +73,7 @@ class PackagingTest(unittest.TestCase):
                 "## Web UI",
                 "## Deployment",
                 "## Agent Skill",
+                "## MCP Server",
                 "## Diagnostics and troubleshooting",
                 "python -m pip install paperseek",
                 "git clone https://github.com/MingfengHong/paperseek.git",

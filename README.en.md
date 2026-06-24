@@ -487,7 +487,7 @@ PaperSeek provides an optional MCP (Model Context Protocol) server that exposes 
 Install the MCP optional dependency (requires Python 3.10+):
 
 ```bash
-pip install paperseek[mcp]
+python -m pip install "paperseek[mcp]"
 ```
 
 Start the MCP server (stdio transport):
