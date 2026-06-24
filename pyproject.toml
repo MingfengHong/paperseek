@@ -45,6 +45,9 @@ dependencies = [
 dev = [
     "httpx>=0.24",
 ]
+mcp = [
+    "mcp>=1.0",
+]
 
 [project.urls]
 Homepage = "https://www.paperseek.xyz/"
@@ -56,6 +59,7 @@ Online-Demo = "https://www.paperseek.xyz/"
 [project.scripts]
 paperseek = "paperseek.cli:main"
 paperseek-web = "paperseek.web_app:main"
+paperseek-mcp = "paperseek.mcp_server:main"
 
 [tool.setuptools.packages.find]
 include = ["paperseek*", "paperseek_core*"]
