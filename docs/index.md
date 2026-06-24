@@ -35,6 +35,8 @@ features:
     details: 基于 OpenAlex 扩展高匹配论文的参考文献和被引论文，并用箭头展示引用方向。
   - title: 可复核导出
     details: 在 Results 页面筛选、勾选、排序论文，导出包含元数据和评分理由的 CSV。
+  - title: Agent 与 MCP 集成
+    details: 可复制自包含 Skill，或安装 paperseek[mcp] 启动 stdio MCP Server，让支持 MCP 的 AI agent 调用检索、诊断和历史工具。
 ---
 
 ## 选择你的入口
@@ -43,6 +45,7 @@ PaperSeek 的社区文档分为两个主要入口：
 
 - **开源自托管版**：阅读 [开源版完整用户手册](user-manual.md)，适合本地运行、Docker/VPS/ModelScope 创空间部署、配置自己的 LLM Key、数据源 Key 和默认 Discipline Fields。
 - **在线体验版**：阅读 [在线体验版用户手册](online-demo.md)，适合直接访问 [paperseek.xyz](https://www.paperseek.xyz/) 试用完整 Web UI。在线版支持 Quick Start、ModelScope Service 和 Use your own API 三种模式，并提供与自托管版一致的 Discipline Fields 选择器；登录影响 Quick Start、ModelScope Service 与云端历史。
+- **Agent 集成**：用户手册中的 [Agent Skill](user-manual.md#agent-skill) 和 [MCP Server](user-manual.md#mcp-server) 章节说明如何把 PaperSeek 接入支持 Skill 或 MCP 的 AI agent。
 
 部署 Docker、Docker Compose、Vercel 或 ModelScope 创空间时，阅读 [部署指南](deployment.md)。
 

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from tests.helpers import CONFIG_ENV_KEYS, temporary_env
 
@@ -121,6 +122,33 @@ class McpServerLogicTest(unittest.TestCase):
             result = search_papers_logic(question="open innovation")
         self.assertIn("error", result)
         self.assertIn("Configuration error", result["error"])
+
+    # ------------------------------------------------------------------
+    # smoke_test_logic
+    # ------------------------------------------------------------------
+
+    def test_smoke_test_redacts_provider_error_credentials(self):
+        from paperseek.mcp_server import smoke_test_logic
+        from paperseek.providers import ProviderError
+
+        secret = "sk-secret-abcdef123456"
+
+        def fail_with_secret(*args, **kwargs):
+            raise ProviderError(
+                "openalex",
+                f"failed Authorization: Bearer {secret}",
+                status=401,
+                query="machine learning",
+                body=f"x-api-key: {secret}",
+            )
+
+        with temporary_env({"DATA_SOURCE": "openalex"}, clear=CONFIG_ENV_KEYS):
+            with patch("paperseek.diagnostics.OpenAlexProvider.search", fail_with_secret):
+                result = smoke_test_logic(source="openalex")
+
+        payload = str(result)
+        self.assertNotIn(secret, payload)
+        self.assertIn("[redacted]", payload)
 
     # ------------------------------------------------------------------
     # list_history_logic

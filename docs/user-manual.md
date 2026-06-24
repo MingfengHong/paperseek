@@ -22,6 +22,7 @@ PaperSeek 是一个 LLM based Literature Search Agent。它面向研究者、学
 - [Citation expansion and map](#citation-expansion-and-map)
 - [Python API and core](#python-api-and-core)
 - [Agent Skill](#agent-skill)
+- [MCP Server](#mcp-server)
 - [Diagnostics and troubleshooting](#diagnostics-and-troubleshooting)
 - [Security and privacy](#security-and-privacy)
 - [Upgrade and maintenance](#upgrade-and-maintenance)
@@ -388,9 +389,9 @@ curl https://your-project.vercel.app/api/sources
 
 ### ModelScope 创空间部署
 
-PaperSeek 社区版支持以 Docker 创空间的方式部署到 ModelScope。它不是 Vercel 那种完整预填参数的一键克隆流程；通常需要先在 ModelScope 创建创空间，再把本仓库代码推送到创空间分配的 Git 仓库。
+PaperSeek 社区版支持以 Docker 创空间的方式部署到 ModelScope。你可以通过 fork 链接创建官方 PaperSeek 创空间的副本，也可以手动创建 Docker 创空间后把本仓库代码推送到创空间分配的 Git 仓库。
 
-<a href="deployment.md#modelscope-studio"><img src="./assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
+<a href="https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek"><img src="./assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
 
 社区版已经包含部署所需文件：
 
@@ -401,8 +402,8 @@ PaperSeek 社区版支持以 Docker 创空间的方式部署到 ModelScope。它
 
 基本流程是：
 
-1. 在 ModelScope 创建 Docker 创空间。
-2. 将 PaperSeek 仓库推送到创空间 Git 远程。
+1. 点击 [Deploy to ModelScope](https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek) fork 官方创空间，或手动创建 Docker 创空间。
+2. 如果手动创建创空间，将 PaperSeek 仓库推送到创空间 Git 远程。
 3. 在创空间设置中配置 `LLM_PROVIDER`、`LLM_API_TYPE`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY` 等环境变量。
 4. 发布或深度重启创空间。
 
@@ -1689,6 +1690,102 @@ $env:PAPERSEEK_PROJECT_ROOT = "C:\path\to\paperseek"
 
 launcher 会优先调用完整 PaperSeek 包；没有安装包时，会自动使用 Skill 自带 runtime 运行核心检索。
 
+## MCP Server
+
+PaperSeek 提供可选的 MCP（Model Context Protocol）服务器。它和 Skill 的定位不同：
+
+- Skill 是一组可复制到 agent 平台的说明与自包含 runtime。
+- MCP Server 是一个长期运行的 stdio 服务，供支持 MCP 的客户端通过工具调用 PaperSeek。
+
+MCP Server 复用完整 PaperSeek 包和 `PaperSeekAgent` 核心逻辑，因此支持 LLM 检索、配置诊断、数据源 smoke test 和本地历史记录。它需要 Python 3.10+，但基础 PaperSeek 包仍保持 Python 3.8+。
+
+### 安装 MCP 可选依赖
+
+```bash
+python -m pip install "paperseek[mcp]"
+```
+
+如果从源码安装：
+
+```bash
+python -m pip install -e ".[mcp]"
+```
+
+启动服务器：
+
+```bash
+paperseek-mcp
+```
+
+也可以使用模块方式启动：
+
+```bash
+python -m paperseek.mcp_server
+```
+
+### 配置方式
+
+MCP Server 读取的配置与 CLI、Web UI 一致：
+
+- 当前工作目录或包根目录下的 `.env`
+- 操作系统环境变量
+- 通过 `paperseek config set` 写入的用户级配置
+
+常用最小配置：
+
+```text
+LLM_PROVIDER=deepseek
+LLM_API_TYPE=openai_chat
+LLM_MODEL=deepseek-v4-flash
+LLM_BASE_URL=https://api.deepseek.com
+LLM_API_KEY=your-llm-api-key
+OPENALEX_API_KEY=your-openalex-api-key
+```
+
+API Key 由 MCP Server 进程持有，不作为 MCP tool 参数传入。MCP 响应会对常见凭据形字符串做脱敏处理；仍然不要把真实 API Key 写入 prompt、issue、README 或客户端配置截图。
+
+### 可用工具
+
+| 工具 | 用途 |
+| --- | --- |
+| `search_papers` | 输入研究问题，执行完整 LLM 检索工作流并返回排序结果 |
+| `check_config` | 检查数据源、LLM、API Key 和运行参数是否就绪 |
+| `smoke_test` | 对数据源发起一次最小真实请求，测试连通性 |
+| `list_sources` | 列出 OpenAlex、Crossref、WoS Starter 及其能力 |
+| `list_history` | 列出本地历史记录 |
+| `get_history_run` | 查看某次历史检索的完整详情 |
+
+`search_papers` 支持常用覆盖参数，包括 `source`、`field`、`discipline_fields`、`target_min`、`target_max`、`max_iterations`、`expand_citations` 和 `fetch_abstracts`。不传这些参数时，会沿用环境变量或用户配置中的默认值。
+
+### Claude Desktop 配置示例
+
+```json
+{
+  "mcpServers": {
+    "paperseek": {
+      "command": "paperseek-mcp",
+      "env": {
+        "LLM_PROVIDER": "deepseek",
+        "LLM_API_TYPE": "openai_chat",
+        "LLM_MODEL": "deepseek-v4-flash",
+        "LLM_BASE_URL": "https://api.deepseek.com",
+        "LLM_API_KEY": "your-llm-api-key",
+        "OPENALEX_API_KEY": "your-openalex-api-key"
+      }
+    }
+  }
+}
+```
+
+如果你在项目目录运行客户端，也可以不在客户端配置里写 key，而是在项目 `.env` 中保存配置。共享电脑上使用后请退出客户端，并确认 `.env` 没有被提交到 Git。
+
+### MCP 与 CLI 的差异
+
+- MCP 返回 JSON 字符串，适合 agent 继续解析。
+- `paperseek-mcp` 默认使用 stdio transport，由 MCP 客户端负责启动和通信。
+- 搜索成功会写入 PaperSeek 本地历史；可用 `list_history` 和 `get_history_run` 查看。
+- MCP Server 本身不提供 Web UI；需要浏览器界面时使用 `paperseek-web`。
+
 ## Diagnostics and troubleshooting
 
 ### 推荐排错顺序
@@ -2045,6 +2142,10 @@ paperseek search "your question" --source openalex --json > papers.json
 ### Skill 是必须安装的吗？
 
 不是。Skill 只用于支持 Skill 的 agent 平台。普通 CLI 和 Web UI 用户不需要安装 Skill。若只复制 `skills/paperseek/` 到 agent 平台，Skill 自带 runtime 也可以直接完成核心文献检索；但 Web UI、引用图和完整历史管理仍需要完整 PaperSeek 包。
+
+### MCP Server 是必须安装的吗？
+
+不是。普通 CLI、Web UI、Docker、Vercel 和 ModelScope 创空间部署都不需要 MCP。只有当你要让 Claude Desktop、Cursor 或其他 MCP-compatible agent 通过工具调用 PaperSeek 时，才需要安装 `paperseek[mcp]` 并运行 `paperseek-mcp`。由于当前 `mcp` 依赖本身要求 Python 3.10+，MCP 功能也要求 Python 3.10+；基础 PaperSeek 包仍支持 Python 3.8+。
 
 ### Web UI 会保存我的 Key 吗？
 

@@ -76,6 +76,19 @@ def _redact_secrets(text: str, max_chars: int = 700) -> str:
     return redacted
 
 
+def _redact_response(value: Any) -> Any:
+    """Recursively redact credential-shaped strings before returning MCP data."""
+    if isinstance(value, str):
+        return _redact_secrets(value)
+    if isinstance(value, dict):
+        return {key: _redact_response(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_response(item) for item in value]
+    if isinstance(value, tuple):
+        return [_redact_response(item) for item in value]
+    return value
+
+
 def _build_search_config(
     source: str = "",
     field: str = "",
@@ -186,7 +199,7 @@ def smoke_test_logic(source: str = "", query: str = "machine learning") -> Dict[
     config = AgentConfig.from_env()
     if source:
         config.data_source = source
-    return smoke_source(config, query=query or "machine learning", limit=1)
+    return _redact_response(smoke_source(config, query=query or "machine learning", limit=1))
 
 
 def list_sources_logic() -> Dict[str, Any]:

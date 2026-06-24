@@ -148,9 +148,9 @@ Vercel can host quick demos and lightweight Web UI deployments:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMingfengHong%2Fpaperseek)
 
-ModelScope Studio can also deploy PaperSeek as a Docker Studio. Use this guide button for the required Studio Git workflow:
+ModelScope Studio can also deploy PaperSeek as a Docker Studio. Use this button to fork the official Studio and create your own copy:
 
-<a href="docs/deployment.md#modelscope-studio-english"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
+<a href="https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
 
 For long searches, citation expansion, and heavy repeated use, prefer Docker or a VPS. See the [deployment guide](docs/deployment.md) for details.
 
@@ -543,16 +543,6 @@ Contributions are welcome:
 - Documentation, examples, and error diagnostics.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing. Report security issues according to [SECURITY.md](SECURITY.md).
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=MingfengHong%2Fpaperseek&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=MingfengHong/paperseek&type=date&legend=top-left" />
- </picture>
-</a>
 
 ## Acknowledgements
 
