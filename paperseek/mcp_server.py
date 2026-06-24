@@ -24,6 +24,7 @@ identical to the CLI and Web UI.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -51,6 +52,30 @@ load_user_config_into_env()
 # ---------------------------------------------------------------------------
 
 
+# Patterns covering common credential-shaped substrings echoed back in HTTP
+# error bodies (Bearer tokens, API keys, x-api-key headers, etc.). Applied
+# before any error message leaves this module so that keys held by the server
+# process are never returned to the MCP client or persisted to history.
+_KEY_VALUE_PATTERN = re.compile(
+    r"(?i)(x-api[_-]?key|api[_-]?key|authorization)\s*[:=]\s*([^\n\r,;}]+)"
+)
+_BEARER_PATTERN = re.compile(r"(?i)bearer\s+([A-Za-z0-9._\-+/=]{8,})")
+
+
+def _redact_secrets(text: str, max_chars: int = 700) -> str:
+    """Return ``text`` with credential-shaped substrings replaced by ``[redacted]``.
+
+    Long messages are truncated to ``max_chars`` to keep MCP responses compact.
+    """
+    if not text:
+        return ""
+    redacted = _KEY_VALUE_PATTERN.sub(lambda m: f"{m.group(1)}: [redacted]", text)
+    redacted = _BEARER_PATTERN.sub("[redacted]", redacted)
+    if len(redacted) > max_chars:
+        redacted = redacted[:max_chars].rstrip() + "..."
+    return redacted
+
+
 def _build_search_config(
     source: str = "",
     field: str = "",
@@ -58,10 +83,16 @@ def _build_search_config(
     target_min: int = 0,
     target_max: int = 0,
     max_iterations: int = 0,
-    expand_citations: bool = True,
-    fetch_abstracts: bool = False,
+    expand_citations: Optional[bool] = None,
+    fetch_abstracts: Optional[bool] = None,
 ) -> AgentConfig:
-    """Build an :class:`AgentConfig` from the environment with optional overrides."""
+    """Build an :class:`AgentConfig` from the environment with optional overrides.
+
+    Boolean flags default to ``None`` so that ``AgentConfig.from_env()`` values
+    (driven by ``EXPAND_CITATIONS`` / ``FETCH_ABSTRACTS``) are preserved when the
+    caller does not explicitly override them. Passing ``True`` or ``False``
+    forces the corresponding config field.
+    """
     config = AgentConfig.from_env()
     if source:
         config.data_source = source
@@ -75,8 +106,10 @@ def _build_search_config(
         config.target_max = target_max
     if max_iterations > 0:
         config.max_iterations = max_iterations
-    config.expand_citations = expand_citations
-    config.fetch_abstracts = fetch_abstracts
+    if expand_citations is not None:
+        config.expand_citations = expand_citations
+    if fetch_abstracts is not None:
+        config.fetch_abstracts = fetch_abstracts
     return config
 
 
@@ -88,13 +121,15 @@ def search_papers_logic(
     target_min: int = 0,
     target_max: int = 0,
     max_iterations: int = 0,
-    expand_citations: bool = True,
-    fetch_abstracts: bool = False,
+    expand_citations: Optional[bool] = None,
+    fetch_abstracts: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Execute a literature search and return a structured result dict.
 
     On success the dict mirrors :func:`result_payload_from_search_result`.
-    On failure the dict contains an ``"error"`` key.
+    On failure the dict contains an ``"error"`` key. Error messages from
+    upstream services are redacted to avoid leaking credentials that the
+    server process holds.
     """
     question = (question or "").strip()
     if not question:
@@ -129,11 +164,13 @@ def search_papers_logic(
         store.complete_run(run_id, payload)
         return payload
     except LLMError as exc:
-        store.fail_run(run_id, str(exc))
-        return {"error": f"LLM error: {exc}"}
+        message = _redact_secrets(str(exc))
+        store.fail_run(run_id, message)
+        return {"error": f"LLM error: {message}"}
     except Exception as exc:
-        store.fail_run(run_id, str(exc))
-        return {"error": f"Search error: {exc}"}
+        message = _redact_secrets(str(exc))
+        store.fail_run(run_id, message)
+        return {"error": f"Search error: {message}"}
 
 
 def check_config_logic(source: str = "") -> Dict[str, Any]:
@@ -212,8 +249,8 @@ def create_server():
         target_min: int = 0,
         target_max: int = 0,
         max_iterations: int = 0,
-        expand_citations: bool = True,
-        fetch_abstracts: bool = False,
+        expand_citations: bool | None = None,
+        fetch_abstracts: bool | None = None,
     ) -> str:
         """Search academic literature for a research question.
 
@@ -230,8 +267,11 @@ def create_server():
             target_min: Minimum target results (default from env: 5).
             target_max: Maximum target results (default from env: 50).
             max_iterations: Max query refinement cycles (default from env: 5).
-            expand_citations: Expand citation network via OpenAlex (default: true).
-            fetch_abstracts: Fetch abstracts via DOI from Crossref (default: false).
+            expand_citations: Expand citation network via OpenAlex (default: from
+                ``EXPAND_CITATIONS`` env var, ``true`` if unset).
+            fetch_abstracts: Fetch abstracts via DOI from Crossref (default: from
+                ``FETCH_ABSTRACTS`` env var, ``false`` if unset). Pass ``True`` or
+                ``False`` to override the env value; omit to keep it.
 
         Returns:
             JSON string with ranked papers, query history, and citation map.

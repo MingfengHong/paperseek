@@ -214,6 +214,85 @@ class McpServerLogicTest(unittest.TestCase):
         self.assertEqual(config.target_min, 8)
         self.assertEqual(config.target_max, 40)
 
+    def test_build_search_config_preserves_env_boolean_defaults(self):
+        """Boolean flags default to ``None`` so env values win by default."""
+        from paperseek.mcp_server import _build_search_config
+
+        with temporary_env(
+            {
+                "DATA_SOURCE": "openalex",
+                "LLM_PROVIDER": "ollama",
+                "LLM_API_TYPE": "openai_chat",
+                "LLM_MODEL": "qwen3:8b",
+                "LLM_BASE_URL": "http://127.0.0.1:11434/v1",
+                "LLM_API_KEY": "",
+                "EXPAND_CITATIONS": "false",
+                "FETCH_ABSTRACTS": "true",
+            },
+            clear=CONFIG_ENV_KEYS,
+        ):
+            config = _build_search_config()
+        self.assertFalse(config.expand_citations)
+        self.assertTrue(config.fetch_abstracts)
+
+    def test_build_search_config_explicit_overrides_env(self):
+        """Passing True/False still overrides env values."""
+        from paperseek.mcp_server import _build_search_config
+
+        with temporary_env(
+            {
+                "DATA_SOURCE": "openalex",
+                "LLM_PROVIDER": "ollama",
+                "LLM_API_TYPE": "openai_chat",
+                "LLM_MODEL": "qwen3:8b",
+                "LLM_BASE_URL": "http://127.0.0.1:11434/v1",
+                "LLM_API_KEY": "",
+                "EXPAND_CITATIONS": "false",
+                "FETCH_ABSTRACTS": "true",
+            },
+            clear=CONFIG_ENV_KEYS,
+        ):
+            config = _build_search_config(
+                expand_citations=True,
+                fetch_abstracts=False,
+            )
+        self.assertTrue(config.expand_citations)
+        self.assertFalse(config.fetch_abstracts)
+
+    # ------------------------------------------------------------------
+    # _redact_secrets
+    # ------------------------------------------------------------------
+
+    def test_redact_secrets_removes_authorization_header(self):
+        from paperseek.mcp_server import _redact_secrets
+
+        text = 'HTTP 401: {"error": "Authorization: Bearer sk-abcdef0123456789"}'
+        redacted = _redact_secrets(text)
+        self.assertNotIn("sk-abcdef0123456789", redacted)
+        self.assertIn("[redacted]", redacted)
+
+    def test_redact_secrets_removes_api_key_header(self):
+        from paperseek.mcp_server import _redact_secrets
+
+        text = "x-api-key: sk-test-1234567890, status=401"
+        redacted = _redact_secrets(text)
+        self.assertNotIn("sk-test-1234567890", redacted)
+        self.assertIn("x-api-key: [redacted]", redacted)
+
+    def test_redact_secrets_truncates_long_text(self):
+        from paperseek.mcp_server import _redact_secrets
+
+        text = "a" * 1000
+        redacted = _redact_secrets(text, max_chars=100)
+        self.assertTrue(redacted.endswith("..."))
+        self.assertLessEqual(len(redacted), 104)
+
+    def test_redact_secrets_handles_empty(self):
+        from paperseek.mcp_server import _redact_secrets
+
+        self.assertEqual(_redact_secrets(""), "")
+        self.assertEqual(_redact_secrets(None), "")  # type: ignore[arg-type]
+
     # ------------------------------------------------------------------
     # create_server
     # ------------------------------------------------------------------
