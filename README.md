@@ -148,9 +148,9 @@ Vercel 可用于快速体验和轻量 Web UI 部署：
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMingfengHong%2Fpaperseek)
 
-ModelScope 创空间也可通过 Docker 方式部署。点击下方按钮 fork 官方创空间并创建自己的副本：
+ModelScope 创空间也可通过 Docker 方式部署。点击下方按钮 fork 社区版创空间并创建自己的副本：
 
-<a href="https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
+<a href="https://modelscope.cn/studios/fork?target=FayeRR/paperseek"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
 
 长时间搜索、引用扩展和大量请求建议使用 Docker 或 VPS。完整说明见 [部署指南](docs/deployment.md)。
 
