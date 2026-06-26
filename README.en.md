@@ -148,9 +148,9 @@ Vercel can host quick demos and lightweight Web UI deployments:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMingfengHong%2Fpaperseek)
 
-ModelScope Studio can also deploy PaperSeek as a Docker Studio. Use this button to fork the official Studio and create your own copy:
+ModelScope Studio can also deploy PaperSeek as a Docker Studio. Use this button to fork the community Studio and create your own copy:
 
-<a href="https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
+<a href="https://modelscope.cn/studios/fork?target=FayeRR/paperseek"><img src="docs/assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
 
 For long searches, citation expansion, and heavy repeated use, prefer Docker or a VPS. See the [deployment guide](docs/deployment.md) for details.
 

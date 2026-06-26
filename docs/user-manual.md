@@ -389,9 +389,9 @@ curl https://your-project.vercel.app/api/sources
 
 ### ModelScope 创空间部署
 
-PaperSeek 社区版支持以 Docker 创空间的方式部署到 ModelScope。你可以通过 fork 链接创建官方 PaperSeek 创空间的副本，也可以手动创建 Docker 创空间后把本仓库代码推送到创空间分配的 Git 仓库。
+PaperSeek 社区版支持以 Docker 创空间的方式部署到 ModelScope。你可以通过 fork 链接创建社区版 PaperSeek 创空间的副本，也可以手动创建 Docker 创空间后把本仓库代码推送到创空间分配的 Git 仓库。
 
-<a href="https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek"><img src="./assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
+<a href="https://modelscope.cn/studios/fork?target=FayeRR/paperseek"><img src="./assets/deploy-modelscope.svg" alt="Deploy to ModelScope" height="32"></a>
 
 社区版已经包含部署所需文件：
 
@@ -402,7 +402,7 @@ PaperSeek 社区版支持以 Docker 创空间的方式部署到 ModelScope。你
 
 基本流程是：
 
-1. 点击 [Deploy to ModelScope](https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek) fork 官方创空间，或手动创建 Docker 创空间。
+1. 点击 [Deploy to ModelScope](https://modelscope.cn/studios/fork?target=FayeRR/paperseek) fork 社区版创空间，或手动创建 Docker 创空间。
 2. 如果手动创建创空间，将 PaperSeek 仓库推送到创空间 Git 远程。
 3. 在创空间设置中配置 `LLM_PROVIDER`、`LLM_API_TYPE`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY` 等环境变量。
 4. 发布或深度重启创空间。
