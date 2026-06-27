@@ -212,7 +212,7 @@ export LLM_BASE_URL=http://127.0.0.1:11434/v1
 paperseek-web
 ```
 
-项目提供 `.env.example`。你可以复制为 `.env` 作为本地配置参考，但不要提交真实 API Key。CLI 和 Web 后端会自动读取当前目录或项目根目录下的 `.env`；已经存在的系统环境变量优先于 `.env`。
+项目提供 `.env.example`。你可以复制为 `.env` 作为本地配置参考，但不要提交真实 API Key。`.env.example` 只保留了最常用的配置项；其他参数（如目标结果数量、引用扩展开关等）均已在代码中提供合理默认值，需要时再覆盖即可。CLI 和 Web 后端会自动读取当前目录或项目根目录下的 `.env`；已经存在的系统环境变量优先于 `.env`。
 
 ## Web UI
 
@@ -377,9 +377,10 @@ A -> B  表示 A 引用了 B
 
 ## 环境变量
 
+以下变量已包含在 `.env.example` 中，是本地部署时最常需要配置的项：
+
 | 变量 | 说明 |
 | --- | --- |
-| `DATA_SOURCE` | `openalex`、`crossref` 或 `wos`，默认 `openalex`。 |
 | `LLM_PROVIDER` | LLM 服务商，例如 `openai`、`deepseek`、`cstcloud`、`anthropic`、`ollama`。 |
 | `LLM_API_TYPE` | `openai_responses`、`openai_chat` 或 `anthropic_messages`。 |
 | `LLM_MODEL` | 模型名称。 |
@@ -389,23 +390,30 @@ A -> B  表示 A 引用了 B
 | `OPENALEX_EMAIL` | OpenAlex 联系邮箱。 |
 | `CROSSREF_EMAIL` | Crossref polite pool 邮箱。 |
 | `WOS_API_KEY` | Clarivate Web of Science Starter API Key。 |
-| `WOS_DB` | WoS 数据库代码，默认 `WOS`。 |
 | `SEARCH_FIELD` | 自由文本学科或领域提示。 |
 | `DISCIPLINE_FIELDS` | OpenAlex Field ID、标签或 URL；多个值建议用分号分隔，并会映射到 OpenAlex / WoS 学科限定。 |
-| `TARGET_MIN` / `TARGET_MAX` | 目标结果数量范围。 |
-| `MAX_ITERATIONS` | 最大查询调整轮数。 |
-| `EXPAND_CITATIONS` | 是否启用 OpenAlex 引用扩展，默认 `true`。 |
-| `FETCH_ABSTRACTS` | 是否尝试从外部 DOI 元数据补摘要，默认 `false`。 |
-| `CITATION_SEED_COUNT` | 引用扩展 seed 论文数量。 |
-| `CITATION_PER_SEED` | 每个 seed 抓取的引用邻居数量。 |
-| `CITATION_MAX_RECORDS` | 引用扩展候选上限。 |
-| `RANKING_BATCH_SIZE` | LLM 排序批大小，默认 `8`；候选数较多时会自适应放大以减少批次数。 |
-| `RANKING_CONCURRENCY` | LLM 排序并发数，默认 `4`；单个批次失败不会使整个检索失败。 |
-| `LLM_TIMEOUT_SECONDS` | 单次 LLM 请求超时秒数，默认 `180`，最小 `30`。 |
-| `PAPERSEEK_HISTORY_ENABLED` | 是否启用本地历史记录，默认 `true`。 |
-| `PAPERSEEK_TIMEZONE` | 本地历史记录时间戳时区，默认 `Asia/Shanghai`；Web UI 会优先使用浏览器检测到的时区。 |
-| `PAPERSEEK_DATA_DIR` | 本地数据目录，默认 `~/.paperseek`。 |
-| `PAPERSEEK_HISTORY_DB` | 本地历史 SQLite 数据库路径，默认 `~/.paperseek/paperseek.db`。 |
+
+以下高级参数已在代码中提供合理默认值，通常无需填写，仅在需要调优时覆盖：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DATA_SOURCE` | `openalex` | 数据源：`openalex`、`crossref` 或 `wos`。 |
+| `WOS_DB` | `WOS` | WoS 数据库代码。 |
+| `TARGET_MIN` | `5` | 目标结果数量下限。 |
+| `TARGET_MAX` | `50` | 目标结果数量上限。 |
+| `MAX_ITERATIONS` | `5` | 最大查询调整轮数。 |
+| `EXPAND_CITATIONS` | `true` | 是否启用 OpenAlex 引用扩展。 |
+| `FETCH_ABSTRACTS` | `false` | 是否尝试从外部 DOI 元数据补摘要。 |
+| `CITATION_SEED_COUNT` | `3` | 引用扩展 seed 论文数量。 |
+| `CITATION_PER_SEED` | `4` | 每个 seed 抓取的引用邻居数量。 |
+| `CITATION_MAX_RECORDS` | `40` | 引用扩展候选上限。 |
+| `RANKING_BATCH_SIZE` | `8` | LLM 排序批大小；候选数较多时会自适应放大以减少批次数。 |
+| `RANKING_CONCURRENCY` | `4` | LLM 排序并发数；单个批次失败不会使整个检索失败。 |
+| `LLM_TIMEOUT_SECONDS` | `180` | 单次 LLM 请求超时秒数，最小 `30`。 |
+| `PAPERSEEK_HISTORY_ENABLED` | `true` | 是否启用本地历史记录。 |
+| `PAPERSEEK_TIMEZONE` | `Asia/Shanghai` | 本地历史记录时间戳时区；Web UI 会优先使用浏览器检测到的时区。 |
+| `PAPERSEEK_DATA_DIR` | `~/.paperseek` | 本地数据目录。 |
+| `PAPERSEEK_HISTORY_DB` | `~/.paperseek/paperseek.db` | 本地历史 SQLite 数据库路径。 |
 
 ## API 获取方式
 
