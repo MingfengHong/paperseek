@@ -77,12 +77,10 @@ docker compose down
 
 ### 环境变量
 
-Docker 镜像接受与 CLI 和 Web UI 后端相同的环境变量：
+Docker 镜像接受与 CLI 和 Web UI 后端相同的环境变量。`.env.example` 已精简为最常用的配置项：
 
 | 变量 | 示例 |
 | --- | --- |
-| `PORT` | `7860` |
-| `DATA_SOURCE` | `openalex` |
 | `LLM_PROVIDER` | `deepseek` |
 | `LLM_API_TYPE` | `openai_chat` |
 | `LLM_MODEL` | `deepseek-v4-flash` |
@@ -91,10 +89,10 @@ Docker 镜像接受与 CLI 和 Web UI 后端相同的环境变量：
 | `OPENALEX_API_KEY` | `your-openalex-key` |
 | `CROSSREF_EMAIL` | `you@example.org` |
 | `WOS_API_KEY` | `your-wos-key` |
+| `SEARCH_FIELD` | `management` |
 | `DISCIPLINE_FIELDS` | `17;14` |
-| `RANKING_BATCH_SIZE` | `8` |
-| `RANKING_CONCURRENCY` | `4` |
-| `LLM_TIMEOUT_SECONDS` | `180` |
+
+其他参数（如 `DATA_SOURCE`、`WOS_DB`、`TARGET_MIN`、`TARGET_MAX`、`MAX_ITERATIONS`、`EXPAND_CITATIONS`、`FETCH_ABSTRACTS`、`CITATION_SEED_COUNT`、`CITATION_PER_SEED`、`CITATION_MAX_RECORDS`、`RANKING_BATCH_SIZE`、`RANKING_CONCURRENCY`、`LLM_TIMEOUT_SECONDS`、`PAPERSEEK_HISTORY_ENABLED`、`PAPERSEEK_TIMEZONE`、`PAPERSEEK_DATA_DIR`、`PAPERSEEK_HISTORY_DB`）均已在代码中提供合理默认值，需要时可在 `.env` 中覆盖。
 
 如果你不想在服务器端配置密钥，用户也可以在 Web UI 中为当前浏览器会话填写 LLM Key 和数据源 Key。PaperSeek 不会保存这些本次会话密钥。
 

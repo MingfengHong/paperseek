@@ -41,8 +41,13 @@ class DeploymentTest(unittest.TestCase):
         compose = read_text("docker-compose.yml")
         self.assertIn("${PAPERSEEK_PORT:-8765}:${PAPERSEEK_CONTAINER_PORT:-7860}", compose)
         self.assertIn("PORT: ${PAPERSEEK_CONTAINER_PORT:-7860}", compose)
-        self.assertIn("LLM_PROVIDER", compose)
-        self.assertIn("OPENALEX_API_KEY", compose)
+        self.assertIn("env_file:", compose)
+        self.assertIn("path: .env", compose)
+        self.assertIn("required: false", compose)
+        self.assertIn("LLM_PROVIDER: ${LLM_PROVIDER}", compose)
+        self.assertIn("LLM_API_KEY: ${LLM_API_KEY}", compose)
+        self.assertIn("OPENALEX_API_KEY: ${OPENALEX_API_KEY}", compose)
+        self.assertIn("DISCIPLINE_FIELDS: ${DISCIPLINE_FIELDS}", compose)
 
     def test_modelscope_deploy_config_uses_docker_port(self):
         config = read_json("ms_deploy.json")
