@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional
 from paperseek.config import AgentConfig
 from paperseek.config_store import load_user_config_into_env
 from paperseek.diagnostics import run_doctor, smoke_source
-from paperseek.disciplines import normalize_discipline_ids
+from paperseek.disciplines import normalize_source_filter_values
 from paperseek.env_loader import load_env_file
 from paperseek.history import (
     HistoryStore,
@@ -96,6 +96,10 @@ def _build_search_config(
     target_min: int = 0,
     target_max: int = 0,
     max_iterations: int = 0,
+    retrieval_pool_max: int = 0,
+    retrieval_lane_limit: int = 0,
+    ranking_candidate_limit: int = 0,
+    retrieval_embedding_provider: str = "",
     expand_citations: Optional[bool] = None,
     fetch_abstracts: Optional[bool] = None,
 ) -> AgentConfig:
@@ -112,13 +116,21 @@ def _build_search_config(
     if field:
         config.search_field = field
     if discipline_fields:
-        config.discipline_fields = normalize_discipline_ids(discipline_fields)
+        config.discipline_fields = normalize_source_filter_values(config.data_source, discipline_fields)
     if target_min > 0:
         config.target_min = target_min
     if target_max > 0:
         config.target_max = target_max
     if max_iterations > 0:
         config.max_iterations = max_iterations
+    if retrieval_pool_max > 0:
+        config.retrieval_pool_max = retrieval_pool_max
+    if retrieval_lane_limit > 0:
+        config.retrieval_lane_limit = retrieval_lane_limit
+    if ranking_candidate_limit > 0:
+        config.ranking_candidate_limit = ranking_candidate_limit
+    if retrieval_embedding_provider:
+        config.retrieval_embedding_provider = retrieval_embedding_provider
     if expand_citations is not None:
         config.expand_citations = expand_citations
     if fetch_abstracts is not None:
@@ -134,6 +146,10 @@ def search_papers_logic(
     target_min: int = 0,
     target_max: int = 0,
     max_iterations: int = 0,
+    retrieval_pool_max: int = 0,
+    retrieval_lane_limit: int = 0,
+    ranking_candidate_limit: int = 0,
+    retrieval_embedding_provider: str = "",
     expand_citations: Optional[bool] = None,
     fetch_abstracts: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -155,6 +171,10 @@ def search_papers_logic(
         target_min=target_min,
         target_max=target_max,
         max_iterations=max_iterations,
+        retrieval_pool_max=retrieval_pool_max,
+        retrieval_lane_limit=retrieval_lane_limit,
+        ranking_candidate_limit=ranking_candidate_limit,
+        retrieval_embedding_provider=retrieval_embedding_provider,
         expand_citations=expand_citations,
         fetch_abstracts=fetch_abstracts,
     )
@@ -262,24 +282,34 @@ def create_server():
         target_min: int = 0,
         target_max: int = 0,
         max_iterations: int = 0,
+        retrieval_pool_max: int = 0,
+        retrieval_lane_limit: int = 0,
+        ranking_candidate_limit: int = 0,
+        retrieval_embedding_provider: str = "",
         expand_citations: bool | None = None,
         fetch_abstracts: bool | None = None,
     ) -> str:
         """Search academic literature for a research question.
 
         Generates a search query from the question using an LLM, searches
-        OpenAlex, Crossref, or Web of Science Starter, iteratively refines
+        OpenAlex, arXiv, Semantic Scholar, PubMed, computer science top conferences, Crossref, or
+        Web of Science Starter, iteratively refines
         the query, ranks results by relevance, and optionally expands the
         citation network.
 
         Args:
             question: Research question in natural language (required).
-            source: Data source: "openalex" (default), "crossref", or "wos".
+            source: Data source: "openalex" (default), "arxiv",
+                "semanticscholar", "pubmed", "paperhub", "crossref", or "wos".
             field: Optional discipline or field hint for query generation.
             discipline_fields: OpenAlex Field IDs or labels, e.g. ["Computer Science", "17"].
             target_min: Minimum target results (default from env: 5).
             target_max: Maximum target results (default from env: 50).
             max_iterations: Max query refinement cycles (default from env: 5).
+            retrieval_pool_max: Maximum fused candidates before LLM ranking.
+            retrieval_lane_limit: Maximum records fetched per retrieval lane.
+            ranking_candidate_limit: Maximum pre-ranked candidates sent to LLM scoring.
+            retrieval_embedding_provider: "local", "cstcloud", "openai", "dashscope", "siliconflow", "zhipu", "volcengine", "modelscope", or "custom".
             expand_citations: Expand citation network via OpenAlex (default: from
                 ``EXPAND_CITATIONS`` env var, ``true`` if unset).
             fetch_abstracts: Fetch abstracts via DOI from Crossref (default: from
@@ -297,6 +327,10 @@ def create_server():
             target_min=target_min,
             target_max=target_max,
             max_iterations=max_iterations,
+            retrieval_pool_max=retrieval_pool_max,
+            retrieval_lane_limit=retrieval_lane_limit,
+            ranking_candidate_limit=ranking_candidate_limit,
+            retrieval_embedding_provider=retrieval_embedding_provider,
             expand_citations=expand_citations,
             fetch_abstracts=fetch_abstracts,
         )
@@ -311,7 +345,7 @@ def create_server():
         if the environment is uncertain.
 
         Args:
-            source: Optional data source to check (openalex, crossref, wos).
+            source: Optional data source to check.
 
         Returns:
             JSON string with diagnostic checks and overall status.
@@ -324,7 +358,7 @@ def create_server():
         """Test connectivity to a literature data source with a small real query.
 
         Args:
-            source: Data source to test (openalex, crossref, wos).
+            source: Data source to test.
             query: Small test query (default: "machine learning").
 
         Returns:

@@ -23,7 +23,7 @@ skills/
 - `SKILL.md`：短指令、触发条件、核心工作流。
 - `references/`：只有在需要时才读取的命令契约、数据源选择和诊断说明。
 - `scripts/paperseek.py`：Skill 可调用的启动器，优先调用完整 PaperSeek CLI，包不可用时回退到自包含 runtime。
-- `scripts/paperseek_skill_runtime.py`：无第三方依赖的核心检索 runtime，可直接检索 OpenAlex、Crossref 和带 key 的 WoS Starter。
+- `scripts/paperseek_skill_runtime.py`：无第三方依赖的核心检索 runtime，可直接检索 OpenAlex、arXiv、Semantic Scholar、PubMed、计算机顶会、Crossref 和带 key 的 WoS Starter。
 
 如果完整 PaperSeek 仓库也在本地，launcher 会优先使用完整包能力；但单独发布 Skill 时不需要复制下列项目文件：
 
@@ -47,7 +47,7 @@ skills/
 这个 Skill 用来指导 AI agent 正确调用 PaperSeek：
 
 - 用自然语言研究问题运行文献检索。
-- 在 OpenAlex、Crossref、WoS Starter 之间选择合适数据源。
+- 在 OpenAlex、arXiv、Semantic Scholar、PubMed、计算机顶会、Crossref、WoS Starter 之间选择合适数据源。
 - 运行 `doctor` 和 `smoke` 排查配置、网络和数据源问题。
 - 读取 JSON 输出和稳定结果字段。
 - 明确不做 PDF 下载、不绕过付费墙、不保存密钥。

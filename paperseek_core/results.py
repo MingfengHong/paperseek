@@ -91,6 +91,8 @@ class PaperResult:
     relevance_score: Optional[float] = None
     relevance_reason: str = ""
     source_rank: Optional[int] = None
+    retrieval_score: Optional[float] = None
+    retrieval_lanes: List[str] = field(default_factory=list)
     source_raw_id: str = ""
     links: Dict[str, str] = field(default_factory=dict)
 
@@ -133,6 +135,8 @@ def ranked_entry_to_result(entry: Dict[str, Any], rank: int) -> PaperResult:
         relevance_score=score_value,
         relevance_reason=entry.get("reasoning", "") or "",
         source_rank=entry.get("source_rank"),
+        retrieval_score=entry.get("retrieval_score"),
+        retrieval_lanes=[str(value) for value in (entry.get("retrieval_lanes") or []) if value],
         source_raw_id=safe_get(doc, "uid"),
         links=links,
     )

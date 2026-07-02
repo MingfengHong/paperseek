@@ -6,10 +6,26 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
+import requests
+
 from paperseek.client import ApiClient, ApiException, Configuration, DocumentsApi
 from paperseek.config import SUPPORTED_LLM_API_TYPES, SUPPORTED_LLM_PROVIDERS, AgentConfig, default_api_type
-from paperseek.disciplines import apply_wos_discipline_filter, discipline_summary, openalex_field_ids
-from paperseek.providers import CrossrefProvider, OpenAlexProvider, ProviderError
+from paperseek.disciplines import (
+    apply_arxiv_category_filter,
+    apply_wos_discipline_filter,
+    discipline_source_note,
+    openalex_field_ids,
+)
+from paperseek.providers import (
+    ArxivProvider,
+    CrossrefProvider,
+    OpenAlexProvider,
+    PaperHubProvider,
+    ProviderError,
+    PubMedProvider,
+    SemanticScholarProvider,
+)
+from paperseek_core.agent import _wos_result_from_json
 from paperseek.source_metadata import get_source_metadata, list_source_metadata, require_source_metadata
 
 
@@ -88,6 +104,22 @@ def run_doctor(config: AgentConfig) -> Dict[str, Any]:
             summary="CROSSREF_EMAIL is not configured.",
             actions=["Set CROSSREF_EMAIL so Crossref requests enter the polite pool."],
         ))
+    elif source == "semanticscholar" and not getattr(config, "semantic_scholar_api_key", ""):
+        checks.append(DiagnosticCheck(
+            id="source.semantic_scholar_key",
+            status="warning",
+            severity="warning",
+            summary="SEMANTIC_SCHOLAR_API_KEY is not configured.",
+            actions=["Anonymous Semantic Scholar access is okay for light use; configure SEMANTIC_SCHOLAR_API_KEY for higher rate limits."],
+        ))
+    elif source == "pubmed" and not getattr(config, "pubmed_email", ""):
+        checks.append(DiagnosticCheck(
+            id="source.pubmed_email",
+            status="warning",
+            severity="warning",
+            summary="PUBMED_EMAIL is not configured.",
+            actions=["Set PUBMED_EMAIL and optionally PUBMED_API_KEY for responsible NCBI E-utilities usage."],
+        ))
     else:
         checks.append(DiagnosticCheck(
             id="source.credentials",
@@ -96,13 +128,13 @@ def run_doctor(config: AgentConfig) -> Dict[str, Any]:
             summary="Source-specific required configuration is present or not required.",
         ))
 
-    selected_disciplines = discipline_summary(getattr(config, "discipline_fields", ()))
+    selected_disciplines = discipline_source_note(getattr(config, "discipline_fields", ()), source)
     if selected_disciplines:
         checks.append(DiagnosticCheck(
             id="source.discipline_fields",
             status="pass",
             severity="info",
-            summary=f"Discipline limit is configured: {selected_disciplines}.",
+            summary=f"Source filter is configured: {selected_disciplines}.",
         ))
 
     if provider not in SUPPORTED_LLM_PROVIDERS:
@@ -209,6 +241,19 @@ def smoke_source(config: AgentConfig, query: str = "machine learning", limit: in
             )
         elif source == "crossref":
             result = CrossrefProvider(config.crossref_email).search(query, limit=limit)
+        elif source == "arxiv":
+            query = apply_arxiv_category_filter(query, getattr(config, "discipline_fields", ()))
+            result = ArxivProvider().search(query, limit=limit)
+        elif source == "semanticscholar":
+            result = SemanticScholarProvider(getattr(config, "semantic_scholar_api_key", "")).search(query, limit=limit)
+        elif source == "pubmed":
+            result = PubMedProvider(
+                getattr(config, "pubmed_api_key", ""),
+                getattr(config, "pubmed_email", ""),
+                getattr(config, "pubmed_tool", "paperseek"),
+            ).search(query, limit=limit)
+        elif source == "paperhub":
+            result = PaperHubProvider().search(query, limit=limit)
         else:
             if not config.wos_api_key:
                 return {
@@ -221,7 +266,36 @@ def smoke_source(config: AgentConfig, query: str = "machine learning", limit: in
             wos_query = query if any(tag in query.upper() for tag in ("TS=", "TI=", "AU=")) else f"TS=({query})"
             wos_query = apply_wos_discipline_filter(wos_query, getattr(config, "discipline_fields", ()))
             api = DocumentsApi(ApiClient(configuration=Configuration(api_key={"ClarivateApiKeyAuth": config.wos_api_key})))
-            result = api.documents_get(q=wos_query, db=config.wos_db, limit=limit)
+            try:
+                result = api.documents_get(q=wos_query, db=config.wos_db, limit=limit, sort_field="RS+D")
+            except ApiException as exc:
+                if exc.status == 429:
+                    time.sleep(2.0)
+                    result = api.documents_get(q=wos_query, db=config.wos_db, limit=limit, sort_field="RS+D")
+                else:
+                    raise
+            except Exception:
+                response = requests.get(
+                    "https://api.clarivate.com/apis/wos-starter/v1/documents",
+                    params={"q": wos_query, "db": config.wos_db, "limit": limit, "sortField": "RS+D"},
+                    headers={"Accept": "application/json", "X-ApiKey": config.wos_api_key},
+                    timeout=45,
+                )
+                if response.status_code == 429:
+                    time.sleep(2.0)
+                    response = requests.get(
+                        "https://api.clarivate.com/apis/wos-starter/v1/documents",
+                        params={"q": wos_query, "db": config.wos_db, "limit": limit, "sortField": "RS+D"},
+                        headers={"Accept": "application/json", "X-ApiKey": config.wos_api_key},
+                        timeout=45,
+                    )
+                if response.status_code < 200 or response.status_code >= 300:
+                    raise ApiException(status=response.status_code, reason=response.reason, body=response.text)
+                try:
+                    payload = response.json()
+                except ValueError as exc:
+                    raise ApiException(status=response.status_code, reason="Invalid JSON response", body=response.text) from exc
+                result = _wos_result_from_json(payload, limit)
         hits = getattr(result, "hits", []) or []
         metadata = getattr(result, "metadata", None)
         return {

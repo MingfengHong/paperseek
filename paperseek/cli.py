@@ -35,7 +35,7 @@ from paperseek.config_store import (
     unset_config_value,
 )
 from paperseek.diagnostics import dumps, render_doctor_text, render_smoke_text, run_doctor, smoke_source
-from paperseek.disciplines import normalize_discipline_ids
+from paperseek.disciplines import normalize_source_filter_values
 from paperseek.env_loader import load_env_file
 from paperseek.formatter import format_json, format_text
 from paperseek.history import (
@@ -122,16 +122,23 @@ def _search_parser(prog: str) -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Environment variables:
-  DATA_SOURCE        "openalex" (default), "crossref", or "wos"
+  DATA_SOURCE        "openalex" (default), "arxiv", "semanticscholar", "pubmed",
+                     "paperhub", "crossref", or "wos"
   WOS_API_KEY        Clarivate WoS Starter API key (X-ApiKey)
   OPENALEX_API_KEY   OpenAlex API key, recommended for stable use
   OPENALEX_EMAIL     Optional email for OpenAlex contact/polite usage
   CROSSREF_EMAIL     Optional email for Crossref polite pool
+  SEMANTIC_SCHOLAR_API_KEY
+                     Optional Semantic Scholar API key for higher rate limits
+  PUBMED_API_KEY     Optional NCBI API key for higher PubMed E-utilities rates
+  PUBMED_EMAIL       Optional NCBI contact email for PubMed E-utilities
+  PUBMED_TOOL        Optional NCBI tool name, default: paperseek
   LLM_API_KEY        LLM API key; optional for Ollama
   LLM_PROVIDER       Service provider, e.g. openai, anthropic, deepseek, cstcloud, ollama, custom
   LLM_API_TYPE       Protocol: openai_chat, openai_responses, anthropic_messages
   LLM_MODEL          Model name
   LLM_BASE_URL       Custom API endpoint URL
+  LLM_MAX_TOKENS     Maximum LLM output tokens per request, default: 2048
   SEARCH_FIELD       Default discipline/field constraint
   DISCIPLINE_FIELDS  OpenAlex Field IDs or labels for source-specific discipline limits
   EXPAND_CITATIONS   Set to "false" to skip OpenAlex citation expansion
@@ -162,11 +169,27 @@ Environment variables:
     parser.add_argument("--openalex-key", default=None, help="OpenAlex API key")
     parser.add_argument("--openalex-email", default=None, help="Email for OpenAlex polite/contact usage")
     parser.add_argument("--crossref-email", default=None, help="Email for Crossref polite pool")
+    parser.add_argument("--semantic-scholar-key", default=None, help="Semantic Scholar API key")
+    parser.add_argument("--pubmed-key", default=None, help="NCBI API key for PubMed E-utilities")
+    parser.add_argument("--pubmed-email", default=None, help="Email for PubMed E-utilities")
+    parser.add_argument("--pubmed-tool", default=None, help="Tool name for PubMed E-utilities")
     parser.add_argument("--llm-model", default=None, help="LLM model name")
     parser.add_argument("--llm-base-url", default=None, help="Custom LLM API endpoint")
+    parser.add_argument("--llm-max-tokens", type=int, default=None, help="Maximum LLM output tokens per request")
     parser.add_argument("--min", type=int, default=None, help="Target minimum results (default: 5)")
     parser.add_argument("--max", type=int, default=None, help="Target maximum results (default: 50)")
     parser.add_argument("--iterations", type=int, default=None, help="Max broaden/narrow cycles (default: 5)")
+    parser.add_argument("--retrieval-pool-max", type=int, default=None, help="Maximum fused candidates before LLM ranking (default: 3000)")
+    parser.add_argument("--retrieval-pool-min", type=int, default=None, help="Minimum useful candidate count after adaptive iterations (default: 5)")
+    parser.add_argument("--retrieval-lane-limit", type=int, default=None, help="Maximum records per retrieval lane before fusion (default: 1000)")
+    parser.add_argument("--ranking-candidate-limit", type=int, default=None, help="Maximum candidates sent to LLM scoring after pre-ranking (default: 256)")
+    retrieval_providers = ["local", "cstcloud", "openai", "dashscope", "siliconflow", "zhipu", "volcengine", "modelscope", "custom"]
+    reranker_providers = ["off", "cstcloud", "openai", "dashscope", "siliconflow", "zhipu", "volcengine", "custom"]
+    parser.add_argument("--retrieval-embedding-provider", default=None, choices=retrieval_providers, help="Embedding provider for pre-ranking")
+    parser.add_argument("--retrieval-embedding-model", default=None, help="Embedding model for external pre-ranking")
+    parser.add_argument("--retrieval-reranker-provider", default=None, choices=reranker_providers, help="Optional reranker provider after RRF fusion")
+    parser.add_argument("--retrieval-reranker-model", default=None, help="Optional reranker model after RRF fusion")
+    parser.add_argument("--retrieval-crossref-enrichment", action="store_true", default=False, help="Enable optional Crossref metadata enrichment for candidates")
     parser.add_argument("--output", "-o", default="text", choices=["text", "json"], help="Output format (default: text)")
     parser.add_argument("--json", action="store_true", help="Shortcut for --output json")
     parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Print intermediate queries")
@@ -184,6 +207,14 @@ def _apply_search_args(config: AgentConfig, args) -> AgentConfig:
         config.openalex_email = args.openalex_email
     if args.crossref_email:
         config.crossref_email = args.crossref_email
+    if args.semantic_scholar_key:
+        config.semantic_scholar_api_key = args.semantic_scholar_key
+    if args.pubmed_key:
+        config.pubmed_api_key = args.pubmed_key
+    if args.pubmed_email:
+        config.pubmed_email = args.pubmed_email
+    if args.pubmed_tool:
+        config.pubmed_tool = args.pubmed_tool
     if args.llm_key:
         config.llm_api_key = args.llm_key
     if args.llm_provider:
@@ -200,12 +231,14 @@ def _apply_search_args(config: AgentConfig, args) -> AgentConfig:
         config.llm_model = args.llm_model
     if args.llm_base_url:
         config.llm_base_url = args.llm_base_url
+    if args.llm_max_tokens is not None:
+        config.llm_max_tokens = args.llm_max_tokens
     if args.db:
         config.wos_db = args.db
     if args.field:
         config.search_field = args.field
     if getattr(args, "discipline_fields", None):
-        config.discipline_fields = normalize_discipline_ids(args.discipline_fields)
+        config.discipline_fields = normalize_source_filter_values(config.data_source, args.discipline_fields)
     if args.fetch_abstracts is not None and args.fetch_abstracts:
         config.fetch_abstracts = True
     if args.no_expand_citations:
@@ -216,6 +249,24 @@ def _apply_search_args(config: AgentConfig, args) -> AgentConfig:
         config.target_max = args.max
     if args.iterations is not None:
         config.max_iterations = args.iterations
+    if args.retrieval_pool_max is not None:
+        config.retrieval_pool_max = args.retrieval_pool_max
+    if args.retrieval_pool_min is not None:
+        config.retrieval_pool_min = args.retrieval_pool_min
+    if args.retrieval_lane_limit is not None:
+        config.retrieval_lane_limit = args.retrieval_lane_limit
+    if args.ranking_candidate_limit is not None:
+        config.ranking_candidate_limit = args.ranking_candidate_limit
+    if args.retrieval_embedding_provider:
+        config.retrieval_embedding_provider = args.retrieval_embedding_provider
+    if args.retrieval_embedding_model:
+        config.retrieval_embedding_model = args.retrieval_embedding_model
+    if args.retrieval_reranker_provider is not None:
+        config.retrieval_reranker_provider = args.retrieval_reranker_provider
+    if args.retrieval_reranker_model:
+        config.retrieval_reranker_model = args.retrieval_reranker_model
+    if args.retrieval_crossref_enrichment:
+        config.retrieval_crossref_enrichment = True
     return config
 
 
@@ -272,6 +323,7 @@ def _run_search(argv, prog: str):
             field_name=result["field"],
             history=result.get("history", []),
             source=result.get("source", ""),
+            citation_map=result.get("citation_map", {}),
         ))
     else:
         print(format_text(
@@ -289,7 +341,7 @@ def _run_search(argv, prog: str):
 def _doctor_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="paperseek doctor", description="Check PaperSeek configuration without making live source requests")
     parser.add_argument("--source", choices=list(supported_source_ids()), default=None, help="Override DATA_SOURCE for diagnostics")
-    parser.add_argument("--discipline", "--discipline-field", dest="discipline_fields", action="append", default=None, help="OpenAlex Field ID or label for source-specific discipline limiting")
+    parser.add_argument("--discipline", "--discipline-field", dest="discipline_fields", action="append", default=None, help="Native source filter value, such as an OpenAlex Field ID, WoS Category, or arXiv category")
     parser.add_argument("--json", action="store_true", help="Print JSON")
     return parser
 
@@ -300,7 +352,7 @@ def _run_doctor(argv):
     if args.source:
         config.data_source = args.source
     if args.discipline_fields:
-        config.discipline_fields = normalize_discipline_ids(args.discipline_fields)
+        config.discipline_fields = normalize_source_filter_values(config.data_source, args.discipline_fields)
     result = run_doctor(config)
     print(dumps(result) if args.json else render_doctor_text(result))
     if not result.get("ok"):
@@ -311,7 +363,7 @@ def _smoke_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="paperseek smoke", description="Run a minimal live request against one literature source")
     parser.add_argument("--source", choices=list(supported_source_ids()), default=None, help="Source to check")
     parser.add_argument("--query", default="machine learning", help="Small smoke-test query")
-    parser.add_argument("--discipline", "--discipline-field", dest="discipline_fields", action="append", default=None, help="OpenAlex Field ID or label for source-specific discipline limiting")
+    parser.add_argument("--discipline", "--discipline-field", dest="discipline_fields", action="append", default=None, help="Native source filter value, such as an OpenAlex Field ID, WoS Category, or arXiv category")
     parser.add_argument("--limit", type=int, default=1, help="Number of records to request, max 5")
     parser.add_argument("--json", action="store_true", help="Print JSON")
     return parser
@@ -323,7 +375,7 @@ def _run_smoke(argv):
     if args.source:
         config.data_source = args.source
     if args.discipline_fields:
-        config.discipline_fields = normalize_discipline_ids(args.discipline_fields)
+        config.discipline_fields = normalize_source_filter_values(config.data_source, args.discipline_fields)
     result = smoke_source(config, query=args.query, limit=args.limit)
     print(dumps(result) if args.json else render_smoke_text(result))
     if not result.get("ok"):

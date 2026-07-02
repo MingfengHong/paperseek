@@ -12,6 +12,9 @@ from urllib.parse import unquote_plus
 from tests.helpers import ROOT, read_text
 
 
+SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"]
+
+
 class SkillLauncherTest(unittest.TestCase):
     def test_launcher_delegates_to_full_package(self):
         result = subprocess.run(
@@ -23,7 +26,7 @@ class SkillLauncherTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual([item["id"] for item in payload["sources"]], ["openalex", "crossref", "wos"])
+        self.assertEqual([item["id"] for item in payload["sources"]], SOURCE_IDS)
 
     def test_launcher_install_help_is_available(self):
         result = subprocess.run(
@@ -53,7 +56,54 @@ class SkillLauncherTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["runtime"], "standalone_skill")
-        self.assertEqual([item["id"] for item in payload["sources"]], ["openalex", "crossref", "wos"])
+        self.assertEqual([item["id"] for item in payload["sources"]], SOURCE_IDS)
+
+    def test_standalone_fetches_new_sources_with_standard_library(self):
+        runtime = self._load_runtime()
+
+        def fake_http_json(url, method="GET", headers=None, payload=None):
+            if "semanticscholar.org" in url:
+                return {"total": 1, "data": [{"paperId": "S2", "title": "Graph Learning", "year": 2024, "authors": [{"name": "Ada"}]}]}
+            if "esearch.fcgi" in url:
+                return {"esearchresult": {"count": "1", "idlist": ["123"]}}
+            if "esummary.fcgi" in url:
+                return {"result": {"123": {"title": "Cancer Immunotherapy", "uid": "123", "pubdate": "2024", "authors": [{"name": "Lin"}]}}}
+            if "manifest.json" in url:
+                return {"shards": [{"file": "shards/iclr-2025.fake.json"}]}
+            if "iclr-2025.fake.json" in url:
+                return {"papers": [{"id": "p1", "title": "Graph Neural Retrieval", "authors": ["Ada"], "conference": "ICLR", "year": 2025, "abstract": "retrieval with graphs"}]}
+            raise AssertionError(url)
+
+        def fake_http_text(url, method="GET", headers=None, payload=None):
+            if "export.arxiv.org" in url:
+                return """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <entry>
+    <id>http://arxiv.org/abs/2401.00001v1</id>
+    <title>Graph Retrieval</title>
+    <summary>Graph retrieval abstract.</summary>
+    <published>2024-01-01T00:00:00Z</published>
+    <author><name>Ada Lovelace</name></author>
+    <link href="http://arxiv.org/abs/2401.00001v1" rel="alternate"/>
+    <link href="http://arxiv.org/pdf/2401.00001v1" title="pdf" type="application/pdf"/>
+    <arxiv:primary_category term="cs.IR"/>
+  </entry>
+</feed>"""
+            if "efetch.fcgi" in url:
+                return """<PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>123</PMID><Article><Abstract><AbstractText>PubMed abstract.</AbstractText></Abstract></Article></MedlineCitation></PubmedArticle></PubmedArticleSet>"""
+            raise AssertionError(url)
+
+        runtime.http_json = fake_http_json
+        runtime.http_text = fake_http_text
+        runtime.PAPERHUB_CACHE = None
+
+        for source in ("arxiv", "semanticscholar", "pubmed", "paperhub"):
+            records, total, used_query = runtime.fetch_source(source, "graph retrieval", 2, {}, [])
+            self.assertEqual(total, 1, source)
+            self.assertEqual(len(records), 1, source)
+            self.assertEqual(records[0]["source"], source)
+            self.assertTrue(used_query)
 
     def test_standalone_skill_doctor_without_installed_package(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -117,7 +167,7 @@ class SkillLauncherTest(unittest.TestCase):
         self.assertNotIn("Authorization", captured["headers"])
         self.assertTrue(captured["url"].endswith("/v1/messages"))
 
-    def test_standalone_wos_quotes_category_terms(self):
+    def test_standalone_wos_omits_unsupported_wc_terms(self):
         runtime = self._load_runtime()
         captured = {}
 
@@ -128,16 +178,17 @@ class SkillLauncherTest(unittest.TestCase):
 
         runtime.http_json = fake_http_json
         records, total, query = runtime.fetch_wos(
-            "open innovation",
+            "(TS=(open innovation)) AND WC=(Management)",
             1,
             {"WOS_API_KEY": "wos-key", "WOS_DB": "WOS"},
             ["14", "17"],
         )
         self.assertEqual(records, [])
         self.assertEqual(total, 0)
-        self.assertIn('WC=("Management" OR "Business" OR "Business, Finance"', query)
-        self.assertIn('"Computer Science, Artificial Intelligence"', query)
-        self.assertIn('q=(TS=(open innovation)) AND WC=("Management"', captured["url"])
+        self.assertEqual(query, "(TS=(open innovation))")
+        self.assertIn("q=(TS=(open innovation))", captured["url"])
+        self.assertIn("sortField=RS+D", captured["url"])
+        self.assertNotIn("WC=", captured["url"])
         self.assertEqual(captured["headers"]["X-ApiKey"], "wos-key")
 
     def test_skill_readme_documents_current_layout(self):

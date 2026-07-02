@@ -6,12 +6,15 @@ from pathlib import Path
 from tests.helpers import CONFIG_ENV_KEYS, run_cli
 
 
+SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"]
+
+
 class CliManagementTest(unittest.TestCase):
     def test_sources_json_contract(self):
         result = run_cli("sources", "--json")
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual([item["id"] for item in payload["sources"]], ["openalex", "crossref", "wos"])
+        self.assertEqual([item["id"] for item in payload["sources"]], SOURCE_IDS)
 
     def test_config_set_list_unset_uses_requested_config_file(self):
         with tempfile.TemporaryDirectory() as tmp:

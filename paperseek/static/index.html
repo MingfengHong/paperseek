@@ -13,10 +13,11 @@
         <div class="mark" aria-hidden="true">
           <img src="/static/paperseek-mark.png" alt="">
         </div>
-        <div>
+        <div class="brand-copy">
           <div class="brand-title">PaperSeek</div>
           <div class="brand-subtitle">LLM based Literature Search Agent</div>
         </div>
+        <a class="docs-nav-button" href="https://docs.paperseek.xyz/" target="_blank" rel="noopener">Docs</a>
       </div>
       <nav class="mode-tabs" aria-label="Workspace section">
         <button class="tab active" type="button" data-view="search">Search</button>
@@ -42,9 +43,21 @@
           <section class="query-section">
             <div class="section-kicker">Research Question</div>
             <textarea id="question" name="question" rows="3" spellcheck="true" required placeholder="Paste a research question, gap paragraph, or plain language search intent."></textarea>
+            <label class="field query-source-field">
+              <span>Data Source</span>
+              <select id="dataSource">
+                <option value="openalex" selected>OpenAlex (precise search)</option>
+                <option value="arxiv">arXiv (preprints)</option>
+                <option value="semanticscholar">Semantic Scholar (broad scholarly graph)</option>
+                <option value="pubmed">PubMed (biomedical literature)</option>
+                <option value="paperhub">Computer science top conferences</option>
+                <option value="crossref">Crossref (metadata / DOI registry)</option>
+                <option value="wos">Web of Science Starter (temporarily unavailable)</option>
+              </select>
+            </label>
             <details id="disciplinePicker" class="discipline-picker">
               <summary>
-                <span>Discipline Fields</span>
+                <span id="disciplinePickerLabel">Source Filter</span>
                 <small id="disciplineSummary">Any field</small>
               </summary>
               <div class="discipline-menu">
@@ -52,6 +65,17 @@
                 <button id="clearDisciplinesButton" class="utility-button" type="button">Clear</button>
               </div>
             </details>
+            <label id="fieldHintField" class="field source-filter-text is-hidden">
+              <span id="fieldHintLabel">Field/context hint</span>
+              <input id="searchField" type="text" placeholder="Optional field, discipline, or domain context" autocomplete="off">
+            </label>
+            <label id="expandCitationsField" class="toggle-field citation-toggle source-field source-openalex">
+              <input id="expandCitations" type="checkbox" checked>
+              <span>
+                <strong>Expand citations</strong>
+                <small>Adds forward and backward citation traversal; searches may take longer.</small>
+              </span>
+            </label>
             <div class="query-actions">
               <button id="searchButton" class="primary-button" type="submit">
                 <span>Run Search</span>
@@ -114,7 +138,7 @@
             <details id="advancedSettings" class="config-advanced">
               <summary>
                 <span>Advanced settings</span>
-                <small>Protocol, source keys, and run controls</small>
+                <small>Protocol, source keys, and retrieval settings</small>
               </summary>
 
               <div class="config-advanced-body">
@@ -137,17 +161,61 @@
                 </div>
 
                 <div class="config-group">
-                  <div class="config-group-title">Source settings</div>
+                  <div class="config-group-title">Embedding and reranking</div>
                   <div class="field-grid">
-                    <label class="field span-2">
-                      <span>Data Source</span>
-                      <select id="dataSource">
-                        <option value="openalex" selected>OpenAlex (precise search)</option>
-                        <option value="crossref">Crossref (metadata / DOI registry)</option>
-                        <option value="wos">Web of Science Starter (temporarily unavailable)</option>
+                    <label class="field">
+                      <span>Embedding Provider</span>
+                      <select id="retrievalEmbeddingProvider">
+                        <option value="local" selected>Local Python</option>
+                        <option value="cstcloud">CSTCloud</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="dashscope">Alibaba Cloud Bailian</option>
+                        <option value="siliconflow">SiliconFlow</option>
+                        <option value="zhipu">Zhipu AI</option>
+                        <option value="volcengine">Volcano Ark</option>
+                        <option value="modelscope">ModelScope API-Inference</option>
+                        <option value="custom">Custom</option>
                       </select>
                     </label>
+                    <label class="field">
+                      <span>Embedding Model</span>
+                      <input id="retrievalEmbeddingModel" type="text" placeholder="Local Python when empty" autocomplete="off">
+                    </label>
+                    <label class="field">
+                      <span>Embedding Base URL</span>
+                      <input id="retrievalEmbeddingBaseUrl" type="url" placeholder="Provider default" autocomplete="off">
+                    </label>
+                    <label class="field">
+                      <span>Embedding API Key</span>
+                      <input id="retrievalEmbeddingApiKey" type="password" placeholder="Optional; defaults to Model API key" autocomplete="off">
+                    </label>
+                    <label class="field">
+                      <span>Reranker Provider</span>
+                      <select id="retrievalRerankerProvider">
+                        <option value="" selected>Off</option>
+                        <option value="cstcloud">CSTCloud</option>
+                        <option value="siliconflow">SiliconFlow</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Reranker Model</span>
+                      <input id="retrievalRerankerModel" type="text" placeholder="Optional" autocomplete="off">
+                    </label>
+                    <label class="field">
+                      <span>Reranker Base URL</span>
+                      <input id="retrievalRerankerBaseUrl" type="url" placeholder="Provider default" autocomplete="off">
+                    </label>
+                    <label class="field">
+                      <span>Reranker API Key</span>
+                      <input id="retrievalRerankerApiKey" type="password" placeholder="Optional; defaults to Model API key" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
 
+                <div class="config-group">
+                  <div class="config-group-title">Source settings</div>
+                  <div class="field-grid">
                     <label id="openAlexKeyField" class="field span-2 source-field source-openalex">
                       <span>OpenAlex API Key</span>
                       <input id="openAlexApiKey" type="password" placeholder="Optional if anonymous access is available" autocomplete="off">
@@ -160,6 +228,22 @@
                       <span>Crossref Email</span>
                       <input id="crossrefEmail" type="email" placeholder="Optional polite-pool email" autocomplete="off">
                     </label>
+                    <label id="semanticScholarKeyField" class="field span-2 source-field source-semanticscholar">
+                      <span>Semantic Scholar API Key</span>
+                      <input id="semanticScholarApiKey" type="password" placeholder="Optional for higher rate limits" autocomplete="off">
+                    </label>
+                    <label id="pubmedKeyField" class="field span-2 source-field source-pubmed">
+                      <span>PubMed API Key</span>
+                      <input id="pubmedApiKey" type="password" placeholder="Optional NCBI API key" autocomplete="off">
+                    </label>
+                    <label id="pubmedEmailField" class="field span-2 source-field source-pubmed">
+                      <span>PubMed Email</span>
+                      <input id="pubmedEmail" type="email" placeholder="Optional NCBI contact email" autocomplete="off">
+                    </label>
+                    <label id="pubmedToolField" class="field source-field source-pubmed">
+                      <span>PubMed Tool</span>
+                      <input id="pubmedTool" type="text" value="paperseek" autocomplete="off">
+                    </label>
                     <label id="wosKeyField" class="field span-2 source-field source-wos">
                       <span>WoS API Key</span>
                       <input id="wosApiKey" type="password" autocomplete="off">
@@ -168,37 +252,14 @@
                       <span>WoS DB</span>
                       <input id="wosDb" type="text" value="WOS" autocomplete="off">
                     </label>
-                    <label class="field">
-                      <span>Field Hint</span>
-                      <input id="searchField" type="text" placeholder="Optional discipline" autocomplete="off">
-                    </label>
                   </div>
                 </div>
 
-                <div class="config-group">
-                  <div class="config-group-title">Run controls</div>
-                  <div class="field-grid">
-                    <label class="field">
-                      <span>Min Results</span>
-                      <input id="targetMin" type="number" value="5" min="0" max="50">
-                    </label>
-                    <label class="field">
-                      <span>Max Results</span>
-                      <input id="targetMax" type="number" value="50" min="1" max="50">
-                    </label>
-                    <label class="field">
-                      <span>Iterations</span>
-                      <input id="maxIterations" type="number" value="5" min="1" max="10">
-                    </label>
-                    <label id="fetchAbstractsField" class="toggle-field source-field source-wos">
-                      <input id="fetchAbstracts" type="checkbox">
-                      <span>Try external abstracts</span>
-                    </label>
-                    <label id="expandCitationsField" class="toggle-field source-field source-openalex">
-                      <input id="expandCitations" type="checkbox" checked>
-                      <span>Expand citations</span>
-                    </label>
-                  </div>
+                <div hidden>
+                  <input id="targetMin" type="hidden" value="5">
+                  <input id="targetMax" type="hidden" value="50">
+                  <input id="maxIterations" type="hidden" value="5">
+                  <input id="fetchAbstracts" type="checkbox">
                 </div>
               </div>
             </details>

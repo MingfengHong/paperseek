@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+import logging
 from queue import Queue
 import re
 from threading import Thread
@@ -12,12 +13,18 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from paperseek.client import ApiException
 from paperseek.config import AgentConfig, default_api_type, default_base_url, default_model
 from paperseek.diagnostics import run_doctor, smoke_source
-from paperseek.disciplines import list_discipline_fields, normalize_discipline_ids
+from paperseek.disciplines import (
+    list_discipline_fields,
+    list_source_filter_options,
+    normalize_source_filter_values,
+    source_filter_label,
+    source_filter_mode,
+)
 from paperseek.env_loader import load_env_file
 from paperseek.history import HistoryStore, result_payload_from_search_result, safe_search_params_from_config
 from paperseek.llm_client import LLMError, create_llm_client
@@ -32,6 +39,7 @@ load_env_file()
 
 app = FastAPI(title="PaperSeek", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+logger = logging.getLogger("paperseek.web_app")
 
 
 FIELD_LABELS = {
@@ -41,6 +49,10 @@ FIELD_LABELS = {
     "openalex_api_key": "OpenAlex API Key",
     "openalex_email": "OpenAlex Email",
     "crossref_email": "Crossref Email",
+    "semantic_scholar_api_key": "Semantic Scholar API Key",
+    "pubmed_api_key": "PubMed API Key",
+    "pubmed_email": "PubMed Email",
+    "pubmed_tool": "PubMed Tool",
     "llm_api_key": "LLM API Key",
     "llm_api_type": "LLM API Type",
     "discipline_fields": "Discipline Fields",
@@ -58,11 +70,16 @@ class SearchRequest(BaseModel):
     openalex_api_key: Optional[str] = ""
     openalex_email: Optional[str] = ""
     crossref_email: Optional[str] = ""
+    semantic_scholar_api_key: Optional[str] = ""
+    pubmed_api_key: Optional[str] = ""
+    pubmed_email: Optional[str] = ""
+    pubmed_tool: Optional[str] = ""
     llm_api_key: Optional[str] = ""
     llm_provider: str = ""
     llm_api_type: str = ""
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
+    llm_max_tokens: Optional[int] = Field(default=None, ge=0, le=8192)
     wos_db: str = "WOS"
     search_field: Optional[str] = ""
     discipline_fields: List[str] = Field(default_factory=list)
@@ -73,6 +90,19 @@ class SearchRequest(BaseModel):
     target_min: int = Field(default=5, ge=0, le=50)
     target_max: int = Field(default=50, ge=1, le=50)
     max_iterations: int = Field(default=5, ge=1, le=10)
+    retrieval_pool_max: int = Field(default=3000, ge=1, le=3000)
+    retrieval_pool_min: int = Field(default=5, ge=0, le=50)
+    retrieval_lane_limit: int = Field(default=1000, ge=1, le=1000)
+    retrieval_rrf_k: int = Field(default=60, ge=1, le=1000)
+    retrieval_embedding_provider: Optional[str] = ""
+    retrieval_embedding_model: Optional[str] = ""
+    retrieval_embedding_base_url: Optional[str] = ""
+    retrieval_embedding_api_key: Optional[str] = ""
+    retrieval_reranker_provider: Optional[str] = ""
+    retrieval_reranker_model: Optional[str] = ""
+    retrieval_reranker_base_url: Optional[str] = ""
+    retrieval_reranker_api_key: Optional[str] = ""
+    retrieval_crossref_enrichment: bool = False
 
     @field_validator("question")
     @classmethod
@@ -103,7 +133,16 @@ class SearchRequest(BaseModel):
     @field_validator("discipline_fields", mode="before")
     @classmethod
     def clean_discipline_fields(cls, value) -> List[str]:
-        return list(normalize_discipline_ids(value))
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return [str(value).strip()] if str(value).strip() else []
+
+    @model_validator(mode="after")
+    def normalize_filters_for_source(self):
+        self.discipline_fields = list(normalize_source_filter_values(self.data_source, self.discipline_fields))
+        return self
 
 
 class DiagnosticRequest(BaseModel):
@@ -113,11 +152,16 @@ class DiagnosticRequest(BaseModel):
     openalex_api_key: Optional[str] = ""
     openalex_email: Optional[str] = ""
     crossref_email: Optional[str] = ""
+    semantic_scholar_api_key: Optional[str] = ""
+    pubmed_api_key: Optional[str] = ""
+    pubmed_email: Optional[str] = ""
+    pubmed_tool: Optional[str] = ""
     llm_api_key: Optional[str] = ""
     llm_provider: str = ""
     llm_api_type: str = ""
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
+    llm_max_tokens: Optional[int] = Field(default=None, ge=0, le=8192)
     wos_db: str = "WOS"
     search_field: Optional[str] = ""
     discipline_fields: List[str] = Field(default_factory=list)
@@ -128,6 +172,19 @@ class DiagnosticRequest(BaseModel):
     target_min: int = Field(default=5, ge=0, le=50)
     target_max: int = Field(default=50, ge=1, le=50)
     max_iterations: int = Field(default=5, ge=1, le=10)
+    retrieval_pool_max: int = Field(default=3000, ge=1, le=3000)
+    retrieval_pool_min: int = Field(default=5, ge=0, le=50)
+    retrieval_lane_limit: int = Field(default=1000, ge=1, le=1000)
+    retrieval_rrf_k: int = Field(default=60, ge=1, le=1000)
+    retrieval_embedding_provider: Optional[str] = ""
+    retrieval_embedding_model: Optional[str] = ""
+    retrieval_embedding_base_url: Optional[str] = ""
+    retrieval_embedding_api_key: Optional[str] = ""
+    retrieval_reranker_provider: Optional[str] = ""
+    retrieval_reranker_model: Optional[str] = ""
+    retrieval_reranker_base_url: Optional[str] = ""
+    retrieval_reranker_api_key: Optional[str] = ""
+    retrieval_crossref_enrichment: bool = False
 
     @field_validator("llm_provider")
     @classmethod
@@ -150,7 +207,16 @@ class DiagnosticRequest(BaseModel):
     @field_validator("discipline_fields", mode="before")
     @classmethod
     def clean_discipline_fields(cls, value) -> List[str]:
-        return list(normalize_discipline_ids(value))
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return [str(value).strip()] if str(value).strip() else []
+
+    @model_validator(mode="after")
+    def normalize_filters_for_source(self):
+        self.discipline_fields = list(normalize_source_filter_values(self.data_source, self.discipline_fields))
+        return self
 
 
 @app.exception_handler(RequestValidationError)
@@ -234,7 +300,14 @@ def sources():
 
 @app.get("/api/disciplines")
 def disciplines():
-    return {"disciplines": list_discipline_fields()}
+    sources = {}
+    for source in supported_source_ids():
+        sources[source] = {
+            "mode": source_filter_mode(source),
+            "label": source_filter_label(source),
+            "options": list_source_filter_options(source),
+        }
+    return {"disciplines": list_discipline_fields(), "sources": sources}
 
 
 @app.get("/api/config/defaults")
@@ -246,6 +319,7 @@ def config_defaults():
         "llm_api_type": config.llm_api_type,
         "llm_model": config.llm_model,
         "llm_base_url": config.llm_base_url,
+        "llm_max_tokens": config.llm_max_tokens,
         "target_min": config.target_min,
         "target_max": config.target_max,
         "max_iterations": config.max_iterations,
@@ -256,6 +330,9 @@ def config_defaults():
         "has_openalex_api_key": bool(config.openalex_api_key),
         "has_openalex_email": bool(config.openalex_email),
         "has_crossref_email": bool(config.crossref_email),
+        "has_semantic_scholar_api_key": bool(getattr(config, "semantic_scholar_api_key", "")),
+        "has_pubmed_api_key": bool(getattr(config, "pubmed_api_key", "")),
+        "has_pubmed_email": bool(getattr(config, "pubmed_email", "")),
         "has_llm_api_key": bool(config.llm_api_key),
     }
 
@@ -278,6 +355,10 @@ def _config_from_payload(payload: SearchRequest) -> AgentConfig:
     config.openalex_api_key = payload.openalex_api_key or config.openalex_api_key
     config.openalex_email = payload.openalex_email or config.openalex_email
     config.crossref_email = payload.crossref_email or config.crossref_email
+    config.semantic_scholar_api_key = payload.semantic_scholar_api_key or getattr(config, "semantic_scholar_api_key", "")
+    config.pubmed_api_key = payload.pubmed_api_key or getattr(config, "pubmed_api_key", "")
+    config.pubmed_email = payload.pubmed_email or getattr(config, "pubmed_email", "")
+    config.pubmed_tool = payload.pubmed_tool or getattr(config, "pubmed_tool", "paperseek") or "paperseek"
     config.llm_api_key = payload.llm_api_key or config.llm_api_key
     config.llm_provider = payload_provider
     if payload.llm_api_type:
@@ -292,14 +373,29 @@ def _config_from_payload(payload: SearchRequest) -> AgentConfig:
         config.llm_base_url = payload.llm_base_url
     elif provider_changed or not config.llm_base_url:
         config.llm_base_url = default_base_url(config.llm_provider, config.llm_api_type)
+    if payload.llm_max_tokens is not None:
+        config.llm_max_tokens = payload.llm_max_tokens
     config.wos_db = payload.wos_db or config.wos_db or "WOS"
     config.search_field = payload.search_field or config.search_field or ""
-    config.discipline_fields = normalize_discipline_ids(payload.discipline_fields)
+    config.discipline_fields = normalize_source_filter_values(config.data_source, payload.discipline_fields)
     config.fetch_abstracts = payload.fetch_abstracts
     config.expand_citations = payload.expand_citations
     config.target_min = payload.target_min
     config.target_max = payload.target_max
     config.max_iterations = payload.max_iterations
+    config.retrieval_pool_max = payload.retrieval_pool_max
+    config.retrieval_pool_min = payload.retrieval_pool_min
+    config.retrieval_lane_limit = payload.retrieval_lane_limit
+    config.retrieval_rrf_k = payload.retrieval_rrf_k
+    config.retrieval_embedding_provider = (payload.retrieval_embedding_provider or config.retrieval_embedding_provider or "local").strip().lower()
+    config.retrieval_embedding_model = payload.retrieval_embedding_model or config.retrieval_embedding_model
+    config.retrieval_embedding_base_url = payload.retrieval_embedding_base_url or config.retrieval_embedding_base_url
+    config.retrieval_embedding_api_key = payload.retrieval_embedding_api_key or config.retrieval_embedding_api_key
+    config.retrieval_reranker_provider = (payload.retrieval_reranker_provider or config.retrieval_reranker_provider or "").strip().lower()
+    config.retrieval_reranker_model = payload.retrieval_reranker_model or config.retrieval_reranker_model
+    config.retrieval_reranker_base_url = payload.retrieval_reranker_base_url or config.retrieval_reranker_base_url
+    config.retrieval_reranker_api_key = payload.retrieval_reranker_api_key or config.retrieval_reranker_api_key
+    config.retrieval_crossref_enrichment = payload.retrieval_crossref_enrichment
     return config
 
 
@@ -402,6 +498,7 @@ def search(payload: SearchRequest):
         raise HTTPException(status_code=502, detail=message) from exc
     except Exception as exc:
         message = "Search failed. Check the local server logs for details."
+        logger.exception("Unhandled search failure.")
         _record_failure(store, run_id, message)
         raise HTTPException(status_code=500, detail=message) from exc
 
@@ -471,6 +568,7 @@ def search_stream(payload: SearchRequest):
                 send({"type": "error", "message": message})
             except Exception:
                 message = "Search failed. Check the local server logs for details."
+                logger.exception("Unhandled streaming search failure.")
                 _record_failure(store, run_id, message)
                 send({"type": "error", "message": message})
             finally:

@@ -4,6 +4,9 @@ from unittest.mock import patch
 from tests.helpers import CONFIG_ENV_KEYS, temporary_env
 
 
+SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"]
+
+
 def _mcp_available() -> bool:
     try:
         import mcp  # noqa: F401
@@ -31,7 +34,7 @@ class McpServerLogicTest(unittest.TestCase):
 
         result = list_sources_logic()
         ids = [item["id"] for item in result["sources"]]
-        self.assertEqual(ids, ["openalex", "crossref", "wos"])
+        self.assertEqual(ids, SOURCE_IDS)
         self.assertTrue(result["sources"][0]["default"])
 
     # ------------------------------------------------------------------
@@ -209,15 +212,17 @@ class McpServerLogicTest(unittest.TestCase):
                 target_min=10,
                 target_max=30,
                 max_iterations=3,
+                ranking_candidate_limit=128,
                 expand_citations=False,
                 fetch_abstracts=True,
-            )
+        )
         self.assertEqual(config.data_source, "crossref")
         self.assertEqual(config.search_field, "management")
-        self.assertEqual(config.discipline_fields, ("17",))
+        self.assertEqual(config.discipline_fields, ())
         self.assertEqual(config.target_min, 10)
         self.assertEqual(config.target_max, 30)
         self.assertEqual(config.max_iterations, 3)
+        self.assertEqual(config.ranking_candidate_limit, 128)
         self.assertFalse(config.expand_citations)
         self.assertTrue(config.fetch_abstracts)
 
@@ -234,6 +239,7 @@ class McpServerLogicTest(unittest.TestCase):
                 "LLM_API_KEY": "sk-test",
                 "TARGET_MIN": "8",
                 "TARGET_MAX": "40",
+                "RANKING_CANDIDATE_LIMIT": "192",
             },
             clear=CONFIG_ENV_KEYS,
         ):
@@ -241,6 +247,7 @@ class McpServerLogicTest(unittest.TestCase):
         self.assertEqual(config.data_source, "crossref")
         self.assertEqual(config.target_min, 8)
         self.assertEqual(config.target_max, 40)
+        self.assertEqual(config.ranking_candidate_limit, 192)
 
     def test_build_search_config_preserves_env_boolean_defaults(self):
         """Boolean flags default to ``None`` so env values win by default."""
