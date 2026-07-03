@@ -105,6 +105,13 @@ class SkillLauncherTest(unittest.TestCase):
             self.assertEqual(records[0]["source"], source)
             self.assertTrue(used_query)
 
+    def test_standalone_arxiv_query_escapes_quotes(self):
+        runtime = self._load_runtime()
+        self.assertEqual(
+            runtime.arxiv_query('graph "neural" retrieval'),
+            'all:"graph \\"neural\\" retrieval"',
+        )
+
     def test_standalone_skill_doctor_without_installed_package(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = Path(tmp) / "paperseek"

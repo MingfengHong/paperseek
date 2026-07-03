@@ -922,7 +922,11 @@ class ArxivProvider:
             return "all:*"
         if re.search(r"\b(AND|OR|ANDNOT)\b", cleaned, flags=re.I):
             return cleaned
-        return f'all:"{cleaned}"'
+        return f'all:"{ArxivProvider._quote_phrase(cleaned)}"'
+
+    @staticmethod
+    def _quote_phrase(value: str) -> str:
+        return value.replace("\\", "\\\\").replace('"', '\\"')
 
     @classmethod
     def _throttle(cls) -> None:
@@ -1334,6 +1338,7 @@ class PubMedProvider:
 class PaperHubProvider:
     MANIFEST_URL = "https://raw.githubusercontent.com/Yupu-Wang/paper-hub/main/data/manifest.json"
     RAW_BASE_URL = "https://raw.githubusercontent.com/Yupu-Wang/paper-hub/main/data"
+    _lock = threading.Lock()
     _paper_cache: Optional[List[Dict[str, Any]]] = None
 
     def __init__(self):
@@ -1374,33 +1379,36 @@ class PaperHubProvider:
     def _load_papers(self, query: str) -> List[Dict[str, Any]]:
         if PaperHubProvider._paper_cache is not None:
             return PaperHubProvider._paper_cache
-        response, info = get_with_retries("paperhub", self.MANIFEST_URL, headers={"Accept": "application/json"}, timeout=45, query=query)
-        self.last_response_info = info
-        if response.status_code >= 400:
-            raise ProviderError("paperhub", f"Paper Hub manifest returned HTTP {response.status_code}.", status=response.status_code, body=response.text[:1000], query=query)
-        try:
-            manifest = response.json()
-        except ValueError as exc:
-            raise ProviderError("paperhub", "Paper Hub manifest returned non-JSON content.", body=response.text[:1000], query=query) from exc
-        papers: List[Dict[str, Any]] = []
-        for shard in manifest.get("shards") or []:
-            file_name = shard.get("file") if isinstance(shard, dict) else ""
-            if not file_name:
-                continue
-            url = f"{self.RAW_BASE_URL}/{file_name}"
-            shard_response, shard_info = get_with_retries("paperhub", url, headers={"Accept": "application/json"}, timeout=60, query=query)
-            self.last_response_info = shard_info
-            if shard_response.status_code >= 400:
-                continue
+        with PaperHubProvider._lock:
+            if PaperHubProvider._paper_cache is not None:
+                return PaperHubProvider._paper_cache
+            response, info = get_with_retries("paperhub", self.MANIFEST_URL, headers={"Accept": "application/json"}, timeout=45, query=query)
+            self.last_response_info = info
+            if response.status_code >= 400:
+                raise ProviderError("paperhub", f"Paper Hub manifest returned HTTP {response.status_code}.", status=response.status_code, body=response.text[:1000], query=query)
             try:
-                payload = shard_response.json()
-            except ValueError:
-                continue
-            for paper in payload.get("papers") or []:
-                if isinstance(paper, dict):
-                    papers.append(paper)
-        PaperHubProvider._paper_cache = papers
-        return papers
+                manifest = response.json()
+            except ValueError as exc:
+                raise ProviderError("paperhub", "Paper Hub manifest returned non-JSON content.", body=response.text[:1000], query=query) from exc
+            papers: List[Dict[str, Any]] = []
+            for shard in manifest.get("shards") or []:
+                file_name = shard.get("file") if isinstance(shard, dict) else ""
+                if not file_name:
+                    continue
+                url = f"{self.RAW_BASE_URL}/{file_name}"
+                shard_response, shard_info = get_with_retries("paperhub", url, headers={"Accept": "application/json"}, timeout=60, query=query)
+                self.last_response_info = shard_info
+                if shard_response.status_code >= 400:
+                    continue
+                try:
+                    payload = shard_response.json()
+                except ValueError:
+                    continue
+                for paper in payload.get("papers") or []:
+                    if isinstance(paper, dict):
+                        papers.append(paper)
+            PaperHubProvider._paper_cache = papers
+            return papers
 
     @staticmethod
     def _terms(query: str) -> List[str]:

@@ -1,4 +1,6 @@
 import unittest
+import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 from paperseek_core.sources.providers import (
@@ -64,6 +66,12 @@ class SourceProviderTest(unittest.TestCase):
         self.assertEqual(captured["timeout"], 20)
         self.assertEqual(captured["attempts"], 1)
         self.assertEqual(captured["params"]["search_query"], 'all:"graph retrieval"')
+
+    def test_arxiv_provider_escapes_quotes_in_plain_query(self):
+        self.assertEqual(
+            ArxivProvider._search_query('graph "neural" retrieval'),
+            'all:"graph \\"neural\\" retrieval"',
+        )
 
     def test_semantic_scholar_provider_uses_api_key_and_maps_fields(self):
         payload = {
@@ -178,6 +186,27 @@ class SourceProviderTest(unittest.TestCase):
         self.assertEqual(record.provider, "paperhub")
         self.assertEqual(record.source.source_title, "ICLR")
         self.assertEqual(record.source.publish_year, 2025)
+
+    def test_paperhub_provider_initializes_cache_once_under_concurrency(self):
+        PaperHubProvider._paper_cache = None
+        calls = []
+
+        def fake_get(provider, url, params=None, headers=None, timeout=0, query=""):
+            calls.append(url)
+            time.sleep(0.01)
+            if url.endswith("manifest.json"):
+                return FakeResponse(payload={"shards": [{"file": "shards/iclr-2025.fake.json"}]}), {"method": "GET", "url": url, "status": 200, "elapsed_ms": 1}
+            if url.endswith("iclr-2025.fake.json"):
+                return FakeResponse(payload={"papers": [{"id": "p1", "title": "Graph Neural Retrieval", "authors": ["Ada"], "conference": "ICLR", "year": 2025, "abstract": "retrieval with graphs"}]}), {"method": "GET", "url": url, "status": 200, "elapsed_ms": 1}
+            raise AssertionError(url)
+
+        with patch("paperseek_core.sources.providers.get_with_retries", fake_get):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                results = list(executor.map(lambda _: PaperHubProvider().search("graph retrieval", limit=1), range(2)))
+
+        self.assertEqual([result.metadata.total for result in results], [1, 1])
+        self.assertEqual(sum(1 for url in calls if url.endswith("manifest.json")), 1)
+        self.assertEqual(sum(1 for url in calls if url.endswith("iclr-2025.fake.json")), 1)
 
 
 if __name__ == "__main__":

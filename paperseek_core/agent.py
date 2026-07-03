@@ -1,4 +1,6 @@
-﻿import re
+from __future__ import annotations
+
+import re
 import json
 import inspect
 import math

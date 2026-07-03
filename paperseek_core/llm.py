@@ -17,8 +17,9 @@ def _llm_timeout_seconds() -> int:
 
 
 def _llm_max_tokens() -> int:
+    raw = os.environ.get("LLM_MAX_TOKENS")
     try:
-        return max(0, int(os.environ.get("LLM_MAX_TOKENS", "2048")))
+        return max(0, int(raw) if raw not in (None, "") else 2048)
     except (TypeError, ValueError):
         return 2048
 

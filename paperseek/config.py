@@ -7,6 +7,15 @@ from paperseek.disciplines import normalize_source_filter_values
 from paperseek.source_metadata import supported_source_ids
 
 
+def _int_env(name: str, default: int, minimum: int = 0) -> int:
+    raw = os.environ.get(name)
+    try:
+        value = int(raw) if raw not in (None, "") else int(default)
+    except (TypeError, ValueError):
+        value = int(default)
+    return max(minimum, value)
+
+
 @dataclass
 class AgentConfig:
     data_source: str = "openalex"
@@ -72,7 +81,7 @@ class AgentConfig:
             llm_api_type=api_type,
             llm_model=os.environ.get("LLM_MODEL") or default_model(provider),
             llm_base_url=os.environ.get("LLM_BASE_URL") or default_base_url(provider, api_type),
-            llm_max_tokens=int(os.environ.get("LLM_MAX_TOKENS", "2048")),
+            llm_max_tokens=_int_env("LLM_MAX_TOKENS", 2048),
             wos_db=os.environ.get("WOS_DB", "WOS"),
             search_field=os.environ.get("SEARCH_FIELD", ""),
             discipline_fields=os.environ.get("DISCIPLINE_FIELDS", ""),

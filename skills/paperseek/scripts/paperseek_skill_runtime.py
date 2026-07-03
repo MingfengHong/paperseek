@@ -1470,7 +1470,11 @@ def arxiv_query(query: str) -> str:
         return cleaned
     if re.search(r"\b(AND|OR|ANDNOT)\b", cleaned, flags=re.I):
         return cleaned
-    return f'all:"{cleaned}"' if cleaned else "all:*"
+    return f'all:"{escape_arxiv_phrase(cleaned)}"' if cleaned else "all:*"
+
+
+def escape_arxiv_phrase(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def throttle_arxiv() -> None:

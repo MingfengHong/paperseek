@@ -37,6 +37,31 @@ class LLMProviderTest(unittest.TestCase):
         self.assertEqual(config.llm_model, "gpt-5.4-mini")
         self.assertEqual(config.llm_base_url, "https://api.openai.com/v1")
 
+    def test_blank_or_invalid_llm_max_tokens_falls_back_safely(self):
+        import importlib
+        import paperseek_core.llm as core_llm
+
+        try:
+            with temporary_env({"LLM_MAX_TOKENS": ""}):
+                config = AgentConfig.from_env()
+                reloaded = importlib.reload(core_llm)
+                self.assertEqual(config.llm_max_tokens, 2048)
+                self.assertEqual(reloaded.DEFAULT_LLM_MAX_TOKENS, 2048)
+
+            with temporary_env({"LLM_MAX_TOKENS": "not-a-number"}):
+                config = AgentConfig.from_env()
+                reloaded = importlib.reload(core_llm)
+                self.assertEqual(config.llm_max_tokens, 2048)
+                self.assertEqual(reloaded.DEFAULT_LLM_MAX_TOKENS, 2048)
+
+            with temporary_env({"LLM_MAX_TOKENS": "-1"}):
+                config = AgentConfig.from_env()
+                reloaded = importlib.reload(core_llm)
+                self.assertEqual(config.llm_max_tokens, 0)
+                self.assertEqual(reloaded.DEFAULT_LLM_MAX_TOKENS, 0)
+        finally:
+            importlib.reload(core_llm)
+
     def test_modelscope_provider_is_available_in_web_ui(self):
         html = read_text("paperseek/static/index.html")
         app_js = read_text("paperseek/static/app.js")
