@@ -424,6 +424,7 @@ let historyStatus = { enabled: true, path: "" };
 let historyLoading = false;
 let historyError = "";
 let activeSearchController = null;
+let latestStreamHeartbeatLogAt = 0;
 let disciplineOptions = [];
 let sourceFilterDefinitions = {};
 let environmentConfig = {
@@ -2446,6 +2447,12 @@ async function readNdjsonStream(response) {
 function handleStreamEvent(event) {
   if (event.type === "log") {
     log(event.message || "");
+  } else if (event.type === "heartbeat") {
+    const now = Date.now();
+    if (!latestStreamHeartbeatLogAt || now - latestStreamHeartbeatLogAt >= 30000) {
+      latestStreamHeartbeatLogAt = now;
+      log("Backend keepalive received; still waiting for upstream services.");
+    }
   } else if (event.type === "run") {
     if (event.run_id) {
       runId.textContent = event.run_id;
@@ -2726,6 +2733,7 @@ form.addEventListener("submit", async (event) => {
   workflowState.query.body = emptyState("Submitting request to local backend.");
   renderWorkflow();
   setBusy(true);
+  latestStreamHeartbeatLogAt = 0;
   activeSearchController = new AbortController();
   log(`Run ${id} started.`);
   log(`Source: ${payload.data_source}; provider: ${payload.llm_provider}; api type: ${payload.llm_api_type}; model: ${payload.llm_model || "provider default"}.`);

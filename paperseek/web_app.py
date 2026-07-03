@@ -5,6 +5,7 @@ import json
 import logging
 from queue import Empty, Queue
 import re
+import time
 from threading import Thread
 from typing import List, Optional
 
@@ -34,6 +35,8 @@ from paperseek.source_metadata import list_source_metadata, supported_source_ids
 
 
 STATIC_DIR = Path(__file__).parent / "static"
+STREAM_HEARTBEAT_SECONDS = 10.0
+STREAM_HEARTBEAT_PADDING = " " * 2048
 
 load_env_file()
 
@@ -578,15 +581,22 @@ def search_stream(payload: SearchRequest):
 
         while True:
             try:
-                item = events.get(timeout=15.0)
+                item = events.get(timeout=STREAM_HEARTBEAT_SECONDS)
             except Empty:
-                yield line({"type": "heartbeat"})
+                yield line({"type": "heartbeat", "ts": time.time(), "pad": STREAM_HEARTBEAT_PADDING})
                 continue
             if item is None:
                 break
             yield line(item)
 
-    return StreamingResponse(generator(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        generator(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def main():
