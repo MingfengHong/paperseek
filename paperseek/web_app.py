@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import logging
-from queue import Queue
+from queue import Empty, Queue
 import re
 from threading import Thread
 from typing import List, Optional
@@ -577,7 +577,11 @@ def search_stream(payload: SearchRequest):
         Thread(target=worker, daemon=True).start()
 
         while True:
-            item = events.get()
+            try:
+                item = events.get(timeout=15.0)
+            except Empty:
+                yield line({"type": "heartbeat"})
+                continue
             if item is None:
                 break
             yield line(item)
