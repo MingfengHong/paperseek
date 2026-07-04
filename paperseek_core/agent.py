@@ -1495,7 +1495,7 @@ class PaperSeekAgent:
         texts = [question] + [document_text(document)[:1800] for document in documents]
         for model in self._retrieval_model_candidates("embedding", "qwen3-embedding:8b", provider):
             try:
-                vectors = self._embedding_vectors(base_url, api_key, model, texts)
+                vectors = self._embedding_vectors(base_url, api_key, model, texts, provider=provider)
             except Exception as exc:
                 self._emit_log(f"External embedding failed for model={model}; trying fallback if available: {exc}")
                 continue
@@ -1519,7 +1519,9 @@ class PaperSeekAgent:
                 output[key] = score
         return output
 
-    def _embedding_vectors(self, base_url: str, api_key: str, model: str, texts: list) -> List[List[float]]:
+    def _embedding_vectors(self, base_url: str, api_key: str, model: str, texts: list, provider: str = "") -> List[List[float]]:
+        if (provider or "").strip().lower() == "nvidia":
+            return self._nvidia_embedding_vectors(base_url, api_key, model, texts)
         vectors: List[List[float]] = []
         url = f"{base_url.rstrip('/')}/embeddings"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -1537,6 +1539,38 @@ class PaperSeekAgent:
                 if not isinstance(embedding, list):
                     raise RuntimeError("embedding response item has no embedding vector")
                 vectors.append([float(value) for value in embedding])
+        return vectors
+
+    def _nvidia_embedding_vectors(self, base_url: str, api_key: str, model: str, texts: list) -> List[List[float]]:
+        url = f"{base_url.rstrip('/')}/embeddings"
+        headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "Content-Type": "application/json"}
+
+        def request_vectors(batch: list, input_type: str) -> List[List[float]]:
+            response = requests.post(
+                url,
+                headers=headers,
+                json={"model": model, "input": batch, "input_type": input_type, "encoding_format": "float"},
+                timeout=60,
+            )
+            if response.status_code < 200 or response.status_code >= 300:
+                raise RuntimeError(f"HTTP {response.status_code}: {response.text[:300]}")
+            payload = response.json()
+            data = payload.get("data") or []
+            data = sorted(data, key=lambda item: int(item.get("index", 0))) if all(isinstance(item, dict) for item in data) else data
+            vectors = []
+            for item in data:
+                embedding = item.get("embedding") if isinstance(item, dict) else None
+                if not isinstance(embedding, list):
+                    raise RuntimeError("embedding response item has no embedding vector")
+                vectors.append([float(value) for value in embedding])
+            return vectors
+
+        vectors: List[List[float]] = []
+        if texts:
+            vectors.extend(request_vectors(texts[:1], "query"))
+        batch_size = 64
+        for offset in range(1, len(texts), batch_size):
+            vectors.extend(request_vectors(texts[offset:offset + batch_size], "passage"))
         return vectors
 
     def _apply_external_reranker(self, question: str, documents: list) -> list:
@@ -1579,22 +1613,33 @@ class PaperSeekAgent:
         texts = [document_text(document)[:1800] for document in documents[:rerank_count]]
         for model in self._retrieval_model_candidates("reranker", "qwen3-reranker:8b", provider):
             try:
-                response = requests.post(
-                    f"{base_url.rstrip('/')}/rerank",
-                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                    json={"model": model, "query": question, "documents": texts, "top_n": rerank_count},
-                    timeout=60,
-                )
+                if provider == "nvidia":
+                    endpoint = base_url.rstrip("/")
+                    if not endpoint.endswith("/reranking"):
+                        endpoint = f"{endpoint}/reranking"
+                    response = requests.post(
+                        endpoint,
+                        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json", "Content-Type": "application/json"},
+                        json={"model": model, "query": {"text": question}, "passages": [{"text": text} for text in texts]},
+                        timeout=60,
+                    )
+                else:
+                    response = requests.post(
+                        f"{base_url.rstrip('/')}/rerank",
+                        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                        json={"model": model, "query": question, "documents": texts, "top_n": rerank_count},
+                        timeout=60,
+                    )
                 if response.status_code < 200 or response.status_code >= 300:
                     raise RuntimeError(f"HTTP {response.status_code}: {response.text[:300]}")
                 payload = response.json()
-                results = payload.get("results") or payload.get("data") or []
+                results = (payload.get("rankings") or []) if provider == "nvidia" else (payload.get("results") or payload.get("data") or [])
                 ranked = []
                 for item in results:
                     if not isinstance(item, dict):
                         continue
                     index = item.get("index")
-                    score = item.get("relevance_score", item.get("score", 0))
+                    score = item.get("logit", item.get("relevance_score", item.get("score", 0)))
                     if isinstance(index, int) and 0 <= index < rerank_count:
                         ranked.append((float(score or 0), index))
                 if not ranked:
@@ -1635,6 +1680,18 @@ class PaperSeekAgent:
             modelscope_models = "Qwen/Qwen3-Embedding-8B,Qwen/Qwen3-Embedding-4B"
             if raw in ("", default_model, "qwen3-embedding:8b,bge-large-zh:latest", "BAAI/bge-large-zh-v1.5"):
                 raw = modelscope_models
+        if kind == "embedding" and provider == "nvidia":
+            if raw in ("", default_model, "qwen3-embedding:8b", "qwen3-embedding:8b,bge-large-zh:latest"):
+                raw = "nvidia/nv-embedqa-e5-v5"
+        if kind == "embedding" and provider == "openrouter":
+            if raw in ("", default_model, "qwen3-embedding:8b", "qwen3-embedding:8b,bge-large-zh:latest"):
+                raw = "openai/text-embedding-3-small"
+        if kind == "reranker" and provider == "nvidia":
+            if raw in ("", default_model, "qwen3-reranker:8b", "BAAI/bge-reranker-v2-m3"):
+                raw = "nv-rerank-qa-mistral-4b:1"
+        if kind == "reranker" and provider == "openrouter":
+            if raw in ("", default_model, "qwen3-reranker:8b", "BAAI/bge-reranker-v2-m3"):
+                raw = "jinaai/jina-reranker-v2-base-multilingual"
         candidates = []
         for part in str(raw).replace(";", ",").split(","):
             value = part.strip()
@@ -1652,6 +1709,8 @@ class PaperSeekAgent:
             "openai",
             "dashscope",
             "siliconflow",
+            "openrouter",
+            "nvidia",
             "zhipu",
             "volcengine",
             "modelscope",
@@ -1672,6 +1731,8 @@ class PaperSeekAgent:
             "openai": "https://api.openai.com/v1",
             "dashscope": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "siliconflow": "https://api.siliconflow.cn/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
+            "nvidia": "https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking" if kind == "reranker" else "https://integrate.api.nvidia.com/v1",
             "zhipu": "https://open.bigmodel.cn/api/paas/v4",
             "volcengine": "https://ark.cn-beijing.volces.com/api/v3",
             "modelscope": "https://api-inference.modelscope.cn/v1",

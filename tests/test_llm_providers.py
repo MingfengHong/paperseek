@@ -25,6 +25,12 @@ class LLMProviderTest(unittest.TestCase):
         self.assertEqual(default_model("cstcloud"), "deepseek-v4-flash")
         self.assertEqual(default_base_url("cstcloud"), "https://uni-api.cstcloud.cn/v1")
 
+    def test_nvidia_provider_defaults(self):
+        self.assertIn("nvidia", SUPPORTED_LLM_PROVIDERS)
+        self.assertEqual(default_api_type("nvidia"), "openai_chat")
+        self.assertEqual(default_model("nvidia"), "nvidia/llama-3.3-nemotron-super-49b-v1.5")
+        self.assertEqual(default_base_url("nvidia"), "https://integrate.api.nvidia.com/v1")
+
     def test_blank_model_and_base_url_fall_back_to_provider_defaults(self):
         with temporary_env(
             {
@@ -111,6 +117,21 @@ class LLMProviderTest(unittest.TestCase):
         self.assertIn('value="cstcloud"', html)
         self.assertIn("deepseek-v4-flash", app_js)
         self.assertIn("https://uni-api.cstcloud.cn/v1", app_js)
+
+    def test_nvidia_provider_is_available_in_web_ui(self):
+        html = read_text("paperseek/static/index.html")
+        app_js = read_text("paperseek/static/app.js")
+        self.assertIn('value="nvidia"', html)
+        self.assertIn("nvidia/llama-3.3-nemotron-super-49b-v1.5", app_js)
+        self.assertIn("nvidia/nv-embedqa-e5-v5", app_js)
+        self.assertIn("nv-rerank-qa-mistral-4b:1", app_js)
+
+    def test_openrouter_retrieval_is_available_in_web_ui(self):
+        html = read_text("paperseek/static/index.html")
+        app_js = read_text("paperseek/static/app.js")
+        self.assertIn('value="openrouter"', html)
+        self.assertIn("openai/text-embedding-3-small", app_js)
+        self.assertIn("jinaai/jina-reranker-v2-base-multilingual", app_js)
 
     def test_llm_timeout_is_configurable_and_keeps_safe_minimum(self):
         import importlib

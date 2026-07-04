@@ -366,6 +366,7 @@ PaperSeek supports two mainstream API protocol families: OpenAI-style APIs and A
 | Zhipu AI GLM | `openai_chat` | `glm-5.1` |
 | SiliconFlow | `openai_chat` | `deepseek-ai/DeepSeek-V4-Flash` |
 | OpenRouter | `openai_chat` | `openai/gpt-5.4-mini` |
+| NVIDIA NIM | `openai_chat` | `nvidia/llama-3.3-nemotron-super-49b-v1.5` |
 | Volcengine Ark | `openai_chat` | `doubao-seed-2-0-mini-260428` |
 | Tencent Hunyuan | `openai_chat` | `hunyuan-turbos-latest` |
 | Baidu Qianfan | `openai_chat` | `ernie-5.0` |
@@ -386,6 +387,8 @@ Embedding is used in the lightweight multi-lane pre-ranking step before LLM scor
 | OpenAI | `text-embedding-3-large` | `https://api.openai.com/v1` |
 | Alibaba Cloud Bailian / DashScope | `text-embedding-v4` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | SiliconFlow | `BAAI/bge-large-zh-v1.5` | `https://api.siliconflow.cn/v1` |
+| OpenRouter | `openai/text-embedding-3-small` | `https://openrouter.ai/api/v1` |
+| NVIDIA NIM | `nvidia/nv-embedqa-e5-v5` | `https://integrate.api.nvidia.com/v1` |
 | Zhipu AI GLM | `embedding-3` | `https://open.bigmodel.cn/api/paas/v4` |
 | Volcano Ark | Empty | `https://ark.cn-beijing.volces.com/api/v3` |
 | ModelScope API-Inference | `Qwen/Qwen3-Embedding-8B,Qwen/Qwen3-Embedding-4B` | `https://api-inference.modelscope.cn/v1` |
@@ -401,11 +404,13 @@ Rerank is an optional external step after RRF fusion. It is off by default. The 
 | --- | --- | --- |
 | Off | Empty | Empty |
 | CSTCloud | `qwen3-reranker:8b` | `https://uni-api.cstcloud.cn/v1` |
+| OpenRouter | `jinaai/jina-reranker-v2-base-multilingual` | `https://openrouter.ai/api/v1` |
+| NVIDIA NIM | `nv-rerank-qa-mistral-4b:1` | `https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking` |
 | SiliconFlow | `BAAI/bge-reranker-v2-m3` | `https://api.siliconflow.cn/v1` |
 | Custom | Empty | Empty |
 
 If `RETRIEVAL_RERANKER_API_KEY` is empty, PaperSeek reuses `LLM_API_KEY`. If the external reranker is unavailable, PaperSeek keeps the local RRF order and continues.
-ModelScope API-Inference can be used for LLM and Qwen embedding, but it is not listed as a Rerank provider.
+ModelScope API-Inference can be used for LLM and Qwen embedding, but it is not listed as a Rerank provider. NVIDIA NIM embedding and rerank use different endpoints; PaperSeek selects the provider-specific request shape automatically.
 
 > CSTCloud LLM, Embedding, and Rerank endpoints are accessed through OpenAI-compatible APIs with the same Base URL: `https://uni-api.cstcloud.cn/v1`. To get a key, open [CSTCloud API Keys](https://uni-api.cstcloud.cn/api_keys), sign in with CSTCloud unified authentication, and submit the requested application information. Chinese Academy of Sciences intramural users can sign in with a CSTCloud Pass, usually their institutional email account and password. See the [CSTCloud LLM API manual](https://uni-api.cstcloud.cn/doc/llm/) for Chats, Embeddings, and Rerank endpoint details.
 
@@ -422,7 +427,7 @@ When OpenAlex citation expansion is enabled, PaperSeek selects up to 30 seed pap
 
 Large candidate pools are ranked in concurrent LLM batches. The default batch size is `8` and default concurrency is `16`; above 16 candidates, PaperSeek adapts the batch size to keep the total batch count near the concurrency level. If one or more ranking batches fail, PaperSeek retries those batches with lower concurrency in the `16 -> 8 -> 4` sequence. If the endpoint still fails at concurrency `4`, only the failed batch falls back to zero-score source order instead of failing the whole search. Advanced users can still set `RANKING_CONCURRENCY=32`, which uses the `32 -> 16 -> 8 -> 4` fallback sequence.
 
-Before LLM scoring, PaperSeek now runs lightweight multi-lane pre-ranking across the selected source's supported signals: relevance, impact/citation when available, recency, and local quality for the computer science top-conference index. It deduplicates candidates, fuses retrieval ranks with RRF, and adds pure-Python hashing cosine plus BM25/term coverage. The default fused pool limit is `3000`; community installs use the local pure-Python embedding path unless you explicitly configure an OpenAI-compatible embedding endpoint. The Web UI advanced settings include embedding provider choices for Local Python, CSTCloud, OpenAI, Alibaba Cloud Bailian, SiliconFlow, Zhipu AI, Volcano Ark, ModelScope, and Custom endpoints. ModelScope API-Inference uses only `Qwen/Qwen3-Embedding-8B` and `Qwen/Qwen3-Embedding-4B` for embedding. Optional external embedding/reranking can use models such as `qwen3-embedding:8b`, `bge-large-zh:latest`, or `qwen3-reranker:8b`; comma-separated model lists are tried in order and failures fall back to the local RRF order.
+Before LLM scoring, PaperSeek now runs lightweight multi-lane pre-ranking across the selected source's supported signals: relevance, impact/citation when available, recency, and local quality for the computer science top-conference index. It deduplicates candidates, fuses retrieval ranks with RRF, and adds pure-Python hashing cosine plus BM25/term coverage. The default fused pool limit is `3000`; community installs use the local pure-Python embedding path unless you explicitly configure an external embedding endpoint. The Web UI advanced settings include embedding provider choices for Local Python, CSTCloud, OpenAI, Alibaba Cloud Bailian, SiliconFlow, OpenRouter, NVIDIA NIM, Zhipu AI, Volcano Ark, ModelScope, and Custom endpoints. ModelScope API-Inference uses only `Qwen/Qwen3-Embedding-8B` and `Qwen/Qwen3-Embedding-4B` for embedding. Optional external embedding/reranking can use models such as `qwen3-embedding:8b`, `bge-large-zh:latest`, OpenRouter embedding/rerank models, or NVIDIA NIM `nvidia/nv-embedqa-e5-v5` and `nv-rerank-qa-mistral-4b:1`; comma-separated model lists are tried in order and failures fall back to the local RRF order.
 
 `TARGET_MAX` guides query refinement; it is not a hard display cap. LLM scoring receives at most `RANKING_CANDIDATE_LIMIT` candidates, default `256`. Results show all candidates when the scored pool is under 50, otherwise at least the top 50; if more than 50 candidates score `5` or above, all of those high-scoring candidates are shown.
 

@@ -253,6 +253,37 @@ class RetrievalAgentTest(unittest.TestCase):
         self.assertEqual(captured["json"]["encoding_format"], "float")
         self.assertEqual(scores, [1.0, 0.0])
 
+    def test_nvidia_embedding_marks_query_and_passages(self):
+        agent = PaperSeekAgent(
+            config(
+                retrieval_embedding_provider="nvidia",
+                retrieval_embedding_api_key="nv-test",
+                retrieval_embedding_base_url="https://integrate.api.nvidia.com/v1",
+                retrieval_embedding_model="nvidia/nv-embedqa-e5-v5",
+            ),
+            FakeLLM(),
+        )
+        calls = []
+
+        def fake_post(url, headers=None, json=None, timeout=0):
+            calls.append({"url": url, "json": dict(json or {})})
+            if json["input_type"] == "query":
+                data = [{"index": 0, "embedding": [1.0, 0.0]}]
+            else:
+                data = [{"index": 0, "embedding": [1.0, 0.0]}, {"index": 1, "embedding": [0.0, 1.0]}]
+            return FakeResponse(payload={"data": data})
+
+        docs = [record("a", "graph retrieval"), record("b", "platform governance")]
+        with patch("paperseek_core.agent.requests.post", fake_post):
+            scores = agent._external_embedding_scores("graph retrieval", docs)
+
+        self.assertEqual([call["url"] for call in calls], ["https://integrate.api.nvidia.com/v1/embeddings"] * 2)
+        self.assertEqual([call["json"]["input_type"] for call in calls], ["query", "passage"])
+        self.assertEqual(calls[0]["json"]["input"], ["graph retrieval"])
+        self.assertEqual(calls[1]["json"]["input"][0], "graph retrieval Journal 2024")
+        self.assertEqual(calls[1]["json"]["input"][1], "platform governance Journal 2024")
+        self.assertEqual(scores, [1.0, 0.0])
+
     def test_external_embedding_falls_back_to_next_model(self):
         agent = PaperSeekAgent(
             config(
@@ -302,6 +333,33 @@ class RetrievalAgentTest(unittest.TestCase):
 
         self.assertEqual([doc.uid for doc in reranked], ["b", "a"])
 
+    def test_nvidia_reranker_uses_rankings_endpoint_and_logit_scores(self):
+        agent = PaperSeekAgent(
+            config(
+                retrieval_reranker_provider="nvidia",
+                retrieval_reranker_api_key="nv-test",
+                retrieval_reranker_base_url="https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking",
+                retrieval_reranker_model="nv-rerank-qa-mistral-4b:1",
+            ),
+            FakeLLM(),
+        )
+        captured = {}
+
+        def fake_post(url, headers=None, json=None, timeout=0):
+            captured.update({"url": url, "headers": dict(headers or {}), "json": dict(json or {})})
+            return FakeResponse(payload={"rankings": [{"index": 1, "logit": 4.7}, {"index": 0, "logit": -1.0}]})
+
+        docs = [record("a", "less relevant"), record("b", "more relevant")]
+        with patch("paperseek_core.agent.requests.post", fake_post):
+            reranked = agent._apply_external_reranker("graph retrieval", docs)
+
+        self.assertEqual(captured["url"], "https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking")
+        self.assertEqual(captured["headers"]["Accept"], "application/json")
+        self.assertEqual(captured["json"]["model"], "nv-rerank-qa-mistral-4b:1")
+        self.assertEqual(captured["json"]["query"], {"text": "graph retrieval"})
+        self.assertEqual(captured["json"]["passages"], [{"text": "less relevant Journal 2024"}, {"text": "more relevant Journal 2024"}])
+        self.assertEqual([doc.uid for doc in reranked], ["b", "a"])
+
     def test_external_reranker_falls_back_to_next_model(self):
         agent = PaperSeekAgent(
             config(
@@ -332,8 +390,12 @@ class RetrievalAgentTest(unittest.TestCase):
         self.assertEqual(agent._retrieval_base_url("embedding", "dashscope"), "https://dashscope.aliyuncs.com/compatible-mode/v1")
         self.assertEqual(agent._retrieval_base_url("embedding", "siliconflow"), "https://api.siliconflow.cn/v1")
         self.assertEqual(agent._retrieval_base_url("embedding", "modelscope"), "https://api-inference.modelscope.cn/v1")
+        self.assertEqual(agent._retrieval_base_url("embedding", "openrouter"), "https://openrouter.ai/api/v1")
+        self.assertEqual(agent._retrieval_base_url("embedding", "nvidia"), "https://integrate.api.nvidia.com/v1")
+        self.assertEqual(agent._retrieval_base_url("reranker", "nvidia"), "https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking")
         self.assertEqual(agent._retrieval_base_url("reranker", "modelscope"), "")
         self.assertEqual(agent._retrieval_api_key("embedding", "dashscope"), "sk-test")
+        self.assertEqual(agent._retrieval_api_key("reranker", "openrouter"), "sk-test")
 
     def test_modelscope_embedding_defaults_to_supported_qwen_models(self):
         agent = PaperSeekAgent(config(retrieval_embedding_model="qwen3-embedding:8b,bge-large-zh:latest"), FakeLLM())
