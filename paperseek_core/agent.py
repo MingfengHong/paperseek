@@ -2743,54 +2743,70 @@ class PaperSeekAgent:
         scores = []
         remaining_batches = [(index, batch) for index, batch in enumerate(batches, 1)]
         completed_batches = 0
-        for workers in self._ranking_concurrency_schedule(len(batches)):
+        schedule = self._ranking_concurrency_schedule(len(batches))
+        for tier_index, workers in enumerate(schedule):
             if not remaining_batches:
                 break
             run_workers = workers
-            if completed_batches > 0:
+            if tier_index > 0:
                 self._emit_log(f"Retrying {len(remaining_batches)} failed result-ranking batch(es) with concurrency={run_workers}.")
             failed_batches = []
-            with ThreadPoolExecutor(max_workers=run_workers) as executor:
-                future_to_batch = {
-                    executor.submit(self._score_ranking_batch, question, batch, self._new_ranking_llm_client()): (index, batch)
-                    for index, batch in remaining_batches
-                }
-                for future in as_completed(future_to_batch):
-                    index, batch = future_to_batch[future]
-                    try:
-                        batch_scores = future.result()
-                    except Exception as exc:
-                        self._emit_log(
-                            f"Result ranking batch {index}/{len(batches)} failed at concurrency={run_workers}; "
-                            f"will retry if a lower concurrency tier is available: {exc}"
-                        )
-                        failed_batches.append((index, batch))
+            lower_tier_available = tier_index < len(schedule) - 1
+            backoff_to_lower_tier = False
+            worklist = list(remaining_batches)
+            for start in range(0, len(worklist), run_workers):
+                chunk = worklist[start:start + run_workers]
+                with ThreadPoolExecutor(max_workers=run_workers) as executor:
+                    future_to_batch = {
+                        executor.submit(self._score_ranking_batch, question, batch, self._new_ranking_llm_client()): (index, batch)
+                        for index, batch in chunk
+                    }
+                    for future in as_completed(future_to_batch):
+                        index, batch = future_to_batch[future]
+                        try:
+                            batch_scores = future.result()
+                        except Exception as exc:
+                            self._emit_log(
+                                f"Result ranking batch {index}/{len(batches)} failed at concurrency={run_workers}; "
+                                f"will retry if a lower concurrency tier is available: {exc}"
+                            )
+                            failed_batches.append((index, batch))
+                            if lower_tier_available and self._is_rate_limit_error(exc):
+                                backoff_to_lower_tier = True
+                            self._emit_ranking_step(
+                                step_id,
+                                "processing",
+                                step_title,
+                                current=completed_batches,
+                                total=len(batches),
+                                detail=f"Batch {index}/{len(batches)} failed at concurrency={run_workers}; retrying failed batches with lower concurrency.",
+                                concurrency=run_workers,
+                                batch_size=batch_size,
+                                candidate_count=len(documents),
+                            )
+                            continue
+                        scores.extend(batch_scores)
+                        completed_batches += 1
+                        self._emit_log(f"Result ranking batch {index}/{len(batches)} completed; candidates={len(batch)}; scored={len(batch_scores)}.")
                         self._emit_ranking_step(
                             step_id,
                             "processing",
                             step_title,
                             current=completed_batches,
                             total=len(batches),
-                            detail=f"Batch {index}/{len(batches)} failed at concurrency={run_workers}; retrying failed batches with lower concurrency.",
+                            detail=f"Completed batch {index}/{len(batches)} at concurrency={run_workers}.",
                             concurrency=run_workers,
                             batch_size=batch_size,
                             candidate_count=len(documents),
                         )
-                        continue
-                    scores.extend(batch_scores)
-                    completed_batches += 1
-                    self._emit_log(f"Result ranking batch {index}/{len(batches)} completed; candidates={len(batch)}; scored={len(batch_scores)}.")
-                    self._emit_ranking_step(
-                        step_id,
-                        "processing",
-                        step_title,
-                        current=completed_batches,
-                        total=len(batches),
-                        detail=f"Completed batch {index}/{len(batches)} at concurrency={run_workers}.",
-                        concurrency=run_workers,
-                        batch_size=batch_size,
-                        candidate_count=len(documents),
+                if backoff_to_lower_tier:
+                    unsubmitted = worklist[start + len(chunk):]
+                    failed_batches.extend(unsubmitted)
+                    self._emit_log(
+                        f"Rate limit detected at concurrency={run_workers}; "
+                        f"moving {len(failed_batches)} failed or unsubmitted batch(es) to the next lower concurrency tier."
                     )
+                    break
             remaining_batches = failed_batches
 
         if remaining_batches:
@@ -2836,11 +2852,11 @@ class PaperSeekAgent:
         return min(max(1, batch_size), max(1, total_documents))
 
     def _ranking_concurrency(self) -> int:
-        configured = getattr(self.config, "ranking_concurrency", 4) or 4
+        configured = getattr(self.config, "ranking_concurrency", 16) or 16
         try:
             return min(32, max(4, int(configured)))
         except (TypeError, ValueError):
-            return 32
+            return 16
 
     def _ranking_concurrency_schedule(self, batch_count: int) -> List[int]:
         configured = max(4, self._ranking_concurrency())
@@ -2854,6 +2870,11 @@ class PaperSeekAgent:
         if 4 not in schedule:
             schedule.append(4)
         return schedule
+
+    @staticmethod
+    def _is_rate_limit_error(exc: Exception) -> bool:
+        text = str(exc).lower()
+        return "429" in text or "rate_limit" in text or "too many requests" in text
 
     def _new_ranking_llm_client(self):
         if hasattr(self.llm, "fork"):

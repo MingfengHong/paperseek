@@ -43,7 +43,7 @@ class AgentConfig:
     citation_max_records: int = 160
     citation_depth: int = 2
     ranking_batch_size: int = 8
-    ranking_concurrency: int = 32
+    ranking_concurrency: int = 16
     ranking_candidate_limit: int = 256
     target_min: int = 5
     target_max: int = 50
@@ -92,7 +92,7 @@ class AgentConfig:
             citation_max_records=int(os.environ.get("CITATION_MAX_RECORDS", "160")),
             citation_depth=int(os.environ.get("CITATION_DEPTH", "2")),
             ranking_batch_size=int(os.environ.get("RANKING_BATCH_SIZE", "8")),
-            ranking_concurrency=int(os.environ.get("RANKING_CONCURRENCY", "32")),
+            ranking_concurrency=int(os.environ.get("RANKING_CONCURRENCY", "16")),
             ranking_candidate_limit=int(os.environ.get("RANKING_CANDIDATE_LIMIT") or "256"),
             target_min=int(os.environ.get("TARGET_MIN", "5")),
             target_max=int(os.environ.get("TARGET_MAX", "50")),

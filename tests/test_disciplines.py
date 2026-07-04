@@ -381,6 +381,48 @@ class DisciplineMappingTest(unittest.TestCase):
             for line in log_text.splitlines()
         ))
 
+    def test_agent_backs_off_before_submitting_all_batches_after_rate_limit(self):
+        class RateLimitRankingLlm(BatchRankingLlm):
+            def __init__(self, calls):
+                super().__init__(calls)
+
+            def fork(self):
+                return RateLimitRankingLlm(self.calls)
+
+            def chat(self, messages, temperature=0.3):
+                text = messages[-1]["content"]
+                uids = re.findall(r"UID: ([^\n]+)", text)
+                self.calls.append(tuple(uids))
+                if "W00" in uids:
+                    raise RuntimeError("LLM API error (429): too many requests")
+                return json.dumps([
+                    {"uid": uid, "score": int(uid.replace("W", "")), "reasoning": "ranked"}
+                    for uid in uids
+                ])
+
+        calls = []
+        config = SimpleNamespace(
+            data_source="openalex",
+            discipline_fields=(),
+            expand_citations=False,
+            ranking_batch_size=1,
+            ranking_concurrency=32,
+            openalex_api_key="",
+            openalex_email="",
+        )
+        agent = PaperSeekAgent(config, RateLimitRankingLlm(calls))
+        events = []
+        agent.event_handler = events.append
+
+        ranked = agent._rank_results("open innovation", [ranking_record(index) for index in range(80)])
+
+        self.assertEqual(len(ranked), 80)
+        first_tier_uids = {uid for call in calls[:32] for uid in call}
+        self.assertTrue(first_tier_uids)
+        self.assertTrue(all(int(uid.replace("W", "")) < 32 for uid in first_tier_uids))
+        log_text = "\n".join(event.get("message", "") for event in events if event.get("type") == "log")
+        self.assertIn("Rate limit detected at concurrency=32", log_text)
+
     def test_ranking_concurrency_schedule_never_goes_below_four(self):
         config = SimpleNamespace(
             data_source="openalex",
@@ -394,6 +436,13 @@ class DisciplineMappingTest(unittest.TestCase):
 
         self.assertEqual(agent._ranking_concurrency(), 4)
         self.assertEqual(agent._ranking_concurrency_schedule(8), [4])
+
+        delattr(config, "ranking_concurrency")
+        self.assertEqual(agent._ranking_concurrency(), 16)
+        self.assertEqual(agent._ranking_concurrency_schedule(8), [16, 8, 4])
+
+        config.ranking_concurrency = "invalid"
+        self.assertEqual(agent._ranking_concurrency(), 16)
 
         config.ranking_concurrency = 32
         self.assertEqual(agent._ranking_concurrency_schedule(8), [32, 16, 8, 4])

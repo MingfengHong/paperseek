@@ -79,7 +79,12 @@ class OpenAIChatClient(LLMClient):
     def chat(self, messages, temperature=0.3):
         url = f"{self.base_url}/chat/completions"
         started = time.perf_counter()
+        kimi_coding_endpoint = self.model == "kimi-for-coding" and "api.kimi.com/coding" in self.base_url
+        if kimi_coding_endpoint:
+            temperature = 0.6
         body = {"model": self.model, "messages": messages, "temperature": temperature}
+        if kimi_coding_endpoint:
+            body["thinking"] = {"type": "disabled"}
         if self.max_tokens:
             body["max_tokens"] = self.max_tokens
         try:

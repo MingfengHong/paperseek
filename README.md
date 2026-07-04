@@ -422,7 +422,7 @@ ModelScope API-Inference 可用于 LLM 和 Qwen embedding，不作为 Rerank 服
 
 在进入 LLM 打分前，PaperSeek 会先进行轻量多路召回预重排：按数据源能力综合相关性、高引用/影响力、时效性和本地质量等信号，去重后用 RRF 融合召回排名，并叠加纯 Python hashing embedding cosine、BM25 和词项覆盖分数。默认 LLM 前融合候选池上限为 `3000`。社区版默认不依赖外部 embedding 服务；如需外部增强，可在 Web UI 高级设置中从 Local Python、中国科技云、OpenAI、阿里云百炼、硅基流动、智谱、火山方舟、ModelScope 或自定义端点中选择 embedding 服务，其中 ModelScope API-Inference 仅使用 `Qwen/Qwen3-Embedding-8B` 和 `Qwen/Qwen3-Embedding-4B`。如果用户自行配置 OpenAI-compatible embedding/reranker，也可使用中国科技云的 `qwen3-embedding:8b`、`bge-large-zh:latest` 或 `qwen3-reranker:8b` 等模型，配置多个模型时会按顺序 fallback，失败时会回退到本地 RRF 顺序。
 
-候选池较大时，LLM 排序会自动分批并发执行。默认批大小为 `8`、并发为 `32`；超过 32 篇候选论文时会自适应放大批大小。若一个或多个批次失败，系统会按 `32 -> 16 -> 8 -> 4` 降低并发重试；如果并发 `4` 仍失败，只回退失败批次，不会使整次检索失败。
+候选池较大时，LLM 排序会自动分批并发执行。默认批大小为 `8`、并发为 `16`；超过 16 篇候选论文时会自适应放大批大小。若一个或多个批次失败，系统会按 `16 -> 8 -> 4` 降低并发重试；如果并发 `4` 仍失败，只回退失败批次，不会使整次检索失败。高级用户仍可手动把 `RANKING_CONCURRENCY` 设为 `32`，此时会按 `32 -> 16 -> 8 -> 4` 降级。
 
 `TARGET_MAX` 用于指导检索式收窄或放宽，不是最终展示的硬上限。LLM 打分前最多保留 `RANKING_CANDIDATE_LIMIT` 条候选，默认 `256`。最终结果少于 50 条时全部展示；结果较多时至少展示前 50 条，如果 5 分及以上候选超过 50 条，则展示全部高分候选。
 
@@ -475,7 +475,7 @@ A -> B  表示 A 引用了 B
 | `FETCH_ABSTRACTS` | `false` | 是否尝试从外部 DOI 元数据补摘要。 |
 | `CITATION_SEED_COUNT` / `CITATION_PER_SEED` / `CITATION_MAX_RECORDS` | `30` / `4` / `160` | 引用扩展规模控制。 |
 | `CITATION_DEPTH` | `2` | OpenAlex 引用扩展遍历层数。 |
-| `RANKING_BATCH_SIZE` / `RANKING_CONCURRENCY` | `8` / `32` | LLM 排序批大小和并发数。 |
+| `RANKING_BATCH_SIZE` / `RANKING_CONCURRENCY` | `8` / `16` | LLM 排序批大小和并发数。 |
 | `LLM_MAX_TOKENS` / `LLM_TIMEOUT_SECONDS` | `2048` / `180` | LLM 输出长度和单次请求超时。 |
 | `RETRIEVAL_POOL_MAX` / `RETRIEVAL_POOL_MIN` | `3000` / `5` | LLM 打分前的融合候选池范围。 |
 | `RETRIEVAL_LANE_LIMIT` / `RETRIEVAL_RRF_K` | `1000` / `60` | 每路召回上限和 RRF 融合常数。 |

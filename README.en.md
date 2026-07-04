@@ -420,7 +420,7 @@ A search usually has four stages:
 
 When OpenAlex citation expansion is enabled, PaperSeek selects up to 30 seed papers across relevance, impact, and recency lanes. High-relevance seeds expand both references and citing works; highly cited seeds focus on references; recent seeds focus on citing works. The expanded records are merged into the same candidate pool before pre-ranking and LLM scoring.
 
-Large candidate pools are ranked in concurrent LLM batches. The default batch size is `8` and default concurrency is `32`; above 32 candidates, PaperSeek adapts the batch size to keep the total batch count near the concurrency level. If one or more ranking batches fail, PaperSeek retries those batches with lower concurrency in the `32 -> 16 -> 8 -> 4` sequence. If the endpoint still fails at concurrency `4`, only the failed batch falls back to zero-score source order instead of failing the whole search.
+Large candidate pools are ranked in concurrent LLM batches. The default batch size is `8` and default concurrency is `16`; above 16 candidates, PaperSeek adapts the batch size to keep the total batch count near the concurrency level. If one or more ranking batches fail, PaperSeek retries those batches with lower concurrency in the `16 -> 8 -> 4` sequence. If the endpoint still fails at concurrency `4`, only the failed batch falls back to zero-score source order instead of failing the whole search. Advanced users can still set `RANKING_CONCURRENCY=32`, which uses the `32 -> 16 -> 8 -> 4` fallback sequence.
 
 Before LLM scoring, PaperSeek now runs lightweight multi-lane pre-ranking across the selected source's supported signals: relevance, impact/citation when available, recency, and local quality for the computer science top-conference index. It deduplicates candidates, fuses retrieval ranks with RRF, and adds pure-Python hashing cosine plus BM25/term coverage. The default fused pool limit is `3000`; community installs use the local pure-Python embedding path unless you explicitly configure an OpenAI-compatible embedding endpoint. The Web UI advanced settings include embedding provider choices for Local Python, CSTCloud, OpenAI, Alibaba Cloud Bailian, SiliconFlow, Zhipu AI, Volcano Ark, ModelScope, and Custom endpoints. ModelScope API-Inference uses only `Qwen/Qwen3-Embedding-8B` and `Qwen/Qwen3-Embedding-4B` for embedding. Optional external embedding/reranking can use models such as `qwen3-embedding:8b`, `bge-large-zh:latest`, or `qwen3-reranker:8b`; comma-separated model lists are tried in order and failures fall back to the local RRF order.
 
@@ -475,7 +475,7 @@ Most parameters already have code defaults. After copying `.env.example`, a norm
 | `FETCH_ABSTRACTS` | `false` | Try external DOI metadata for abstracts. |
 | `CITATION_SEED_COUNT` / `CITATION_PER_SEED` / `CITATION_MAX_RECORDS` | `30` / `4` / `160` | Citation expansion size controls. |
 | `CITATION_DEPTH` | `2` | OpenAlex citation traversal depth. |
-| `RANKING_BATCH_SIZE` / `RANKING_CONCURRENCY` | `8` / `32` | LLM ranking batch size and concurrency. |
+| `RANKING_BATCH_SIZE` / `RANKING_CONCURRENCY` | `8` / `16` | LLM ranking batch size and concurrency. |
 | `LLM_MAX_TOKENS` / `LLM_TIMEOUT_SECONDS` | `2048` / `180` | LLM output length and per-request timeout. |
 | `RETRIEVAL_POOL_MAX` / `RETRIEVAL_POOL_MIN` | `3000` / `5` | Fused candidate pool range before LLM ranking. |
 | `RETRIEVAL_LANE_LIMIT` / `RETRIEVAL_RRF_K` | `1000` / `60` | Retrieval lane cap and RRF fusion constant. |
