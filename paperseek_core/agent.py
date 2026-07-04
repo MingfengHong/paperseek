@@ -2197,7 +2197,7 @@ class PaperSeekAgent:
 
     def _llm_request_log(self, purpose: str) -> None:
         base_url = getattr(self.llm, "base_url", "")
-        model = getattr(self.llm, "model", "")
+        model = self._display_llm_model(getattr(self.llm, "model", ""))
         provider = getattr(self.config, "llm_provider", "llm")
         api_type = getattr(self.config, "llm_api_type", "")
         self._emit_log(f"LLM request started: provider={provider} api_type={api_type} model={model} purpose={purpose} endpoint={base_url}.")
@@ -2211,6 +2211,9 @@ class PaperSeekAgent:
         elapsed_text = f" in {elapsed}ms" if elapsed is not None else ""
         status_text = f"HTTP {status} OK" if isinstance(status, int) and status < 400 else str(status)
         self._emit_log(f"LLM {method} {url} -> {status_text}{elapsed_text}; purpose={purpose}.")
+        route_label = info.get("fallback_route")
+        if route_label:
+            self._emit_log(f"LLM route used: {route_label}.")
         quota = info.get("quota") or {}
         quota_text = format_modelscope_quota(quota)
         if quota_text:
@@ -2222,6 +2225,16 @@ class PaperSeekAgent:
                 quota=quota,
             )
             self._emit_log(f"ModelScope quota updated: {quota_text}.")
+
+    @staticmethod
+    def _display_llm_model(model: str) -> str:
+        return {
+            "kimi-for-coding": "kimi-k2.7-code",
+            "z-ai/glm-5.2": "glm-5.2",
+            "minimaxai/minimax-m3": "minimax-m3",
+            "moonshotai/kimi-k2.6": "kimi-k2.6",
+            "nvidia/nemotron-3-ultra-550b-a55b": "nemotron-3-ultra-550b-a55b",
+        }.get(model, model)
 
     def _preview_hits(self, hits: list, limit: int = 5) -> list:
         preview = []
