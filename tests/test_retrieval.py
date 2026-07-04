@@ -360,6 +360,27 @@ class RetrievalAgentTest(unittest.TestCase):
         self.assertEqual(captured["json"]["passages"], [{"text": "less relevant Journal 2024"}, {"text": "more relevant Journal 2024"}])
         self.assertEqual([doc.uid for doc in reranked], ["b", "a"])
 
+    def test_nvidia_reranker_preserves_ranking_endpoint(self):
+        agent = PaperSeekAgent(
+            config(
+                retrieval_reranker_provider="nvidia",
+                retrieval_reranker_api_key="nv-test",
+                retrieval_reranker_base_url="http://localhost:8000/v1/ranking",
+                retrieval_reranker_model="nv-rerank-qa-mistral-4b:1",
+            ),
+            FakeLLM(),
+        )
+        captured = {}
+
+        def fake_post(url, headers=None, json=None, timeout=0):
+            captured["url"] = url
+            return FakeResponse(payload={"rankings": [{"index": 0, "logit": 1.0}]})
+
+        with patch("paperseek_core.agent.requests.post", fake_post):
+            agent._apply_external_reranker("graph retrieval", [record("a", "relevant")])
+
+        self.assertEqual(captured["url"], "http://localhost:8000/v1/ranking")
+
     def test_external_reranker_falls_back_to_next_model(self):
         agent = PaperSeekAgent(
             config(

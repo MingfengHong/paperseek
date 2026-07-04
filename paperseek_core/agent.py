@@ -1615,7 +1615,7 @@ class PaperSeekAgent:
             try:
                 if provider == "nvidia":
                     endpoint = base_url.rstrip("/")
-                    if not endpoint.endswith("/reranking"):
+                    if not (endpoint.endswith("/reranking") or endpoint.endswith("/ranking")):
                         endpoint = f"{endpoint}/reranking"
                     response = requests.post(
                         endpoint,
