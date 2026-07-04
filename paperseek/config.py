@@ -33,6 +33,7 @@ class AgentConfig:
     llm_model: str = ""
     llm_base_url: str = ""
     llm_max_tokens: int = 2048
+    ranking_llm_timeout_seconds: int = 60
     wos_db: str = "WOS"
     search_field: str = ""
     discipline_fields: tuple[str, ...] = field(default_factory=tuple)
@@ -82,6 +83,7 @@ class AgentConfig:
             llm_model=os.environ.get("LLM_MODEL") or default_model(provider),
             llm_base_url=os.environ.get("LLM_BASE_URL") or default_base_url(provider, api_type),
             llm_max_tokens=_int_env("LLM_MAX_TOKENS", 2048),
+            ranking_llm_timeout_seconds=_int_env("RANKING_LLM_TIMEOUT_SECONDS", 60, minimum=10),
             wos_db=os.environ.get("WOS_DB", "WOS"),
             search_field=os.environ.get("SEARCH_FIELD", ""),
             discipline_fields=os.environ.get("DISCIPLINE_FIELDS", ""),

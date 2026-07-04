@@ -7,6 +7,8 @@ import math
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import count
+from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import requests
 
@@ -78,6 +80,39 @@ from paperseek_core.sources.providers import (
     SearchMetadata,
     SemanticScholarProvider,
 )
+
+
+_EXTERNAL_API_KEY_COUNTER_LOCK = Lock()
+_EXTERNAL_API_KEY_COUNTERS = {}
+
+
+def _split_external_api_keys(api_key: str) -> List[str]:
+    keys = [item.strip() for item in re.split(r"[\s,;]+", api_key or "") if item.strip()]
+    return list(dict.fromkeys(keys))
+
+
+def _next_external_api_key(keys: List[str]) -> str:
+    if not keys:
+        return ""
+    if len(keys) == 1:
+        return keys[0]
+    pool_key = "\0".join(keys)
+    with _EXTERNAL_API_KEY_COUNTER_LOCK:
+        counter = _EXTERNAL_API_KEY_COUNTERS.setdefault(pool_key, count())
+        index = next(counter)
+    return keys[index % len(keys)]
+
+
+def _external_api_key_attempts(api_key: str, max_attempts: int = 3) -> List[str]:
+    keys = _split_external_api_keys(api_key)
+    if not keys:
+        return [""]
+    attempts = min(max(1, int(max_attempts or 1)), len(keys))
+    return [_next_external_api_key(keys) for _ in range(attempts)]
+
+
+def _retryable_external_status(status_code: int) -> bool:
+    return status_code in (401, 403, 408, 409, 425, 429) or status_code >= 500
 
 
 def _extract_json_object_text(text: str) -> str:
@@ -1519,16 +1554,57 @@ class PaperSeekAgent:
                 output[key] = score
         return output
 
+    def _post_external_api(
+        self,
+        url: str,
+        api_key: str,
+        headers_factory: Callable[[str], Dict[str, str]],
+        payload: Dict[str, Any],
+        *,
+        timeout: int = 60,
+        label: str = "External API",
+    ):
+        attempts = _external_api_key_attempts(api_key)
+        last_error = None
+        for attempt_index, key in enumerate(attempts, 1):
+            try:
+                response = requests.post(url, headers=headers_factory(key), json=payload, timeout=timeout)
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt_index < len(attempts):
+                    self._emit_log(f"{label} request failed; retrying with another key ({attempt_index}/{len(attempts)}): {exc}")
+                    continue
+                raise
+            if (
+                response.status_code < 200 or response.status_code >= 300
+            ) and attempt_index < len(attempts) and _retryable_external_status(response.status_code):
+                self._emit_log(
+                    f"{label} request returned HTTP {response.status_code}; "
+                    f"retrying with another key ({attempt_index}/{len(attempts)})."
+                )
+                last_error = RuntimeError(f"HTTP {response.status_code}: {response.text[:300]}")
+                continue
+            return response
+        if last_error:
+            raise last_error
+        return requests.post(url, headers=headers_factory(""), json=payload, timeout=timeout)
+
     def _embedding_vectors(self, base_url: str, api_key: str, model: str, texts: list, provider: str = "") -> List[List[float]]:
         if (provider or "").strip().lower() == "nvidia":
             return self._nvidia_embedding_vectors(base_url, api_key, model, texts)
         vectors: List[List[float]] = []
         url = f"{base_url.rstrip('/')}/embeddings"
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         batch_size = 64
         for offset in range(0, len(texts), batch_size):
             batch = texts[offset:offset + batch_size]
-            response = requests.post(url, headers=headers, json={"model": model, "input": batch, "encoding_format": "float"}, timeout=60)
+            response = self._post_external_api(
+                url,
+                api_key,
+                lambda key: {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                {"model": model, "input": batch, "encoding_format": "float"},
+                timeout=60,
+                label="External embedding",
+            )
             if response.status_code < 200 or response.status_code >= 300:
                 raise RuntimeError(f"HTTP {response.status_code}: {response.text[:300]}")
             payload = response.json()
@@ -1543,14 +1619,15 @@ class PaperSeekAgent:
 
     def _nvidia_embedding_vectors(self, base_url: str, api_key: str, model: str, texts: list) -> List[List[float]]:
         url = f"{base_url.rstrip('/')}/embeddings"
-        headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "Content-Type": "application/json"}
 
         def request_vectors(batch: list, input_type: str) -> List[List[float]]:
-            response = requests.post(
+            response = self._post_external_api(
                 url,
-                headers=headers,
-                json={"model": model, "input": batch, "input_type": input_type, "encoding_format": "float"},
+                api_key,
+                lambda key: {"Authorization": f"Bearer {key}", "Accept": "application/json", "Content-Type": "application/json"},
+                {"model": model, "input": batch, "input_type": input_type, "encoding_format": "float"},
                 timeout=60,
+                label="NVIDIA embedding",
             )
             if response.status_code < 200 or response.status_code >= 300:
                 raise RuntimeError(f"HTTP {response.status_code}: {response.text[:300]}")
@@ -1617,18 +1694,22 @@ class PaperSeekAgent:
                     endpoint = base_url.rstrip("/")
                     if not (endpoint.endswith("/reranking") or endpoint.endswith("/ranking")):
                         endpoint = f"{endpoint}/reranking"
-                    response = requests.post(
+                    response = self._post_external_api(
                         endpoint,
-                        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json", "Content-Type": "application/json"},
-                        json={"model": model, "query": {"text": question}, "passages": [{"text": text} for text in texts]},
+                        api_key,
+                        lambda key: {"Authorization": f"Bearer {key}", "Accept": "application/json", "Content-Type": "application/json"},
+                        {"model": model, "query": {"text": question}, "passages": [{"text": text} for text in texts]},
                         timeout=60,
+                        label="External reranker",
                     )
                 else:
-                    response = requests.post(
+                    response = self._post_external_api(
                         f"{base_url.rstrip('/')}/rerank",
-                        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                        json={"model": model, "query": question, "documents": texts, "top_n": rerank_count},
+                        api_key,
+                        lambda key: {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                        {"model": model, "query": question, "documents": texts, "top_n": rerank_count},
                         timeout=60,
+                        label="External reranker",
                     )
                 if response.status_code < 200 or response.status_code >= 300:
                     raise RuntimeError(f"HTTP {response.status_code}: {response.text[:300]}")
@@ -1683,6 +1764,8 @@ class PaperSeekAgent:
         if kind == "embedding" and provider == "nvidia":
             if raw in ("", default_model, "qwen3-embedding:8b", "qwen3-embedding:8b,bge-large-zh:latest"):
                 raw = "nvidia/nv-embedqa-e5-v5"
+            elif raw == "nv-embed-v1":
+                raw = "nvidia/nv-embed-v1"
         if kind == "embedding" and provider == "openrouter":
             if raw in ("", default_model, "qwen3-embedding:8b", "qwen3-embedding:8b,bge-large-zh:latest"):
                 raw = "openai/text-embedding-3-small"
@@ -2771,9 +2854,22 @@ class PaperSeekAgent:
                 total=1,
                 detail=f"Scoring {len(documents)} candidates in one LLM batch.",
             )
-            self._llm_request_log("result_ranking")
-            scores = self._score_ranking_batch(question, documents, self.llm)
-            self._llm_response_log("result_ranking")
+            try:
+                self._llm_request_log("result_ranking")
+                scores = self._score_ranking_batch(question, documents, self._new_ranking_llm_client())
+                self._llm_response_log("result_ranking")
+            except Exception as exc:
+                self._emit_log(f"Result ranking batch failed; keeping local pre-ranking order: {exc}")
+                self._emit_ranking_step(
+                    step_id,
+                    "skipped",
+                    step_title,
+                    current=0,
+                    total=1,
+                    detail="LLM ranking failed or timed out; keeping the local pre-ranking order.",
+                    candidate_count=len(documents),
+                )
+                return self._rank_from_scores(documents, [])
             self._emit_ranking_step(
                 step_id,
                 "complete",
@@ -2878,11 +2974,14 @@ class PaperSeekAgent:
             failed_docs = sum(len(batch) for _, batch in remaining_batches)
             self._emit_ranking_step(
                 step_id,
-                "error",
+                "skipped" if not scores else "complete",
                 step_title,
                 current=completed_batches,
                 total=len(batches),
-                detail=f"{len(remaining_batches)} batch(es), {failed_docs} candidates, failed even at concurrency=4.",
+                detail=(
+                    f"{len(remaining_batches)} batch(es), {failed_docs} candidates, failed even at concurrency=4; "
+                    "keeping local pre-ranking order for those candidates."
+                ),
                 concurrency=4,
                 batch_size=batch_size,
                 candidate_count=len(documents),
@@ -2890,6 +2989,17 @@ class PaperSeekAgent:
 
         if not scores:
             self._emit_log("All result ranking batches failed; returning candidates in source order with zero scores.")
+            self._emit_ranking_step(
+                step_id,
+                "skipped",
+                step_title,
+                current=completed_batches,
+                total=len(batches),
+                detail="All LLM ranking batches failed or timed out; keeping the local pre-ranking order.",
+                concurrency=4,
+                batch_size=batch_size,
+                candidate_count=len(documents),
+            )
         elif not remaining_batches:
             self._emit_ranking_step(
                 step_id,
@@ -2937,9 +3047,23 @@ class PaperSeekAgent:
         text = str(exc).lower()
         return "429" in text or "rate_limit" in text or "too many requests" in text
 
+    def _ranking_llm_timeout_seconds(self) -> int:
+        configured = getattr(self.config, "ranking_llm_timeout_seconds", 60) or 60
+        try:
+            return max(10, int(configured))
+        except (TypeError, ValueError):
+            return 60
+
     def _new_ranking_llm_client(self):
+        timeout_seconds = self._ranking_llm_timeout_seconds()
         if hasattr(self.llm, "fork"):
-            return self.llm.fork()
+            try:
+                client = self.llm.fork()
+                if hasattr(client, "timeout_seconds"):
+                    client.timeout_seconds = timeout_seconds
+                return client
+            except Exception:
+                pass
         client_class = self.llm.__class__
         api_key = getattr(self.llm, "api_key", None)
         base_url = getattr(self.llm, "base_url", "")
@@ -2947,18 +3071,27 @@ class PaperSeekAgent:
             return self.llm
         try:
             if hasattr(self.llm, "models"):
-                return client_class(api_key, list(getattr(self.llm, "models") or []), base_url)
+                try:
+                    return client_class(api_key, list(getattr(self.llm, "models") or []), base_url, timeout_seconds=timeout_seconds)
+                except TypeError:
+                    return client_class(api_key, list(getattr(self.llm, "models") or []), base_url)
             model = getattr(self.llm, "model", "")
             attempts = getattr(self.llm, "attempts", None)
             if attempts is not None:
                 try:
-                    return client_class(api_key, model=model, base_url=base_url, attempts=attempts)
+                    return client_class(api_key, model=model, base_url=base_url, attempts=attempts, timeout_seconds=timeout_seconds)
                 except TypeError:
-                    pass
+                    try:
+                        return client_class(api_key, model=model, base_url=base_url, attempts=attempts)
+                    except TypeError:
+                        pass
             try:
-                return client_class(api_key, model=model, base_url=base_url)
+                return client_class(api_key, model=model, base_url=base_url, timeout_seconds=timeout_seconds)
             except TypeError:
-                return client_class(api_key, model, base_url)
+                try:
+                    return client_class(api_key, model, base_url, timeout_seconds=timeout_seconds)
+                except TypeError:
+                    return client_class(api_key, model, base_url)
         except Exception:
             return self.llm
 

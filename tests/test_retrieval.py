@@ -313,6 +313,30 @@ class RetrievalAgentTest(unittest.TestCase):
         self.assertEqual(models, ["qwen3-embedding:8b", "bge-large-zh:latest"])
         self.assertEqual(scores, [1.0])
 
+    def test_external_embedding_rotates_key_pool_on_retryable_status(self):
+        agent = PaperSeekAgent(
+            config(
+                retrieval_embedding_provider="cstcloud",
+                retrieval_embedding_api_key="sk-a,sk-b",
+                retrieval_embedding_base_url="https://uni-api.cstcloud.cn/v1",
+                retrieval_embedding_model="qwen3-embedding:8b",
+            ),
+            FakeLLM(),
+        )
+        calls = []
+
+        def fake_post(url, headers=None, json=None, timeout=0):
+            calls.append(headers.get("Authorization"))
+            if len(calls) == 1:
+                return FakeResponse(payload={"error": "limited"}, status_code=429, text="limited")
+            return FakeResponse(payload={"data": [{"index": 0, "embedding": [1.0, 0.0]}, {"index": 1, "embedding": [1.0, 0.0]}]})
+
+        with patch("paperseek_core.agent.requests.post", fake_post):
+            scores = agent._external_embedding_scores("graph retrieval", [record("a", "graph retrieval")])
+
+        self.assertEqual(calls, ["Bearer sk-a", "Bearer sk-b"])
+        self.assertEqual(scores, [1.0])
+
     def test_external_reranker_reorders_prefix_when_available(self):
         agent = PaperSeekAgent(
             config(
@@ -404,6 +428,31 @@ class RetrievalAgentTest(unittest.TestCase):
             reranked = agent._apply_external_reranker("graph retrieval", docs)
 
         self.assertEqual(models, ["qwen3-reranker:8b", "bge-reranker-v2-m3"])
+        self.assertEqual([doc.uid for doc in reranked], ["b", "a"])
+
+    def test_external_reranker_rotates_key_pool_on_retryable_status(self):
+        agent = PaperSeekAgent(
+            config(
+                retrieval_reranker_provider="nvidia",
+                retrieval_reranker_api_key="nv-a,nv-b",
+                retrieval_reranker_base_url="https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking",
+                retrieval_reranker_model="nv-rerank-qa-mistral-4b:1",
+            ),
+            FakeLLM(),
+        )
+        calls = []
+
+        def fake_post(url, headers=None, json=None, timeout=0):
+            calls.append(headers.get("Authorization"))
+            if len(calls) == 1:
+                return FakeResponse(payload={"error": "limited"}, status_code=429, text="limited")
+            return FakeResponse(payload={"rankings": [{"index": 1, "logit": 4.0}, {"index": 0, "logit": 1.0}]})
+
+        docs = [record("a", "less relevant"), record("b", "more relevant")]
+        with patch("paperseek_core.agent.requests.post", fake_post):
+            reranked = agent._apply_external_reranker("graph retrieval", docs)
+
+        self.assertEqual(calls, ["Bearer nv-a", "Bearer nv-b"])
         self.assertEqual([doc.uid for doc in reranked], ["b", "a"])
 
     def test_retrieval_provider_default_base_urls_include_common_embedding_vendors(self):

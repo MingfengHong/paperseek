@@ -333,6 +333,68 @@ class DisciplineMappingTest(unittest.TestCase):
         self.assertTrue(failed_batch)
         self.assertTrue(all(entry["score"] == 0 for entry in failed_batch.values()))
 
+    def test_agent_keeps_local_order_when_single_ranking_batch_fails(self):
+        class FailingRankingLlm:
+            def chat(self, messages, temperature=0.3):
+                raise RuntimeError("LLM network error: timeout")
+
+        config = SimpleNamespace(
+            data_source="openalex",
+            discipline_fields=(),
+            expand_citations=False,
+            ranking_batch_size=8,
+            ranking_concurrency=4,
+            openalex_api_key="",
+            openalex_email="",
+        )
+        agent = PaperSeekAgent(config, FailingRankingLlm())
+        events = []
+        agent.event_handler = events.append
+
+        ranked = agent._rank_results("open innovation", [ranking_record(index) for index in range(3)])
+
+        self.assertEqual([entry["document"].uid for entry in ranked], ["W00", "W01", "W02"])
+        self.assertTrue(all(entry["score"] == 0 for entry in ranked))
+        step_statuses = [
+            step.get("status")
+            for event in events
+            for step in (event.get("data") or {}).get("ranking_steps", [])
+        ]
+        self.assertIn("skipped", step_statuses)
+
+    def test_agent_keeps_local_order_when_all_parallel_ranking_batches_fail(self):
+        class AlwaysFailRankingLlm:
+            def fork(self):
+                return AlwaysFailRankingLlm()
+
+            def chat(self, messages, temperature=0.3):
+                raise RuntimeError("LLM network error: timeout")
+
+        config = SimpleNamespace(
+            data_source="openalex",
+            discipline_fields=(),
+            expand_citations=False,
+            ranking_batch_size=4,
+            ranking_concurrency=8,
+            openalex_api_key="",
+            openalex_email="",
+        )
+        agent = PaperSeekAgent(config, AlwaysFailRankingLlm())
+        events = []
+        agent.event_handler = events.append
+
+        ranked = agent._rank_results("open innovation", [ranking_record(index) for index in range(8)])
+
+        self.assertEqual([entry["document"].uid for entry in ranked], [f"W{index:02d}" for index in range(8)])
+        self.assertTrue(all(entry["score"] == 0 for entry in ranked))
+        log_text = "\n".join(event.get("message", "") for event in events if event.get("type") == "log")
+        self.assertIn("All result ranking batches failed; returning candidates in source order", log_text)
+        self.assertFalse(any(
+            step.get("status") == "error"
+            for event in events
+            for step in (event.get("data") or {}).get("ranking_steps", [])
+        ))
+
     def test_agent_retries_failed_ranking_batches_at_lower_concurrency(self):
         class RetryOnceRankingLlm(BatchRankingLlm):
             def __init__(self, calls, attempts=None):

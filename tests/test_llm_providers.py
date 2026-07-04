@@ -70,6 +70,32 @@ class LLMProviderTest(unittest.TestCase):
         self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.6)
         self.assertEqual(post.call_args.kwargs["json"]["thinking"], {"type": "disabled"})
 
+    def test_openai_chat_rotates_key_pool_on_retryable_status(self):
+        class FakeResponse:
+            headers = {}
+
+            def __init__(self, status_code, payload=None, text=""):
+                self.status_code = status_code
+                self._payload = payload or {}
+                self.text = text
+
+            def json(self):
+                return self._payload
+
+        calls = []
+
+        def fake_post(url, **kwargs):
+            calls.append(kwargs["headers"].get("Authorization"))
+            if len(calls) == 1:
+                return FakeResponse(429, text='{"status":429}')
+            return FakeResponse(200, {"choices": [{"message": {"content": "clean answer"}}]})
+
+        with patch("paperseek_core.llm.requests.post", side_effect=fake_post):
+            client = OpenAIChatClient("sk-rotate-a,sk-rotate-b", model="gpt-test", base_url="https://example.test/v1")
+            self.assertEqual(client.chat([{"role": "user", "content": "ping"}]), "clean answer")
+
+        self.assertEqual(calls, ["Bearer sk-rotate-a", "Bearer sk-rotate-b"])
+
     def test_blank_or_invalid_llm_max_tokens_falls_back_safely(self):
         import importlib
         import paperseek_core.llm as core_llm
@@ -132,6 +158,19 @@ class LLMProviderTest(unittest.TestCase):
         self.assertIn('value="openrouter"', html)
         self.assertIn("openai/text-embedding-3-small", app_js)
         self.assertIn("jinaai/jina-reranker-v2-base-multilingual", app_js)
+
+    def test_ranking_llm_timeout_defaults_to_preview_safe_value(self):
+        with temporary_env(clear=("RANKING_LLM_TIMEOUT_SECONDS",)):
+            config = AgentConfig.from_env()
+            self.assertEqual(config.ranking_llm_timeout_seconds, 60)
+
+        with temporary_env({"RANKING_LLM_TIMEOUT_SECONDS": "15"}):
+            config = AgentConfig.from_env()
+            self.assertEqual(config.ranking_llm_timeout_seconds, 15)
+
+        with temporary_env({"RANKING_LLM_TIMEOUT_SECONDS": "2"}):
+            config = AgentConfig.from_env()
+            self.assertEqual(config.ranking_llm_timeout_seconds, 10)
 
     def test_llm_timeout_is_configurable_and_keeps_safe_minimum(self):
         import importlib
