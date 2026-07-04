@@ -12,7 +12,7 @@ PaperSeek Web UI 常见部署方式有三种：
 https://www.paperseek.xyz/
 ```
 
-在线体验版的 Quick Start、ModelScope Service、Use your own API、登录权限、ModelScope 额度和历史记录说明见 [在线体验版用户手册](online-demo.md)。
+在线体验版的 PaperSeek Service、Third-party Service（ModelScope、OpenRouter、Hugging Face）、Bring your own Key / BYOK、登录权限、第三方推理额度和历史记录说明见 [在线体验版用户手册](online-demo.md)。
 
 ## Docker
 

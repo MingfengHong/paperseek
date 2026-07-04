@@ -53,7 +53,7 @@
 - Added arXiv, Semantic Scholar, PubMed, computer science top-conference search, and Crossref.
 - The search loop now uses source-aware query generation, intent analysis, iterative top-result feedback, and lightweight multi-lane pre-ranking.
 - Added lightweight multi-lane pre-ranking: before LLM scoring, PaperSeek combines relevance, impact/citation, recency, and local-quality signals according to each source's capabilities, then fuses candidates with RRF, BM25/term coverage, and local hashing embeddings; OpenAI-compatible embedding/reranker endpoints remain optional.
-- Updated the hosted online account system. PaperSeek now uses email registration and sign-in by default, supports GitHub and ModelScope OAuth, and provides signed-in users with up to 20 successful free searches per day.
+- Updated the hosted online account system. PaperSeek now uses email registration and sign-in by default, supports GitHub, ModelScope, and Hugging Face OAuth, and provides signed-in users with up to 20 successful free searches per day.
 
 ### v0.1.1 - Language, History, and Discipline Filters
 
@@ -80,7 +80,7 @@ PaperSeek focuses on first-pass paper discovery and metadata organization, helpi
 
 ## Choose Your Path
 
-- **Hosted online edition**: use [paperseek.xyz](https://www.paperseek.xyz/) with Quick Start, ModelScope Service, or Use your own API; see the [hosted demo guide](docs/online-demo.md).
+- **Hosted online edition**: use [paperseek.xyz](https://www.paperseek.xyz/) with PaperSeek Service, Third-party Service (ModelScope, OpenRouter, or Hugging Face), or Bring your own Key. Bring your own Key means bring your own provider keys (BYOK); see the [hosted demo guide](docs/online-demo.md).
 - **Self-hosted open-source edition**: install from PyPI or source, or run with Docker/VPS for longer searches, citation expansion, and heavier request volume.
 - **ModelScope Studio**: use the public [PaperSeek Studio](https://modelscope.cn/studios/HongMingfeng/PaperSeek) or deploy your own Docker Studio from the guide.
 - **Agent Skill**: copy `skills/paperseek/` into a skill-aware agent platform; the Skill includes a lightweight runtime for core search without installing the full package.
