@@ -154,12 +154,40 @@ class ProviderLaneTest(unittest.TestCase):
             result = PaperHubProvider().search("graph retrieval", lane=RetrievalLane.LOCAL_QUALITY)
         self.assertEqual(result.hits[0].uid, "b")
 
+    def test_paperhub_query_uses_required_terms_or_and_metadata_filters(self):
+        papers = [
+            {"id": "a", "title": "Graph Neural Retrieval", "abstract": "retrieval benchmark", "conference": "ICLR", "year": 2025},
+            {"id": "b", "title": "Graph Neural Networks Survey", "abstract": "retrieval benchmark", "conference": "ICLR", "year": 2025},
+            {"id": "c", "title": "Graph Neural Retrieval", "abstract": "retrieval benchmark", "conference": "NeurIPS", "year": 2025},
+            {"id": "d", "title": "Vision Retrieval", "abstract": "image benchmark", "conference": "ICLR", "year": 2025},
+        ]
+
+        with patch.object(PaperHubProvider, "_load_papers", return_value=papers):
+            result = PaperHubProvider().search('"graph neural" OR GNN retrieval -survey conference:ICLR year:2025', limit=10)
+
+        self.assertEqual([hit.uid for hit in result.hits], ["a"])
+
+    def test_paperhub_plain_terms_are_required_not_broadening_or_terms(self):
+        papers = [
+            {"id": "a", "title": "Graph Retrieval", "abstract": "", "conference": "ICLR", "year": 2025},
+            {"id": "b", "title": "Graph Generation", "abstract": "", "conference": "ICLR", "year": 2025},
+            {"id": "c", "title": "Neural Retrieval", "abstract": "", "conference": "ICLR", "year": 2025},
+        ]
+
+        with patch.object(PaperHubProvider, "_load_papers", return_value=papers):
+            broad = PaperHubProvider().search("graph", limit=10)
+            narrow = PaperHubProvider().search("graph retrieval", limit=10)
+
+        self.assertEqual(broad.metadata.total, 2)
+        self.assertEqual(narrow.metadata.total, 1)
+
 
 class RetrievalAgentTest(unittest.TestCase):
     def test_adaptive_iteration_continues_after_configured_limit_when_pool_is_too_large(self):
         agent = PaperSeekAgent(config(retrieval_pool_max=3000), FakeLLM())
         self.assertTrue(agent._should_narrow_after_result(5000, 5, 5, 10))
         self.assertFalse(agent._should_narrow_after_result(2000, 5, 5, 10))
+        self.assertFalse(agent._should_narrow_after_result(500, 1, 5, 10))
 
     def test_zero_results_stop_after_configured_iterations(self):
         agent = PaperSeekAgent(config(retrieval_pool_min=5), FakeLLM())

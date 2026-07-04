@@ -748,12 +748,8 @@ class PaperSeekAgent:
                 continue
             elif self._should_narrow_after_result(total, iteration, configured_iterations, adaptive_max_iterations):
                 current_query = query
-                if total > self.config.target_max:
-                    adjustment = f"above target maximum {self.config.target_max}"
-                    message = f"{total} records found, above the target maximum of {self.config.target_max}; generated a narrower query."
-                else:
-                    adjustment = f"above LLM pre-ranking safety pool {self._retrieval_pool_max()}"
-                    message = f"{total} records found, above the LLM pre-ranking safety pool of {self._retrieval_pool_max()}; generated a narrower query."
+                adjustment = f"above LLM pre-ranking safety pool {self._retrieval_pool_max()}"
+                message = f"{total} records found, above the LLM pre-ranking safety pool of {self._retrieval_pool_max()}; generated a narrower query."
                 feedback = self._result_feedback(query, hits, total, adjustment)
                 revised_query = self._apply_discipline_filter(self._narrow_query(question, query, feedback))
                 query_audit = self._consume_query_audit()
@@ -790,12 +786,12 @@ class PaperSeekAgent:
                 elif total < self.config.target_min:
                     action = "accept_low"
                     message = f"Accepted {total} records at the iteration limit, below the target minimum of {self.config.target_min}."
-                elif total > self.config.target_max:
-                    action = "accept_high"
-                    message = f"Accepted {total} records at the iteration limit, above the target maximum of {self.config.target_max}."
                 elif total > self._retrieval_pool_max():
                     action = "accept_high"
                     message = f"Accepted {total} records at the iteration limit, above the LLM pre-ranking safety pool of {self._retrieval_pool_max()}; the fused candidate pool will be truncated before LLM ranking."
+                elif total > self.config.target_max:
+                    action = "accept_pool"
+                    message = f"Accepted {total} records for downstream pre-ranking; final displayed results are selected after retrieval fusion and LLM ranking."
                 else:
                     action = "accept"
                     message = f"Accepted {total} records within the target range."
@@ -1270,8 +1266,6 @@ class PaperSeekAgent:
         return total < self._retrieval_pool_min() and iteration < adaptive_max_iterations
 
     def _should_narrow_after_result(self, total: int, iteration: int, configured_iterations: int, adaptive_max_iterations: int) -> bool:
-        if iteration < configured_iterations:
-            return total > self.config.target_max
         return total > self._retrieval_pool_max() and iteration < adaptive_max_iterations
 
     def _complete_after_unchanged_revision(self, history: list, iteration: int, query: str, total: int, hits: list, attempted_action: str) -> None:
@@ -1285,8 +1279,8 @@ class PaperSeekAgent:
             action = "accept_high"
             message = f"Accepted {total} records above the LLM pre-ranking safety pool because the {attempted_action} query was unchanged; the fused candidate pool will be truncated before LLM ranking."
         elif total > self.config.target_max:
-            action = "accept_high"
-            message = f"Accepted {total} records above the target maximum because the {attempted_action} query was unchanged."
+            action = "accept_pool"
+            message = f"Accepted {total} records for downstream pre-ranking because the {attempted_action} query was unchanged."
         else:
             action = "accept"
             message = f"Accepted {total} records because the {attempted_action} query was unchanged."
