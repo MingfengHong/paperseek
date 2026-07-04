@@ -16,7 +16,16 @@ def _llm_timeout_seconds() -> int:
         return 180
 
 
+def _llm_max_tokens() -> int:
+    raw = os.environ.get("LLM_MAX_TOKENS")
+    try:
+        return max(0, int(raw) if raw not in (None, "") else 2048)
+    except (TypeError, ValueError):
+        return 2048
+
+
 DEFAULT_LLM_TIMEOUT_SECONDS = _llm_timeout_seconds()
+DEFAULT_LLM_MAX_TOKENS = _llm_max_tokens()
 
 
 class LLMClient(ABC):
@@ -60,20 +69,24 @@ def format_modelscope_quota(quota: Dict[str, str]) -> str:
 
 
 class OpenAIChatClient(LLMClient):
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str = ""):
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str = "", max_tokens: int = DEFAULT_LLM_MAX_TOKENS):
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/") if base_url else "https://api.openai.com/v1"
+        self.max_tokens = max(0, int(max_tokens or 0))
         self.last_response_info = {}
 
     def chat(self, messages, temperature=0.3):
         url = f"{self.base_url}/chat/completions"
         started = time.perf_counter()
+        body = {"model": self.model, "messages": messages, "temperature": temperature}
+        if self.max_tokens:
+            body["max_tokens"] = self.max_tokens
         try:
             resp = requests.post(
                 url,
                 headers=_auth_headers(self.api_key),
-                json={"model": self.model, "messages": messages, "temperature": temperature},
+                json=body,
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
             )
             self.last_response_info = {
@@ -112,10 +125,11 @@ class OpenAIChatClient(LLMClient):
 
 
 class OpenAIResponsesClient(LLMClient):
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str = ""):
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str = "", max_tokens: int = DEFAULT_LLM_MAX_TOKENS):
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/") if base_url else "https://api.openai.com/v1"
+        self.max_tokens = max(0, int(max_tokens or 0))
         self.last_response_info = {}
 
     def chat(self, messages, temperature=0.3):
@@ -128,6 +142,8 @@ class OpenAIResponsesClient(LLMClient):
             "input": input_messages,
             "temperature": temperature,
         }
+        if self.max_tokens:
+            body["max_output_tokens"] = self.max_tokens
         if instructions:
             body["instructions"] = instructions
         try:
@@ -184,10 +200,11 @@ class OpenAIResponsesClient(LLMClient):
 
 
 class AnthropicClient(LLMClient):
-    def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307", base_url: str = ""):
+    def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307", base_url: str = "", max_tokens: int = DEFAULT_LLM_MAX_TOKENS):
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/") if base_url else "https://api.anthropic.com"
+        self.max_tokens = max(1, int(max_tokens or DEFAULT_LLM_MAX_TOKENS))
         self.last_response_info = {}
 
     def chat(self, messages, temperature=0.3):
@@ -203,7 +220,7 @@ class AnthropicClient(LLMClient):
             "model": self.model,
             "messages": user_messages,
             "temperature": temperature,
-            "max_tokens": 4096,
+            "max_tokens": self.max_tokens,
         }
         if system_msg:
             body["system"] = system_msg
@@ -256,11 +273,12 @@ class AnthropicClient(LLMClient):
 
 def create_llm_client(config) -> LLMClient:
     api_type = (getattr(config, "llm_api_type", "") or "").lower()
+    max_tokens = getattr(config, "llm_max_tokens", DEFAULT_LLM_MAX_TOKENS)
     if api_type == "anthropic_messages":
-        return AnthropicClient(config.llm_api_key, config.llm_model, config.llm_base_url)
+        return AnthropicClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens)
     if api_type == "openai_responses":
-        return OpenAIResponsesClient(config.llm_api_key, config.llm_model, config.llm_base_url)
-    return OpenAIChatClient(config.llm_api_key, config.llm_model, config.llm_base_url)
+        return OpenAIResponsesClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens)
+    return OpenAIChatClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens)
 
 
 def _extract_openai_chat_content(payload) -> str:

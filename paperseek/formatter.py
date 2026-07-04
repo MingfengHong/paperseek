@@ -151,7 +151,7 @@ def format_text(items: list, question: str, final_query: str, db: str,
 
 def format_json(items: list, question: str, final_query: str, db: str,
                 total_count: int, iterations: int, field_name: str = "",
-                history: list = None, source: str = "") -> str:
+                history: list = None, source: str = "", citation_map: dict = None) -> str:
     output = {
         "question": question,
         "source": source or None,
@@ -161,6 +161,7 @@ def format_json(items: list, question: str, final_query: str, db: str,
         "total_results": total_count,
         "iterations": iterations,
         "history": history or [],
+        "citation_map": citation_map or {},
         "ranked": ranked_items_to_dict(items)
     }
     return json.dumps(output, ensure_ascii=False, indent=2)

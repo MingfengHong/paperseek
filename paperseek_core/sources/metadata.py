@@ -4,6 +4,16 @@ from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
 
 
+RETRIEVAL_PARAMETERS = [
+    "retrieval_pool_max",
+    "retrieval_pool_min",
+    "retrieval_lane_limit",
+    "retrieval_rrf_k",
+    "retrieval_embedding_provider",
+    "retrieval_crossref_enrichment",
+]
+
+
 @dataclass(frozen=True)
 class SourceMetadata:
     id: str
@@ -46,7 +56,7 @@ SOURCE_METADATA: Dict[str, SourceMetadata] = {
             "target_max",
             "max_iterations",
             "expand_citations",
-        ],
+        ] + RETRIEVAL_PARAMETERS,
         optional_config=["OPENALEX_API_KEY", "OPENALEX_EMAIL"],
         notes=[
             "Use an OpenAlex API key for normal or high-frequency work.",
@@ -66,15 +76,109 @@ SOURCE_METADATA: Dict[str, SourceMetadata] = {
         supported_parameters=[
             "crossref_email",
             "search_field",
-            "discipline_fields",
             "target_min",
             "target_max",
             "max_iterations",
-        ],
+        ] + RETRIEVAL_PARAMETERS,
         optional_config=["CROSSREF_EMAIL"],
         notes=[
             "Crossref abstracts are optional publisher metadata and are often missing.",
             "Use a mailto email for Crossref polite-pool requests.",
+            "Field/context hints are used only as bibliographic search context.",
+        ],
+    ),
+    "arxiv": SourceMetadata(
+        id="arxiv",
+        display_name="arXiv",
+        status="supported",
+        description="Open preprint repository API for physics, mathematics, computer science, quantitative biology, statistics, electrical engineering, and economics.",
+        api_key="not_required",
+        supports_abstracts=True,
+        supports_citations=False,
+        supports_citation_expansion=False,
+        supports_pdf_links=True,
+        supported_parameters=[
+            "search_field",
+            "discipline_fields",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ] + RETRIEVAL_PARAMETERS,
+        notes=[
+            "Uses the public arXiv API Atom feed.",
+            "arXiv category filters use native cat: clauses.",
+            "Best for preprints and computer science / quantitative fields covered by arXiv.",
+        ],
+    ),
+    "semanticscholar": SourceMetadata(
+        id="semanticscholar",
+        display_name="Semantic Scholar",
+        status="supported",
+        description="Semantic Scholar Academic Graph search with title, abstract, author, venue, citation count, DOI, PubMed, and arXiv identifiers when available.",
+        api_key="optional",
+        supports_abstracts=True,
+        supports_citations=True,
+        supports_citation_expansion=False,
+        supports_pdf_links=True,
+        supported_parameters=[
+            "semantic_scholar_api_key",
+            "search_field",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ] + RETRIEVAL_PARAMETERS,
+        optional_config=["SEMANTIC_SCHOLAR_API_KEY"],
+        notes=[
+            "Anonymous access works for light use; an API key improves rate limits.",
+            "Field/context hints are used only to help the LLM choose better query terms.",
+        ],
+    ),
+    "pubmed": SourceMetadata(
+        id="pubmed",
+        display_name="PubMed",
+        status="supported",
+        description="PubMed biomedical literature search through NCBI E-utilities with PMID, journal, author, publication type, DOI, and abstract extraction when available.",
+        api_key="optional",
+        supports_abstracts=True,
+        supports_citations=False,
+        supports_citation_expansion=False,
+        supports_pdf_links=False,
+        supported_parameters=[
+            "pubmed_api_key",
+            "pubmed_email",
+            "pubmed_tool",
+            "search_field",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ] + RETRIEVAL_PARAMETERS,
+        optional_config=["PUBMED_API_KEY", "PUBMED_EMAIL", "PUBMED_TOOL"],
+        notes=[
+            "NCBI recommends identifying the tool and email for responsible E-utilities usage.",
+            "An NCBI API key increases allowed request rate.",
+            "Biomedical field/context hints are used only to help the LLM choose PubMed terms.",
+        ],
+    ),
+    "paperhub": SourceMetadata(
+        id="paperhub",
+        display_name="Computer science top conferences",
+        status="supported",
+        description="Computer science top-conference paper index, currently covering selected ICLR, ICML, NeurIPS, AAAI, and NDSS proceedings.",
+        api_key="not_required",
+        supports_abstracts=True,
+        supports_citations=False,
+        supports_citation_expansion=False,
+        supports_pdf_links=False,
+        supported_parameters=[
+            "search_field",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ] + RETRIEVAL_PARAMETERS,
+        notes=[
+            "Downloads and caches computer science top-conference index shards at runtime.",
+            "Best for top ML/security conference discovery rather than exhaustive bibliographic coverage.",
+            "Computer-science field/context hints are used only to help the LLM choose better query terms.",
         ],
     ),
     "wos": SourceMetadata(
@@ -96,7 +200,7 @@ SOURCE_METADATA: Dict[str, SourceMetadata] = {
             "target_max",
             "max_iterations",
             "fetch_abstracts",
-        ],
+        ] + RETRIEVAL_PARAMETERS,
         required_config=["WOS_API_KEY"],
         notes=[
             "WoS Starter returns basic bibliographic metadata and links; do not rely on native abstract fields.",
@@ -119,7 +223,10 @@ def require_source_metadata(source: str) -> SourceMetadata:
 
 
 def list_source_metadata() -> List[Dict[str, object]]:
-    return [SOURCE_METADATA[key].to_dict() for key in ("openalex", "crossref", "wos")]
+    return [
+        SOURCE_METADATA[key].to_dict()
+        for key in ("openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos")
+    ]
 
 
 def supported_source_ids() -> tuple:

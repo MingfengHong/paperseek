@@ -61,6 +61,10 @@ textarea {
   min-width: 0;
 }
 
+.brand-copy {
+  min-width: 0;
+}
+
 .mark {
   width: 32px;
   height: 32px;
@@ -76,7 +80,7 @@ textarea {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .brand-title {
@@ -89,6 +93,26 @@ textarea {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.docs-nav-button {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  color: var(--ink);
+  background: #f4f0e8;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.docs-nav-button:hover {
+  background: #ece7df;
 }
 
 .mode-tabs {
@@ -262,6 +286,11 @@ body[data-view="history"] .workflow {
 
 .query-section {
   padding: 18px;
+}
+
+.query-source-field,
+.source-filter-text {
+  margin-top: 10px;
 }
 
 .config-section {
@@ -511,6 +540,7 @@ select.is-invalid {
   grid-column: span 2;
 }
 
+.is-hidden,
 .source-field.is-hidden {
   display: none;
 }
@@ -699,6 +729,32 @@ select {
   height: 16px;
 }
 
+.citation-toggle {
+  height: auto;
+  min-height: 48px;
+  margin-top: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+}
+
+.citation-toggle span {
+  display: grid;
+  gap: 3px;
+}
+
+.citation-toggle strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.citation-toggle small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
 .workflow {
   min-height: 0;
   padding: 26px 26px 20px;
@@ -812,16 +868,40 @@ h3 {
 }
 
 .chip-list span {
-  padding: 8px 12px;
-  color: #62655f;
-  background: #f0f0ee;
-  border-radius: 6px;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-}
+    padding: 8px 12px;
+    color: #62655f;
+    background: #f0f0ee;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
 
-.metric-row {
+  .intent-audit {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfbf9;
+  }
+
+  .intent-audit span {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 850;
+    text-transform: uppercase;
+  }
+
+  .intent-audit p {
+    margin: 0;
+    color: var(--ink);
+    line-height: 1.55;
+    white-space: pre-wrap;
+  }
+
+  .metric-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -914,6 +994,80 @@ h3 {
   background: var(--green-soft);
 }
 
+.action-pill.processing {
+  color: #d74e25;
+  background: var(--orange-soft);
+}
+
+.action-pill.complete {
+  color: #477c48;
+  background: var(--green-soft);
+}
+
+.action-pill.skipped {
+  color: #74766f;
+  background: #ecedea;
+}
+
+.action-pill.error {
+  color: var(--red);
+  background: #fff0ef;
+}
+
+.ranking-step-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ranking-step-row {
+  padding: 14px;
+  background: #f8f8f6;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.ranking-step-row.error {
+  border-color: #d77770;
+  background: #fff8f7;
+}
+
+.ranking-step-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ranking-step-row p {
+  margin: 9px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.ranking-step-row small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.progress-bar {
+  height: 7px;
+  margin-top: 10px;
+  overflow: hidden;
+  background: #ecece8;
+  border-radius: 999px;
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  background: #e6622f;
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
 code {
   display: block;
   margin-top: 9px;
@@ -928,6 +1082,27 @@ code {
 .iteration-row p {
   margin: 10px 0 0;
   color: var(--muted);
+}
+
+.query-rationale {
+  margin-top: 11px;
+  padding: 10px 12px;
+  background: #fbfbf9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.query-rationale span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.query-rationale p {
+  margin: 5px 0 0;
+  color: #464842;
+  line-height: 1.45;
 }
 
 .next-query,

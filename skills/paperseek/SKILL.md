@@ -1,8 +1,8 @@
 ---
 name: paperseek
-description: LLM literature-search workflow router for PaperSeek CLI and local Web UI. Use when users ask to search papers, find literature, run natural-language academic search, diagnose PaperSeek configuration, inspect OpenAlex/Crossref/WoS results, export ranked paper lists, or explore citation maps. Guides agents to call paperseek commands, parse JSON output, choose data sources, and avoid storing secrets or downloading paywalled PDFs.
+description: LLM literature-search workflow router for PaperSeek CLI and local Web UI. Use when users ask to search papers, find literature, run natural-language academic search, diagnose PaperSeek configuration, inspect PaperSeek source results, export ranked paper lists, or explore citation maps. Guides agents to call paperseek commands, parse JSON output, choose data sources, and avoid storing secrets or downloading paywalled PDFs.
 license: Apache-2.0
-compatibility: Bundles a self-contained Python standard-library runtime for core OpenAlex/Crossref/WoS literature search. The full PaperSeek package is optional and used automatically when installed.
+compatibility: Bundles a self-contained Python standard-library runtime for core OpenAlex/arXiv/Semantic Scholar/PubMed/computer science top-conference/Crossref/WoS literature search. The full PaperSeek package is optional and used automatically when installed.
 ---
 
 # PaperSeek
@@ -12,7 +12,7 @@ You are using PaperSeek as an LLM-based literature search agent. This Skill incl
 ## Reference Rules
 
 - For install, Skill script launching, `doctor`, `smoke`, `config`, health checks, and secrets handling, read `references/management-layer.md`.
-- For choosing OpenAlex, Crossref, or WoS Starter and deciding whether citation expansion applies, read `references/source-routing.md`.
+- For choosing OpenAlex, arXiv, Semantic Scholar, PubMed, computer science top-conference, Crossref, or WoS Starter and deciding whether citation expansion applies, read `references/source-routing.md`.
 - For exact CLI commands, output fields, JSON expectations, and stable command contracts, read `references/cli-contract.md`.
 - If a reference conflicts with `paperseek --help`, `paperseek sources --json`, or `paperseek doctor --json`, trust the live CLI and report that the Skill reference may need an update.
 
@@ -53,7 +53,7 @@ Do not ask the user to paste API keys into chat. Ask them to configure keys loca
 
 ## Default Search Procedure
 
-1. Use OpenAlex as the default source unless the user asks for Crossref or WoS, or the task clearly needs DOI registry metadata.
+1. Use OpenAlex as the default source unless the user asks for another source or the task clearly needs preprints, biomedical literature, top CS conference coverage, DOI registry metadata, or institution-backed WoS metadata.
 2. For uncertain environments, run `paperseek doctor --json` before searching.
 3. Run search with JSON output for machine parsing:
 

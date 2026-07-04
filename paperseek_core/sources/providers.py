@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
-
+from html import unescape
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import re
 import requests
+import threading
 import time
+import xml.etree.ElementTree as ET
+
+from paperseek_core.retrieval import ProviderRetrievalCapabilities, RetrievalLane
 
 
 @dataclass
@@ -55,6 +59,8 @@ class PaperIdentifiers:
     eisbn: str = ""
     pmid: str = ""
     openalex: str = ""
+    arxiv: str = ""
+    semanticscholar: str = ""
 
 
 @dataclass
@@ -77,6 +83,14 @@ class PaperRecord:
     abstract: str = ""
     provider: str = ""
     raw: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class CitationSeedPlan:
+    record: PaperRecord
+    role: str = "relevance"
+    directions: Tuple[str, ...] = ("backward", "forward")
+    depth: int = 1
 
 
 @dataclass
@@ -156,6 +170,9 @@ def get_with_retries(
                 "elapsed_ms": int((time.perf_counter() - started) * 1000),
                 "attempts": attempt,
             }
+            if response.status_code in {429, 500, 502, 503, 504} and attempt < attempts:
+                time.sleep(_retry_delay(response, attempt, source))
+                continue
             return response, info
         except requests.RequestException as exc:
             last_exc = exc
@@ -173,6 +190,16 @@ def get_with_retries(
     raise ProviderError(source, f"{source.title()} request failed after {attempts} attempts: {detail}", query=query) from last_exc
 
 
+def _retry_delay(response: requests.Response, attempt: int, source: str = "") -> float:
+    retry_after = response.headers.get("Retry-After", "")
+    try:
+        return max(0.7 * attempt, min(float(retry_after), 15.0))
+    except (TypeError, ValueError):
+        if response.status_code == 429 and (source or "").lower() == "arxiv":
+            return min(5.0 * attempt, 20.0)
+        return 0.7 * attempt
+
+
 class OpenAlexProvider:
     BASE_URL = "https://api.openalex.org/works"
 
@@ -181,12 +208,19 @@ class OpenAlexProvider:
         self.email = (email or "").strip()
         self.last_response_info: Dict[str, Any] = {}
 
+    def retrieval_capabilities(self) -> ProviderRetrievalCapabilities:
+        return ProviderRetrievalCapabilities(
+            source="openalex",
+            lanes=(RetrievalLane.RELEVANCE, RetrievalLane.IMPACT, RetrievalLane.RECENT),
+        )
+
     def search(
         self,
         query: str,
         limit: int = 50,
         page: int = 1,
         field_ids: Optional[Sequence[str]] = None,
+        lane: str = RetrievalLane.RELEVANCE,
     ) -> ProviderSearchResult:
         query = (query or "").strip()
         if not query:
@@ -221,6 +255,12 @@ class OpenAlexProvider:
         normalized_field_ids = self._normalize_field_ids(field_ids)
         if normalized_field_ids:
             params["filter"] = self._field_filter_clause(normalized_field_ids)
+        if lane == RetrievalLane.IMPACT:
+            params["sort"] = "cited_by_count:desc"
+        elif lane == RetrievalLane.RECENT:
+            params["sort"] = "publication_date:desc"
+        elif lane == RetrievalLane.RELEVANCE:
+            params["sort"] = "relevance_score:desc"
         if self.api_key:
             params["api_key"] = self.api_key
         if self.email:
@@ -281,15 +321,19 @@ class OpenAlexProvider:
         per_seed: int = 4,
         max_records: int = 40,
         field_ids: Optional[Sequence[str]] = None,
+        seed_plans: Optional[Sequence[Any]] = None,
+        depth: int = 1,
     ) -> Dict[str, Any]:
         """Fetch forward and backward citation neighbors for seed OpenAlex works."""
         per_seed = max(1, min(int(per_seed or 4), 10))
-        max_records = max(1, min(int(max_records or 40), 100))
+        max_records = max(1, min(int(max_records or 40), 500))
+        depth = max(1, min(int(depth or 1), 3))
         normalized_field_ids = self._normalize_field_ids(field_ids)
         output: List[PaperRecord] = []
         nodes: Dict[str, Dict[str, Any]] = {}
         edges: List[Dict[str, str]] = []
         seen = set()
+        expanded = set()
 
         def add_node(record: PaperRecord, role: str, seed_uid: str = ""):
             node_id = record.uid or (record.identifiers.openalex if record.identifiers else "") or record.title
@@ -325,50 +369,143 @@ class OpenAlexProvider:
             seen.add(dedupe)
             output.append(record)
 
-        for seed in seeds or []:
+        def normalize_seed_plans() -> List[CitationSeedPlan]:
+            plans: List[CitationSeedPlan] = []
+            raw_plans = seed_plans or [
+                {"record": seed, "role": "relevance", "directions": ("backward", "forward"), "depth": depth}
+                for seed in (seeds or [])
+            ]
+            for item in raw_plans:
+                if isinstance(item, CitationSeedPlan):
+                    plan = item
+                elif isinstance(item, dict):
+                    record = item.get("record") or item.get("seed")
+                    if not isinstance(record, PaperRecord):
+                        continue
+                    directions = tuple(
+                        direction
+                        for direction in (item.get("directions") or ("backward", "forward"))
+                        if direction in ("backward", "forward")
+                    )
+                    plan = CitationSeedPlan(
+                        record=record,
+                        role=str(item.get("role") or "relevance"),
+                        directions=directions or ("backward", "forward"),
+                        depth=max(1, min(int(item.get("depth") or depth), 3)),
+                    )
+                elif isinstance(item, PaperRecord):
+                    plan = CitationSeedPlan(record=item, depth=depth)
+                else:
+                    continue
+                plans.append(plan)
+            return plans
+
+        def append_neighbor(
+            *,
+            seed_uid: str,
+            parent_uid: str,
+            record: Optional[PaperRecord],
+            direction: str,
+            layer: int,
+            next_frontier: List[PaperRecord],
+            frontier_seen: set,
+        ):
+            if not record or not self._record_matches_field_ids(record, normalized_field_ids):
+                return
+            record_uid = record.uid or (record.identifiers.openalex if record.identifiers else "") or record.title
+            if not record_uid:
+                return
+            role = "backward" if direction == "backward" else "forward"
+            add_node(record, role, seed_uid)
+            if direction == "backward":
+                edge = {
+                    "source": parent_uid,
+                    "target": record_uid,
+                    "type": "references",
+                    "seed": seed_uid,
+                    "layer": str(layer),
+                }
+            else:
+                edge = {
+                    "source": record_uid,
+                    "target": parent_uid,
+                    "type": "cites",
+                    "seed": seed_uid,
+                    "layer": str(layer),
+                }
+            edges.append(edge)
+            add_record(record)
+            if layer < depth and record_uid not in frontier_seen:
+                frontier_seen.add(record_uid)
+                next_frontier.append(record)
+
+        for plan in normalize_seed_plans():
             if len(output) >= max_records:
                 break
+            seed = plan.record
             seed_id = self._openalex_work_id(seed)
             if not seed_id:
                 continue
             seed_uid = seed.uid or (seed.identifiers.openalex if seed.identifiers else "") or seed_id
             add_node(seed, "seed")
-
-            for ref_url in (seed.raw.get("referenced_works") or [])[:per_seed]:
-                if len(output) >= max_records:
-                    break
-                try:
-                    record = self._fetch_work(ref_url)
-                    if record and self._record_matches_field_ids(record, normalized_field_ids):
-                        add_node(record, "backward", seed_uid)
-                        edges.append({
-                            "source": seed_uid,
-                            "target": record.uid,
-                            "type": "references",
-                            "seed": seed_uid,
-                        })
-                        add_record(record)
-                except ProviderError:
-                    continue
-
-            if len(output) >= max_records:
-                break
-            try:
-                for record in self._fetch_forward_citations(seed_id, per_seed, field_ids=normalized_field_ids):
+            add_node(seed, f"seed_{plan.role}", seed_uid)
+            frontier = [seed]
+            frontier_seen = {seed_uid}
+            for layer in range(1, max(1, min(plan.depth, depth)) + 1):
+                next_frontier: List[PaperRecord] = []
+                for current in frontier:
                     if len(output) >= max_records:
                         break
-                    if not self._record_matches_field_ids(record, normalized_field_ids):
+                    current_id = self._openalex_work_id(current)
+                    if not current_id:
                         continue
-                    add_node(record, "forward", seed_uid)
-                    edges.append({
-                        "source": record.uid,
-                        "target": seed_uid,
-                        "type": "cites",
-                        "seed": seed_uid,
-                    })
-                    add_record(record)
-            except ProviderError:
-                continue
+                    current_uid = current.uid or (current.identifiers.openalex if current.identifiers else "") or current_id
+                    if "backward" in plan.directions:
+                        expand_key = (current_id, "backward", layer)
+                        if expand_key not in expanded:
+                            expanded.add(expand_key)
+                            for ref_url in (current.raw.get("referenced_works") or [])[:per_seed]:
+                                if len(output) >= max_records:
+                                    break
+                                try:
+                                    record = self._fetch_work(ref_url)
+                                except ProviderError:
+                                    continue
+                                append_neighbor(
+                                    seed_uid=seed_uid,
+                                    parent_uid=current_uid,
+                                    record=record,
+                                    direction="backward",
+                                    layer=layer,
+                                    next_frontier=next_frontier,
+                                    frontier_seen=frontier_seen,
+                                )
+                    if len(output) >= max_records:
+                        break
+                    if "forward" in plan.directions:
+                        expand_key = (current_id, "forward", layer)
+                        if expand_key in expanded:
+                            continue
+                        expanded.add(expand_key)
+                        try:
+                            records = self._fetch_forward_citations(current_id, per_seed, field_ids=normalized_field_ids)
+                        except ProviderError:
+                            continue
+                        for record in records:
+                            if len(output) >= max_records:
+                                break
+                            append_neighbor(
+                                seed_uid=seed_uid,
+                                parent_uid=current_uid,
+                                record=record,
+                                direction="forward",
+                                layer=layer,
+                                next_frontier=next_frontier,
+                                frontier_seen=frontier_seen,
+                            )
+                frontier = next_frontier
+                if not frontier or len(output) >= max_records:
+                    break
 
         return {"records": output, "nodes": list(nodes.values()), "edges": edges}
 
@@ -561,7 +698,13 @@ class CrossrefProvider:
         self.email = (email or "").strip()
         self.last_response_info: Dict[str, Any] = {}
 
-    def search(self, query: str, limit: int = 50, page: int = 1) -> ProviderSearchResult:
+    def retrieval_capabilities(self) -> ProviderRetrievalCapabilities:
+        return ProviderRetrievalCapabilities(
+            source="crossref",
+            lanes=(RetrievalLane.RELEVANCE, RetrievalLane.IMPACT, RetrievalLane.RECENT),
+        )
+
+    def search(self, query: str, limit: int = 50, page: int = 1, lane: str = RetrievalLane.RELEVANCE) -> ProviderSearchResult:
         query = (query or "").strip()
         if not query:
             raise ProviderError("crossref", "Crossref search query is empty.")
@@ -571,6 +714,7 @@ class CrossrefProvider:
             "query.bibliographic": query,
             "rows": page_size,
             "offset": max(0, (int(page or 1) - 1) * page_size),
+            "order": "desc",
             "select": ",".join([
                 "DOI",
                 "title",
@@ -587,6 +731,10 @@ class CrossrefProvider:
                 "ISBN",
             ]),
         }
+        if lane == RetrievalLane.IMPACT:
+            params["sort"] = "is-referenced-by-count"
+        elif lane == RetrievalLane.RECENT:
+            params["sort"] = "published"
         if self.email:
             params["mailto"] = self.email
 
@@ -706,3 +854,619 @@ class CrossrefProvider:
             .replace("&quot;", '"')
         )
         return re.sub(r"\s+", " ", text).strip()
+
+
+class ArxivProvider:
+    BASE_URL = "http://export.arxiv.org/api/query"
+    ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+    _lock = threading.Lock()
+    _last_request_at = 0.0
+
+    def __init__(self):
+        self.last_response_info: Dict[str, Any] = {}
+
+    def retrieval_capabilities(self) -> ProviderRetrievalCapabilities:
+        return ProviderRetrievalCapabilities(
+            source="arxiv",
+            lanes=(RetrievalLane.RELEVANCE, RetrievalLane.RECENT),
+            max_lane_limit=200,
+        )
+
+    def search(self, query: str, limit: int = 50, page: int = 1, lane: str = RetrievalLane.RELEVANCE) -> ProviderSearchResult:
+        query = (query or "").strip()
+        if not query:
+            raise ProviderError("arxiv", "arXiv search query is empty.")
+
+        page_size = max(1, min(int(limit or 10), 100))
+        params = {
+            "search_query": self._search_query(query),
+            "start": max(0, (int(page or 1) - 1) * page_size),
+            "max_results": page_size,
+            "sortBy": "submittedDate" if lane == RetrievalLane.RECENT else "relevance",
+            "sortOrder": "descending",
+        }
+        headers = {"Accept": "application/atom+xml", "User-Agent": "paperseek/1.0"}
+        try:
+            self._throttle()
+            response, info = get_with_retries("arxiv", self.BASE_URL, params=params, headers=headers, timeout=20, query=query, attempts=1)
+            self.last_response_info = info
+        except ProviderError as exc:
+            self.last_response_info = {"method": "GET", "url": self.BASE_URL, "status": "request_error", "elapsed_ms": None}
+            raise exc
+
+        if response.status_code >= 400:
+            raise ProviderError("arxiv", f"arXiv returned HTTP {response.status_code}.", status=response.status_code, body=response.text[:1000], query=query)
+
+        try:
+            root = ET.fromstring(response.text)
+        except ET.ParseError as exc:
+            raise ProviderError("arxiv", "arXiv returned invalid Atom XML.", body=response.text[:1000], query=query) from exc
+
+        total_text = root.findtext("opensearch:totalResults", default="", namespaces={"opensearch": "http://a9.com/-/spec/opensearch/1.1/"})
+        try:
+            total = int((total_text or "0").strip())
+        except ValueError:
+            total = 0
+        entries = root.findall("atom:entry", self.ATOM_NS)
+        return ProviderSearchResult(
+            metadata=SearchMetadata(total=total, page=max(1, int(page or 1)), limit=page_size),
+            hits=[self._to_record(entry) for entry in entries],
+        )
+
+    @staticmethod
+    def _search_query(query: str) -> str:
+        if re.search(r"\b(?:all|ti|au|abs|cat|id|jr):", query, flags=re.I):
+            return query
+        cleaned = re.sub(r"\s+", " ", query).strip()
+        if not cleaned:
+            return "all:*"
+        if re.search(r"\b(AND|OR|ANDNOT)\b", cleaned, flags=re.I):
+            return cleaned
+        return f'all:"{ArxivProvider._quote_phrase(cleaned)}"'
+
+    @staticmethod
+    def _quote_phrase(value: str) -> str:
+        return value.replace("\\", "\\\\").replace('"', '\\"')
+
+    @classmethod
+    def _throttle(cls) -> None:
+        with cls._lock:
+            elapsed = time.monotonic() - cls._last_request_at
+            if elapsed < 3.1:
+                time.sleep(3.1 - elapsed)
+            cls._last_request_at = time.monotonic()
+
+    def _to_record(self, entry: ET.Element) -> PaperRecord:
+        arxiv_url = self._text(entry, "atom:id")
+        arxiv_id = arxiv_url.rstrip("/").split("/")[-1]
+        title = self._clean(self._text(entry, "atom:title"))
+        abstract = self._clean(self._text(entry, "atom:summary"))
+        year = self._year(self._text(entry, "atom:published") or self._text(entry, "atom:updated"))
+        authors = [
+            PaperAuthor(display_name=self._clean(author.findtext("atom:name", default="", namespaces=self.ATOM_NS)))
+            for author in entry.findall("atom:author", self.ATOM_NS)
+        ]
+        authors = [author for author in authors if author.display_name]
+        pdf = ""
+        landing_page = arxiv_url
+        for link in entry.findall("atom:link", self.ATOM_NS):
+            href = link.attrib.get("href") or ""
+            if link.attrib.get("title") == "pdf" or link.attrib.get("type") == "application/pdf":
+                pdf = href
+            elif link.attrib.get("rel") == "alternate":
+                landing_page = href
+        doi = normalize_doi(self._text(entry, "arxiv:doi"))
+        categories = []
+        primary = entry.find("arxiv:primary_category", self.ATOM_NS)
+        if primary is not None and primary.attrib.get("term"):
+            categories.append(primary.attrib["term"])
+        for category in entry.findall("atom:category", self.ATOM_NS):
+            term = category.attrib.get("term")
+            if term and term not in categories:
+                categories.append(term)
+        return PaperRecord(
+            uid=f"arxiv:{arxiv_id}" if arxiv_id else arxiv_url or title,
+            title=title,
+            types=["preprint"],
+            source_types=["preprint"],
+            source=PaperSource(source_title="arXiv", publish_year=year),
+            names=PaperNames(authors=authors),
+            links=PaperLinks(record=landing_page, landing_page=landing_page, pdf=pdf),
+            identifiers=PaperIdentifiers(doi=doi, arxiv=arxiv_id),
+            keywords=PaperKeywords(author_keywords=categories),
+            abstract=abstract,
+            provider="arxiv",
+            raw={"id": arxiv_id, "categories": categories, "url": arxiv_url},
+        )
+
+    def _text(self, entry: ET.Element, path: str) -> str:
+        return entry.findtext(path, default="", namespaces=self.ATOM_NS)
+
+    @staticmethod
+    def _clean(text: str) -> str:
+        return re.sub(r"\s+", " ", unescape(text or "")).strip()
+
+    @staticmethod
+    def _year(value: str) -> Optional[int]:
+        match = re.match(r"^(\d{4})", value or "")
+        return int(match.group(1)) if match else None
+
+
+class SemanticScholarProvider:
+    BASE_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
+    BULK_URL = "https://api.semanticscholar.org/graph/v1/paper/search/bulk"
+    FULL_FIELDS = (
+        "paperId",
+        "corpusId",
+        "title",
+        "abstract",
+        "year",
+        "publicationDate",
+        "venue",
+        "publicationVenue",
+        "publicationTypes",
+        "authors",
+        "url",
+        "externalIds",
+        "citationCount",
+        "fieldsOfStudy",
+        "openAccessPdf",
+    )
+    FALLBACK_FIELDS = (
+        "paperId",
+        "corpusId",
+        "title",
+        "year",
+        "publicationDate",
+        "venue",
+        "authors",
+        "url",
+        "externalIds",
+        "citationCount",
+    )
+
+    def __init__(self, api_key: str = ""):
+        self.api_key = (api_key or "").strip()
+        self.last_response_info: Dict[str, Any] = {}
+
+    def retrieval_capabilities(self) -> ProviderRetrievalCapabilities:
+        return ProviderRetrievalCapabilities(
+            source="semanticscholar",
+            lanes=(RetrievalLane.RELEVANCE, RetrievalLane.IMPACT, RetrievalLane.RECENT),
+        )
+
+    def search(self, query: str, limit: int = 50, page: int = 1, lane: str = RetrievalLane.RELEVANCE) -> ProviderSearchResult:
+        query = (query or "").strip()
+        if not query:
+            raise ProviderError("semanticscholar", "Semantic Scholar search query is empty.")
+
+        if lane in (RetrievalLane.IMPACT, RetrievalLane.RECENT):
+            return self._bulk_search(query, limit=limit, lane=lane)
+
+        page_size = max(1, min(int(limit or 10), 100))
+        params = {
+            "query": query,
+            "limit": page_size,
+            "offset": max(0, (int(page or 1) - 1) * page_size),
+            "fields": ",".join(self.FULL_FIELDS),
+        }
+        headers = {"Accept": "application/json", "User-Agent": "paperseek/1.0"}
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+        try:
+            response, info = get_with_retries("semanticscholar", self.BASE_URL, params=params, headers=headers, timeout=45, query=query)
+            self.last_response_info = info
+        except ProviderError as exc:
+            self.last_response_info = {"method": "GET", "url": self.BASE_URL, "status": "request_error", "elapsed_ms": None}
+            raise exc
+        if response.status_code >= 500:
+            fallback_params = dict(params)
+            fallback_params["fields"] = ",".join(self.FALLBACK_FIELDS)
+            response, fallback_info = get_with_retries(
+                "semanticscholar",
+                self.BASE_URL,
+                params=fallback_params,
+                headers=headers,
+                timeout=45,
+                query=query,
+            )
+            fallback_info["fallback"] = "basic_fields"
+            self.last_response_info = fallback_info
+
+        if response.status_code >= 400:
+            raise ProviderError(
+                "semanticscholar",
+                f"Semantic Scholar returned HTTP {response.status_code}.",
+                status=response.status_code,
+                body=response.text[:1000],
+                query=query,
+            )
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ProviderError("semanticscholar", "Semantic Scholar returned a non-JSON response.", body=response.text[:1000], query=query) from exc
+        papers = payload.get("data") or []
+        records = [self._to_record(item) for item in papers if isinstance(item, dict)]
+        return ProviderSearchResult(
+            metadata=SearchMetadata(total=int(payload.get("total") or len(records)), page=max(1, int(page or 1)), limit=page_size),
+            hits=records,
+        )
+
+    def _bulk_search(self, query: str, limit: int = 50, lane: str = RetrievalLane.IMPACT) -> ProviderSearchResult:
+        page_size = max(1, min(int(limit or 10), 1000))
+        params = {
+            "query": query,
+            "limit": page_size,
+            "fields": ",".join(self.FULL_FIELDS),
+            "sort": "publicationDate:desc" if lane == RetrievalLane.RECENT else "citationCount:desc",
+        }
+        headers = {"Accept": "application/json", "User-Agent": "paperseek/1.0"}
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+        try:
+            response, info = get_with_retries("semanticscholar", self.BULK_URL, params=params, headers=headers, timeout=45, query=query)
+            self.last_response_info = info
+        except ProviderError as exc:
+            self.last_response_info = {"method": "GET", "url": self.BULK_URL, "status": "request_error", "elapsed_ms": None}
+            raise exc
+        if response.status_code >= 500:
+            fallback_params = dict(params)
+            fallback_params["fields"] = ",".join(self.FALLBACK_FIELDS)
+            response, fallback_info = get_with_retries(
+                "semanticscholar",
+                self.BULK_URL,
+                params=fallback_params,
+                headers=headers,
+                timeout=45,
+                query=query,
+            )
+            fallback_info["fallback"] = "basic_fields"
+            self.last_response_info = fallback_info
+        if response.status_code >= 400:
+            raise ProviderError(
+                "semanticscholar",
+                f"Semantic Scholar returned HTTP {response.status_code}.",
+                status=response.status_code,
+                body=response.text[:1000],
+                query=query,
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ProviderError("semanticscholar", "Semantic Scholar returned a non-JSON response.", body=response.text[:1000], query=query) from exc
+        papers = payload.get("data") or []
+        records = [self._to_record(item) for item in papers if isinstance(item, dict)]
+        total = int(payload.get("total") or len(records))
+        return ProviderSearchResult(metadata=SearchMetadata(total=total, page=1, limit=page_size), hits=records)
+
+    def _to_record(self, item: Dict[str, Any]) -> PaperRecord:
+        external = item.get("externalIds") or {}
+        paper_id = str(item.get("paperId") or "")
+        corpus_id = str(item.get("corpusId") or "")
+        title = item.get("title") or paper_id or corpus_id
+        authors = [
+            PaperAuthor(display_name=str(author.get("name") or ""))
+            for author in item.get("authors") or []
+            if isinstance(author, dict) and author.get("name")
+        ]
+        venue_obj = item.get("publicationVenue") or {}
+        venue = venue_obj.get("name") if isinstance(venue_obj, dict) else ""
+        source_title = venue or item.get("venue") or ""
+        pdf = ""
+        open_pdf = item.get("openAccessPdf") or {}
+        if isinstance(open_pdf, dict):
+            pdf = open_pdf.get("url") or ""
+        doi = normalize_doi(external.get("DOI") or external.get("DOIUrl") or "")
+        pmid = str(external.get("PubMed") or "")
+        arxiv_id = str(external.get("ArXiv") or "")
+        citations = int(item.get("citationCount") or 0)
+        fields = [str(value) for value in (item.get("fieldsOfStudy") or []) if value]
+        publication_types = [str(value) for value in (item.get("publicationTypes") or []) if value]
+        return PaperRecord(
+            uid=paper_id or f"CorpusId:{corpus_id}" or title,
+            title=title,
+            types=publication_types,
+            source_types=publication_types,
+            source=PaperSource(source_title=source_title, publish_year=item.get("year")),
+            names=PaperNames(authors=authors),
+            links=PaperLinks(record=item.get("url") or "", landing_page=item.get("url") or "", pdf=pdf),
+            citations=[PaperCitation(db="Semantic Scholar", count=citations)] if citations else [],
+            identifiers=PaperIdentifiers(doi=doi, pmid=pmid, arxiv=arxiv_id, semanticscholar=paper_id),
+            keywords=PaperKeywords(author_keywords=fields),
+            abstract=item.get("abstract") or "",
+            provider="semanticscholar",
+            raw=item,
+        )
+
+
+class PubMedProvider:
+    BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+
+    def __init__(self, api_key: str = "", email: str = "", tool: str = "paperseek"):
+        self.api_key = (api_key or "").strip()
+        self.email = (email or "").strip()
+        self.tool = (tool or "paperseek").strip()
+        self.last_response_info: Dict[str, Any] = {}
+
+    def retrieval_capabilities(self) -> ProviderRetrievalCapabilities:
+        return ProviderRetrievalCapabilities(
+            source="pubmed",
+            lanes=(RetrievalLane.RELEVANCE, RetrievalLane.RECENT),
+            max_lane_limit=500,
+        )
+
+    def search(self, query: str, limit: int = 50, page: int = 1, lane: str = RetrievalLane.RELEVANCE) -> ProviderSearchResult:
+        query = (query or "").strip()
+        if not query:
+            raise ProviderError("pubmed", "PubMed search query is empty.")
+
+        page_size = max(1, min(int(limit or 10), 100))
+        retstart = max(0, (int(page or 1) - 1) * page_size)
+        search_payload = self._get_json(
+            "esearch.fcgi",
+            {
+                "db": "pubmed",
+                "term": query,
+                "retmode": "json",
+                "retmax": page_size,
+                "retstart": retstart,
+                "sort": "pub+date" if lane == RetrievalLane.RECENT else "relevance",
+            },
+            query,
+        )
+        result = search_payload.get("esearchresult") or {}
+        ids = [str(value) for value in result.get("idlist") or [] if value]
+        total = int(result.get("count") or 0)
+        if not ids:
+            return ProviderSearchResult(metadata=SearchMetadata(total=total, page=max(1, int(page or 1)), limit=page_size), hits=[])
+
+        summary_payload = self._get_json(
+            "esummary.fcgi",
+            {"db": "pubmed", "id": ",".join(ids), "retmode": "json"},
+            query,
+        )
+        summaries = (summary_payload.get("result") or {})
+        abstracts = self._fetch_abstracts(ids, query)
+        records = []
+        for pmid in ids:
+            item = summaries.get(pmid)
+            if isinstance(item, dict):
+                records.append(self._to_record(pmid, item, abstracts.get(pmid, "")))
+        return ProviderSearchResult(metadata=SearchMetadata(total=total, page=max(1, int(page or 1)), limit=page_size), hits=records)
+
+    def _get_json(self, endpoint: str, params: Dict[str, Any], query: str) -> Dict[str, Any]:
+        url = f"{self.BASE_URL}/{endpoint}"
+        params = {**params, **self._common_params()}
+        headers = {"Accept": "application/json", "User-Agent": self._user_agent()}
+        try:
+            response, info = get_with_retries("pubmed", url, params=params, headers=headers, timeout=45, query=query)
+            self.last_response_info = info
+        except ProviderError as exc:
+            self.last_response_info = {"method": "GET", "url": url, "status": "request_error", "elapsed_ms": None}
+            raise exc
+        if response.status_code >= 400:
+            raise ProviderError("pubmed", f"PubMed returned HTTP {response.status_code}.", status=response.status_code, body=response.text[:1000], query=query)
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise ProviderError("pubmed", "PubMed returned a non-JSON response.", body=response.text[:1000], query=query) from exc
+
+    def _fetch_abstracts(self, pmids: List[str], query: str) -> Dict[str, str]:
+        if not pmids:
+            return {}
+        url = f"{self.BASE_URL}/efetch.fcgi"
+        params = {
+            "db": "pubmed",
+            "id": ",".join(pmids),
+            "retmode": "xml",
+            **self._common_params(),
+        }
+        headers = {"Accept": "application/xml", "User-Agent": self._user_agent()}
+        try:
+            response, info = get_with_retries("pubmed", url, params=params, headers=headers, timeout=45, query=query)
+            self.last_response_info = info
+        except ProviderError:
+            return {}
+        if response.status_code >= 400:
+            return {}
+        try:
+            root = ET.fromstring(response.text)
+        except ET.ParseError:
+            return {}
+        abstracts: Dict[str, str] = {}
+        for article in root.findall(".//PubmedArticle"):
+            pmid = article.findtext(".//PMID") or ""
+            parts = []
+            for node in article.findall(".//Abstract/AbstractText"):
+                label = node.attrib.get("Label")
+                text = "".join(node.itertext()).strip()
+                if text:
+                    parts.append(f"{label}: {text}" if label else text)
+            if pmid and parts:
+                abstracts[pmid] = re.sub(r"\s+", " ", " ".join(parts)).strip()
+        return abstracts
+
+    def _common_params(self) -> Dict[str, str]:
+        params = {"tool": self.tool}
+        if self.email:
+            params["email"] = self.email
+        if self.api_key:
+            params["api_key"] = self.api_key
+        return params
+
+    def _user_agent(self) -> str:
+        if self.email:
+            return f"paperseek/1.0 (mailto:{self.email})"
+        return "paperseek/1.0"
+
+    def _to_record(self, pmid: str, item: Dict[str, Any], abstract: str) -> PaperRecord:
+        article_ids = item.get("articleids") or []
+        doi = ""
+        for article_id in article_ids:
+            if isinstance(article_id, dict) and str(article_id.get("idtype") or "").lower() == "doi":
+                doi = normalize_doi(article_id.get("value") or "")
+                break
+        authors = []
+        for author in item.get("authors") or []:
+            if isinstance(author, dict) and author.get("name"):
+                authors.append(PaperAuthor(display_name=str(author.get("name") or "")))
+        year = self._extract_year(item.get("pubdate") or item.get("epubdate") or "")
+        pub_types = [str(value) for value in (item.get("pubtype") or []) if value]
+        url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else ""
+        return PaperRecord(
+            uid=f"PMID:{pmid}",
+            title=item.get("title") or pmid,
+            types=pub_types,
+            source_types=pub_types,
+            source=PaperSource(source_title=item.get("fulljournalname") or item.get("source") or "PubMed", publish_year=year),
+            names=PaperNames(authors=authors),
+            links=PaperLinks(record=url, landing_page=url),
+            identifiers=PaperIdentifiers(doi=doi, pmid=pmid),
+            keywords=PaperKeywords(author_keywords=[]),
+            abstract=abstract,
+            provider="pubmed",
+            raw=item,
+        )
+
+    @staticmethod
+    def _extract_year(value: str) -> Optional[int]:
+        match = re.search(r"\b(19|20)\d{2}\b", value or "")
+        return int(match.group(0)) if match else None
+
+
+class PaperHubProvider:
+    MANIFEST_URL = "https://raw.githubusercontent.com/Yupu-Wang/paper-hub/main/data/manifest.json"
+    RAW_BASE_URL = "https://raw.githubusercontent.com/Yupu-Wang/paper-hub/main/data"
+    _lock = threading.Lock()
+    _paper_cache: Optional[List[Dict[str, Any]]] = None
+
+    def __init__(self):
+        self.last_response_info: Dict[str, Any] = {}
+
+    def retrieval_capabilities(self) -> ProviderRetrievalCapabilities:
+        return ProviderRetrievalCapabilities(
+            source="paperhub",
+            lanes=(RetrievalLane.RELEVANCE, RetrievalLane.RECENT, RetrievalLane.LOCAL_QUALITY),
+            max_lane_limit=1000,
+        )
+
+    def search(self, query: str, limit: int = 50, page: int = 1, lane: str = RetrievalLane.RELEVANCE) -> ProviderSearchResult:
+        query = (query or "").strip()
+        if not query:
+            raise ProviderError("paperhub", "Paper Hub search query is empty.")
+        papers = self._load_papers(query)
+        scored = []
+        terms = self._terms(query)
+        for paper in papers:
+            score = self._score(paper, terms)
+            if score > 0:
+                scored.append((score, paper))
+        if lane == RetrievalLane.RECENT:
+            scored.sort(key=lambda item: (int(item[1].get("year") or 0), item[0], item[1].get("conference") or ""), reverse=True)
+        elif lane == RetrievalLane.LOCAL_QUALITY:
+            scored.sort(key=lambda item: (item[0], self._conference_weight(item[1]), int(item[1].get("year") or 0)), reverse=True)
+        else:
+            scored.sort(key=lambda item: (item[0], int(item[1].get("year") or 0), item[1].get("conference") or ""), reverse=True)
+        page_size = max(1, min(int(limit or 10), 100))
+        offset = max(0, (int(page or 1) - 1) * page_size)
+        selected = [paper for _, paper in scored[offset:offset + page_size]]
+        return ProviderSearchResult(
+            metadata=SearchMetadata(total=len(scored), page=max(1, int(page or 1)), limit=page_size),
+            hits=[self._to_record(paper) for paper in selected],
+        )
+
+    def _load_papers(self, query: str) -> List[Dict[str, Any]]:
+        if PaperHubProvider._paper_cache is not None:
+            return PaperHubProvider._paper_cache
+        with PaperHubProvider._lock:
+            if PaperHubProvider._paper_cache is not None:
+                return PaperHubProvider._paper_cache
+            response, info = get_with_retries("paperhub", self.MANIFEST_URL, headers={"Accept": "application/json"}, timeout=45, query=query)
+            self.last_response_info = info
+            if response.status_code >= 400:
+                raise ProviderError("paperhub", f"Paper Hub manifest returned HTTP {response.status_code}.", status=response.status_code, body=response.text[:1000], query=query)
+            try:
+                manifest = response.json()
+            except ValueError as exc:
+                raise ProviderError("paperhub", "Paper Hub manifest returned non-JSON content.", body=response.text[:1000], query=query) from exc
+            papers: List[Dict[str, Any]] = []
+            for shard in manifest.get("shards") or []:
+                file_name = shard.get("file") if isinstance(shard, dict) else ""
+                if not file_name:
+                    continue
+                url = f"{self.RAW_BASE_URL}/{file_name}"
+                shard_response, shard_info = get_with_retries("paperhub", url, headers={"Accept": "application/json"}, timeout=60, query=query)
+                self.last_response_info = shard_info
+                if shard_response.status_code >= 400:
+                    continue
+                try:
+                    payload = shard_response.json()
+                except ValueError:
+                    continue
+                for paper in payload.get("papers") or []:
+                    if isinstance(paper, dict):
+                        papers.append(paper)
+            PaperHubProvider._paper_cache = papers
+            return papers
+
+    @staticmethod
+    def _terms(query: str) -> List[str]:
+        terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9_+-]{1,}", query.lower())
+        stop = {"and", "or", "not", "the", "with", "for", "from", "paper", "papers", "study", "research"}
+        return [term for term in terms if term not in stop][:20]
+
+    def _score(self, paper: Dict[str, Any], terms: List[str]) -> int:
+        if not terms:
+            return 1
+        title = str(paper.get("title") or "").lower()
+        abstract = str(paper.get("abstract") or "").lower()
+        keywords = " ".join(str(value) for value in (paper.get("keywords") or [])).lower()
+        authors = " ".join(str(value) for value in (paper.get("authors") or [])).lower()
+        venue = f"{paper.get('conference') or ''} {paper.get('year') or ''} {paper.get('presentation') or ''}".lower()
+        score = 0
+        for term in terms:
+            if term in title:
+                score += 8
+            if term in keywords:
+                score += 5
+            if term in abstract:
+                score += 3
+            if term in authors:
+                score += 2
+            if term in venue:
+                score += 4
+        return score
+
+    @staticmethod
+    def _conference_weight(paper: Dict[str, Any]) -> int:
+        conference = str(paper.get("conference") or "").upper()
+        order = {"NEURIPS": 6, "ICML": 5, "ICLR": 5, "AAAI": 4, "NDSS": 4}
+        return order.get(conference, 1)
+
+    def _to_record(self, paper: Dict[str, Any]) -> PaperRecord:
+        paper_id = str(paper.get("id") or paper.get("url") or paper.get("title") or "")
+        conference = str(paper.get("conference") or "")
+        year = paper.get("year")
+        presentation = str(paper.get("presentation") or "")
+        keywords = [str(value) for value in (paper.get("keywords") or []) if value]
+        if conference and conference not in keywords:
+            keywords.append(conference)
+        if presentation and presentation not in keywords:
+            keywords.append(presentation)
+        authors = [PaperAuthor(display_name=str(name)) for name in (paper.get("authors") or []) if name]
+        url = str(paper.get("url") or "")
+        return PaperRecord(
+            uid=paper_id or url,
+            title=str(paper.get("title") or paper_id),
+            types=["conference-paper"],
+            source_types=[presentation] if presentation else ["conference-paper"],
+            source=PaperSource(source_title=conference, publish_year=year),
+            names=PaperNames(authors=authors),
+            links=PaperLinks(record=url, landing_page=url),
+            identifiers=PaperIdentifiers(),
+            keywords=PaperKeywords(author_keywords=keywords),
+            abstract=str(paper.get("abstract") or ""),
+            provider="paperhub",
+            raw=paper,
+        )

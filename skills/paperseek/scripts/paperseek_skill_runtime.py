@@ -11,6 +11,7 @@ doctor, config inspection, and history path lookup.
 from __future__ import annotations
 
 import argparse
+from html import unescape
 import json
 import math
 import os
@@ -22,6 +23,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote_plus, urlencode
 from urllib.request import Request, urlopen
+import xml.etree.ElementTree as ET
 
 
 CONFIG_KEYS = (
@@ -40,7 +42,11 @@ CONFIG_KEYS = (
     "OPENALEX_EMAIL",
     "PAPERSEEK_HISTORY_DB",
     "PAPERSEEK_HISTORY_ENABLED",
+    "PUBMED_API_KEY",
+    "PUBMED_EMAIL",
+    "PUBMED_TOOL",
     "SEARCH_FIELD",
+    "SEMANTIC_SCHOLAR_API_KEY",
     "TARGET_MAX",
     "TARGET_MIN",
     "WOS_API_KEY",
@@ -76,6 +82,8 @@ OPENALEX_FIELDS = {
     "36": "Health Professions",
 }
 
+ARXIV_LAST_REQUEST_AT = 0.0
+
 SOURCE_METADATA = [
     {
         "id": "openalex",
@@ -103,6 +111,97 @@ SOURCE_METADATA = [
             "Standalone Skill search uses OpenAlex works search and primary_topic.field.id filters.",
             "Full citation expansion requires the PaperSeek package.",
         ],
+    },
+    {
+        "id": "arxiv",
+        "display_name": "arXiv",
+        "status": "supported",
+        "description": "Open preprint repository API for physics, mathematics, computer science, statistics, quantitative biology, electrical engineering, and economics.",
+        "api_key": "not_required",
+        "default": False,
+        "supports_abstracts": True,
+        "supports_citations": False,
+        "supports_citation_expansion": False,
+        "supports_pdf_links": True,
+        "supported_parameters": [
+            "search_field",
+            "discipline_fields",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ],
+        "required_config": [],
+        "optional_config": [],
+        "notes": ["Uses the public arXiv API Atom feed."],
+    },
+    {
+        "id": "semanticscholar",
+        "display_name": "Semantic Scholar",
+        "status": "supported",
+        "description": "Semantic Scholar Academic Graph search with title, abstract, author, venue, citation count, DOI, PubMed, and arXiv identifiers when available.",
+        "api_key": "optional",
+        "default": False,
+        "supports_abstracts": True,
+        "supports_citations": True,
+        "supports_citation_expansion": False,
+        "supports_pdf_links": True,
+        "supported_parameters": [
+            "semantic_scholar_api_key",
+            "search_field",
+            "discipline_fields",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ],
+        "required_config": [],
+        "optional_config": ["SEMANTIC_SCHOLAR_API_KEY"],
+        "notes": ["Anonymous access works for light use; an API key improves rate limits."],
+    },
+    {
+        "id": "pubmed",
+        "display_name": "PubMed",
+        "status": "supported",
+        "description": "PubMed biomedical literature search through NCBI E-utilities with PMID, journal, author, publication type, DOI, and abstract extraction when available.",
+        "api_key": "optional",
+        "default": False,
+        "supports_abstracts": True,
+        "supports_citations": False,
+        "supports_citation_expansion": False,
+        "supports_pdf_links": False,
+        "supported_parameters": [
+            "pubmed_api_key",
+            "pubmed_email",
+            "pubmed_tool",
+            "search_field",
+            "discipline_fields",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ],
+        "required_config": [],
+        "optional_config": ["PUBMED_API_KEY", "PUBMED_EMAIL", "PUBMED_TOOL"],
+        "notes": ["NCBI recommends identifying the tool and email for responsible E-utilities usage."],
+    },
+    {
+        "id": "paperhub",
+        "display_name": "Computer science top conferences",
+        "status": "supported",
+        "description": "Computer science top-conference paper search support.",
+        "api_key": "not_required",
+        "default": False,
+        "supports_abstracts": True,
+        "supports_citations": False,
+        "supports_citation_expansion": False,
+        "supports_pdf_links": False,
+        "supported_parameters": [
+            "search_field",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ],
+        "required_config": [],
+        "optional_config": [],
+        "notes": ["Downloads and caches computer science top-conference index shards at runtime."],
     },
     {
         "id": "crossref",
@@ -203,10 +302,10 @@ Usage:
   python scripts/paperseek.py --install-help
 
 The standalone runtime is bundled inside the Skill folder and uses only the
-Python standard library. It can search OpenAlex, Crossref, and WoS Starter
-directly. If LLM_API_KEY is configured, it can also ask an OpenAI-compatible LLM
-to refine search terms and score candidates; otherwise it uses deterministic
-query and ranking heuristics.
+Python standard library. It can search OpenAlex, arXiv, Semantic Scholar,
+PubMed, computer science top-conference search, Crossref, and WoS Starter directly. If LLM_API_KEY is
+configured, it can also ask an OpenAI-compatible LLM to refine search terms and
+score candidates; otherwise it uses deterministic query and ranking heuristics.
 """
 
 
@@ -309,7 +408,11 @@ def run_smoke(argv: List[str]) -> int:
 def run_search(argv: List[str]) -> int:
     parser = argparse.ArgumentParser(prog="paperseek search")
     parser.add_argument("question")
-    parser.add_argument("--source", default=os.environ.get("DATA_SOURCE", "openalex"), choices=["openalex", "crossref", "wos"])
+    parser.add_argument(
+        "--source",
+        default=os.environ.get("DATA_SOURCE", "openalex"),
+        choices=["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"],
+    )
     parser.add_argument("--min", dest="target_min", type=int, default=int_env("TARGET_MIN", 5))
     parser.add_argument("--max", dest="target_max", type=int, default=int_env("TARGET_MAX", 20))
     parser.add_argument("--iterations", type=int, default=int_env("MAX_ITERATIONS", 1))
@@ -327,6 +430,10 @@ def run_search(argv: List[str]) -> int:
     parser.add_argument("--openalex-key", default="")
     parser.add_argument("--openalex-email", default="")
     parser.add_argument("--crossref-email", default="")
+    parser.add_argument("--semantic-scholar-key", default="")
+    parser.add_argument("--pubmed-key", default="")
+    parser.add_argument("--pubmed-email", default="")
+    parser.add_argument("--pubmed-tool", default="")
     parser.add_argument("--wos-key", default="")
     parser.add_argument("--db", default="")
     args = parser.parse_args(argv)
@@ -422,6 +529,14 @@ def run_history(argv: List[str]) -> int:
 def fetch_source(source: str, query: str, limit: int, config: Dict[str, str], discipline_fields: Sequence[str]) -> Tuple[List[Dict[str, object]], int, str]:
     if source == "openalex":
         return fetch_openalex(query, limit, config, discipline_fields)
+    if source == "arxiv":
+        return fetch_arxiv(query, limit, config)
+    if source == "semanticscholar":
+        return fetch_semantic_scholar(query, limit, config)
+    if source == "pubmed":
+        return fetch_pubmed(query, limit, config)
+    if source == "paperhub":
+        return fetch_paperhub(query, limit, config)
     if source == "crossref":
         return fetch_crossref(query, limit, config)
     if source == "wos":
@@ -463,19 +578,106 @@ def fetch_crossref(query: str, limit: int, config: Dict[str, str]) -> Tuple[List
     return records, total, query
 
 
+def fetch_arxiv(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
+    used_query = arxiv_query(query)
+    params = {
+        "search_query": used_query,
+        "start": "0",
+        "max_results": str(max(1, min(limit, 50))),
+        "sortBy": "relevance",
+        "sortOrder": "descending",
+    }
+    throttle_arxiv()
+    text = http_text("https://export.arxiv.org/api/query?" + urlencode(params), headers={"Accept": "application/atom+xml"})
+    root = ET.fromstring(text)
+    namespaces = {"atom": "http://www.w3.org/2005/Atom", "opensearch": "http://a9.com/-/spec/opensearch/1.1/", "arxiv": "http://arxiv.org/schemas/atom"}
+    total_text = root.findtext("opensearch:totalResults", default="0", namespaces=namespaces)
+    records = [normalize_arxiv(entry, namespaces) for entry in root.findall("atom:entry", namespaces)]
+    return records, safe_int(total_text, len(records)), used_query
+
+
+def fetch_semantic_scholar(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
+    params = {
+        "query": query,
+        "limit": str(max(1, min(limit, 50))),
+        "fields": ",".join([
+            "paperId",
+            "corpusId",
+            "title",
+            "abstract",
+            "year",
+            "venue",
+            "publicationVenue",
+            "publicationTypes",
+            "authors",
+            "url",
+            "externalIds",
+            "citationCount",
+            "fieldsOfStudy",
+            "openAccessPdf",
+        ]),
+    }
+    headers = {}
+    if config.get("SEMANTIC_SCHOLAR_API_KEY"):
+        headers["x-api-key"] = config["SEMANTIC_SCHOLAR_API_KEY"]
+    data = http_json("https://api.semanticscholar.org/graph/v1/paper/search?" + urlencode(params), headers=headers)
+    papers = data.get("data") or []
+    records = [normalize_semantic_scholar(item) for item in papers if isinstance(item, dict)]
+    return records, int(data.get("total") or len(records)), query
+
+
+def fetch_pubmed(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
+    common = pubmed_common_params(config)
+    params = {
+        "db": "pubmed",
+        "term": query,
+        "retmode": "json",
+        "retmax": str(max(1, min(limit, 50))),
+        "sort": "relevance",
+        **common,
+    }
+    search = http_json("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?" + urlencode(params))
+    result = search.get("esearchresult") or {}
+    ids = [str(value) for value in result.get("idlist") or [] if value]
+    total = int(result.get("count") or len(ids))
+    if not ids:
+        return [], total, query
+    summary_params = {"db": "pubmed", "id": ",".join(ids), "retmode": "json", **common}
+    summary = http_json("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?" + urlencode(summary_params))
+    abstracts = fetch_pubmed_abstracts(ids, config)
+    payload = summary.get("result") or {}
+    records = [normalize_pubmed(pmid, payload[pmid], abstracts.get(pmid, "")) for pmid in ids if isinstance(payload.get(pmid), dict)]
+    return records, total, query
+
+
+def fetch_paperhub(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
+    del config
+    papers = load_paperhub_papers()
+    terms = paperhub_terms(query)
+    scored = []
+    for paper in papers:
+        score = paperhub_score(paper, terms)
+        if score > 0:
+            scored.append((score, paper))
+    scored.sort(key=lambda item: (item[0], safe_int(item[1].get("year"), 0), str(item[1].get("conference") or "")), reverse=True)
+    selected = [paper for _, paper in scored[: max(1, min(limit, 50))]]
+    return [normalize_paperhub(paper) for paper in selected], len(scored), query
+
+
 def fetch_wos(query: str, limit: int, config: Dict[str, str], discipline_fields: Sequence[str]) -> Tuple[List[Dict[str, object]], int, str]:
     api_key = config.get("WOS_API_KEY", "")
     if not api_key:
         raise ValueError("WOS_API_KEY is required for WoS Starter searches.")
-    wos_query = query if re.search(r"\b(TS|TI|AU|SO|WC)=", query, re.I) else f"TS=({query})"
-    wc_terms = wos_categories_for_fields(discipline_fields)
-    if wc_terms:
-        wc_query = " OR ".join(quote_wos_category(term) for term in wc_terms[:10])
-        wos_query = f"({wos_query}) AND WC=({wc_query})"
+    del discipline_fields
+    wos_query = query if re.search(r"\b(TS|TI|AU|SO)=", query, re.I) else f"TS=({query})"
+    wos_query = re.sub(r"\s+(AND|OR)\s+WC\s*=\s*\([^)]*\)", "", wos_query, flags=re.I)
+    wos_query = re.sub(r"WC\s*=\s*\([^)]*\)\s+(AND|OR)\s+", "", wos_query, flags=re.I)
+    wos_query = re.sub(r"\s+", " ", wos_query).strip()
     params = {
         "db": config.get("WOS_DB", "WOS"),
         "q": wos_query,
         "limit": str(max(1, min(limit, 50))),
+        "sortField": "RS+D",
     }
     headers = {"X-ApiKey": api_key}
     data = http_json("https://api.clarivate.com/apis/wos-starter/v1/documents?" + urlencode(params), headers=headers)
@@ -551,6 +753,146 @@ def normalize_crossref(item: Dict[str, object]) -> Dict[str, object]:
         "keywords_text": "",
         "citation_count": int(item.get("is-referenced-by-count") or 0),
         "source_raw_id": doi,
+    }
+
+
+def normalize_arxiv(entry: ET.Element, namespaces: Dict[str, str]) -> Dict[str, object]:
+    arxiv_url = entry.findtext("atom:id", default="", namespaces=namespaces)
+    arxiv_id = arxiv_url.rstrip("/").split("/")[-1]
+    title = clean_xml_text(entry.findtext("atom:title", default="", namespaces=namespaces))
+    abstract = truncate_text(clean_xml_text(entry.findtext("atom:summary", default="", namespaces=namespaces)), 3000)
+    authors = []
+    for author in entry.findall("atom:author", namespaces):
+        name = clean_xml_text(author.findtext("atom:name", default="", namespaces=namespaces))
+        if name:
+            authors.append(name)
+    pdf = ""
+    landing = arxiv_url
+    for link in entry.findall("atom:link", namespaces):
+        href = link.attrib.get("href") or ""
+        if link.attrib.get("title") == "pdf" or link.attrib.get("type") == "application/pdf":
+            pdf = href
+        elif link.attrib.get("rel") == "alternate":
+            landing = href
+    doi = clean_doi(entry.findtext("arxiv:doi", default="", namespaces=namespaces))
+    categories = []
+    primary = entry.find("arxiv:primary_category", namespaces)
+    if primary is not None and primary.attrib.get("term"):
+        categories.append(primary.attrib["term"])
+    for category in entry.findall("atom:category", namespaces):
+        term = category.attrib.get("term")
+        if term and term not in categories:
+            categories.append(term)
+    published = entry.findtext("atom:published", default="", namespaces=namespaces) or entry.findtext("atom:updated", default="", namespaces=namespaces)
+    return {
+        "id": f"arxiv:{arxiv_id}" if arxiv_id else arxiv_url or title,
+        "source": "arxiv",
+        "title": title,
+        "authors": authors,
+        "authors_text": ", ".join(authors),
+        "year": year_from_text(published),
+        "venue": "arXiv",
+        "publication_type": "preprint",
+        "doi": doi,
+        "url": landing,
+        "pdf_url": pdf,
+        "abstract": abstract,
+        "keywords": categories,
+        "keywords_text": ", ".join(categories),
+        "citation_count": 0,
+        "source_raw_id": arxiv_id,
+    }
+
+
+def normalize_semantic_scholar(item: Dict[str, object]) -> Dict[str, object]:
+    external = item.get("externalIds") if isinstance(item.get("externalIds"), dict) else {}
+    authors = []
+    for author in item.get("authors") or []:
+        if isinstance(author, dict) and author.get("name"):
+            authors.append(str(author.get("name") or ""))
+    venue_obj = item.get("publicationVenue") if isinstance(item.get("publicationVenue"), dict) else {}
+    pdf_obj = item.get("openAccessPdf") if isinstance(item.get("openAccessPdf"), dict) else {}
+    fields = [str(value) for value in (item.get("fieldsOfStudy") or []) if value]
+    pub_types = [str(value) for value in (item.get("publicationTypes") or []) if value]
+    paper_id = str(item.get("paperId") or "")
+    doi = clean_doi(str(external.get("DOI") or external.get("DOIUrl") or ""))
+    return {
+        "id": paper_id or str(item.get("corpusId") or item.get("title") or ""),
+        "source": "semanticscholar",
+        "title": str(item.get("title") or paper_id),
+        "authors": authors,
+        "authors_text": ", ".join(authors),
+        "year": item.get("year") or "",
+        "venue": venue_obj.get("name") or item.get("venue") or "",
+        "publication_type": ", ".join(pub_types),
+        "doi": doi,
+        "url": item.get("url") or "",
+        "pdf_url": pdf_obj.get("url") or "",
+        "abstract": truncate_text(str(item.get("abstract") or ""), 3000),
+        "keywords": fields,
+        "keywords_text": ", ".join(fields),
+        "citation_count": int(item.get("citationCount") or 0),
+        "source_raw_id": paper_id,
+    }
+
+
+def normalize_pubmed(pmid: str, item: Dict[str, object], abstract: str) -> Dict[str, object]:
+    doi = ""
+    for article_id in item.get("articleids") or []:
+        if isinstance(article_id, dict) and str(article_id.get("idtype") or "").lower() == "doi":
+            doi = clean_doi(str(article_id.get("value") or ""))
+            break
+    authors = []
+    for author in item.get("authors") or []:
+        if isinstance(author, dict) and author.get("name"):
+            authors.append(str(author.get("name") or ""))
+    pub_types = [str(value) for value in (item.get("pubtype") or []) if value]
+    url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else ""
+    return {
+        "id": f"PMID:{pmid}" if pmid else str(item.get("uid") or item.get("title") or ""),
+        "source": "pubmed",
+        "title": str(item.get("title") or pmid),
+        "authors": authors,
+        "authors_text": ", ".join(authors),
+        "year": year_from_text(str(item.get("pubdate") or item.get("epubdate") or "")),
+        "venue": item.get("fulljournalname") or item.get("source") or "PubMed",
+        "publication_type": ", ".join(pub_types),
+        "doi": doi,
+        "url": url,
+        "pdf_url": "",
+        "abstract": truncate_text(abstract, 3000),
+        "keywords": [],
+        "keywords_text": "",
+        "citation_count": 0,
+        "source_raw_id": pmid,
+    }
+
+
+def normalize_paperhub(paper: Dict[str, object]) -> Dict[str, object]:
+    authors = [str(name) for name in (paper.get("authors") or []) if name]
+    keywords = [str(value) for value in (paper.get("keywords") or []) if value]
+    conference = str(paper.get("conference") or "")
+    presentation = str(paper.get("presentation") or "")
+    for value in (conference, presentation):
+        if value and value not in keywords:
+            keywords.append(value)
+    return {
+        "id": str(paper.get("id") or paper.get("url") or paper.get("title") or ""),
+        "source": "paperhub",
+        "title": str(paper.get("title") or ""),
+        "authors": authors,
+        "authors_text": ", ".join(authors),
+        "year": paper.get("year") or "",
+        "venue": conference,
+        "publication_type": presentation or "conference-paper",
+        "doi": "",
+        "url": paper.get("url") or "",
+        "pdf_url": "",
+        "abstract": truncate_text(str(paper.get("abstract") or ""), 3000),
+        "keywords": keywords,
+        "keywords_text": ", ".join(keywords),
+        "citation_count": 0,
+        "source_raw_id": str(paper.get("id") or ""),
     }
 
 
@@ -729,15 +1071,52 @@ def http_json(url: str, method: str = "GET", headers: Optional[Dict[str, str]] =
     if payload is not None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = Request(url, data=body, headers=request_headers, method=method)
-    try:
-        with urlopen(request, timeout=45) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {exc.code} from {url}: {detail[:500]}")
-    except URLError as exc:
-        raise RuntimeError(f"Network error from {url}: {exc.reason}")
+    for attempt in range(1, 4):
+        try:
+            with urlopen(request, timeout=45) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+                break
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code in {429, 500, 502, 503, 504} and attempt < 3:
+                time.sleep(retry_delay_for_url(url, exc.code, attempt))
+                continue
+            raise RuntimeError(f"HTTP {exc.code} from {url}: {detail[:500]}")
+        except URLError as exc:
+            if attempt < 3:
+                time.sleep(0.7 * attempt)
+                continue
+            raise RuntimeError(f"Network error from {url}: {exc.reason}")
     return json.loads(raw)
+
+
+def http_text(url: str, method: str = "GET", headers: Optional[Dict[str, str]] = None, payload: Optional[Dict[str, object]] = None) -> str:
+    body = None
+    request_headers = {
+        "Accept": "text/plain, application/xml, application/atom+xml, application/json",
+        "User-Agent": "PaperSeek-Skill/standalone",
+    }
+    if headers:
+        request_headers.update(headers)
+    if payload is not None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = Request(url, data=body, headers=request_headers, method=method)
+    for attempt in range(1, 4):
+        try:
+            with urlopen(request, timeout=45) as response:
+                return response.read().decode("utf-8", errors="replace")
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code in {429, 500, 502, 503, 504} and attempt < 3:
+                time.sleep(retry_delay_for_url(url, exc.code, attempt))
+                continue
+            raise RuntimeError(f"HTTP {exc.code} from {url}: {detail[:500]}")
+        except URLError as exc:
+            if attempt < 3:
+                time.sleep(0.7 * attempt)
+                continue
+            raise RuntimeError(f"Network error from {url}: {exc.reason}")
+    return ""
 
 
 def doctor_checks(config: Dict[str, str], source: str, provider: str, api_type: str, disciplines: Sequence[str]) -> List[Dict[str, object]]:
@@ -762,6 +1141,10 @@ def doctor_checks(config: Dict[str, str], source: str, provider: str, api_type: 
         checks.append(check("source.openalex_key", "warning", "warning", "OPENALEX_API_KEY is not configured.", ["OpenAlex may still work, but configure a key for stable use."]))
     elif source == "crossref" and not config.get("CROSSREF_EMAIL"):
         checks.append(check("source.crossref_email", "warning", "warning", "CROSSREF_EMAIL is not configured.", ["Set CROSSREF_EMAIL for Crossref polite-pool requests."]))
+    elif source == "semanticscholar" and not config.get("SEMANTIC_SCHOLAR_API_KEY"):
+        checks.append(check("source.semantic_scholar_key", "warning", "warning", "SEMANTIC_SCHOLAR_API_KEY is not configured.", ["Anonymous Semantic Scholar access is suitable only for light smoke tests."]))
+    elif source == "pubmed" and not config.get("PUBMED_EMAIL"):
+        checks.append(check("source.pubmed_email", "warning", "warning", "PUBMED_EMAIL is not configured.", ["Set PUBMED_EMAIL to identify responsible NCBI E-utilities usage."]))
     else:
         checks.append(check("source.credentials", "pass", "info", "Source-specific credential requirement is satisfied or not required."))
 
@@ -974,6 +1357,10 @@ def apply_arg_config(config: Dict[str, str], args) -> None:
         "openalex_key": "OPENALEX_API_KEY",
         "openalex_email": "OPENALEX_EMAIL",
         "crossref_email": "CROSSREF_EMAIL",
+        "semantic_scholar_key": "SEMANTIC_SCHOLAR_API_KEY",
+        "pubmed_key": "PUBMED_API_KEY",
+        "pubmed_email": "PUBMED_EMAIL",
+        "pubmed_tool": "PUBMED_TOOL",
         "wos_key": "WOS_API_KEY",
         "db": "WOS_DB",
     }
@@ -1077,6 +1464,122 @@ def quote_wos_category(term: str) -> str:
     return f'"{escaped}"'
 
 
+def arxiv_query(query: str) -> str:
+    cleaned = " ".join(str(query or "").split())
+    if re.search(r"\b(?:all|ti|au|abs|cat|id|jr):", cleaned, flags=re.I):
+        return cleaned
+    if re.search(r"\b(AND|OR|ANDNOT)\b", cleaned, flags=re.I):
+        return cleaned
+    return f'all:"{escape_arxiv_phrase(cleaned)}"' if cleaned else "all:*"
+
+
+def escape_arxiv_phrase(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def throttle_arxiv() -> None:
+    global ARXIV_LAST_REQUEST_AT
+    elapsed = time.monotonic() - ARXIV_LAST_REQUEST_AT
+    if elapsed < 3.1:
+        time.sleep(3.1 - elapsed)
+    ARXIV_LAST_REQUEST_AT = time.monotonic()
+
+
+def retry_delay_for_url(url: str, status_code: int, attempt: int) -> float:
+    if status_code == 429 and "export.arxiv.org" in url:
+        return min(5.0 * attempt, 20.0)
+    return 0.7 * attempt
+
+
+def pubmed_common_params(config: Dict[str, str]) -> Dict[str, str]:
+    params = {"tool": config.get("PUBMED_TOOL") or "paperseek"}
+    if config.get("PUBMED_EMAIL"):
+        params["email"] = config["PUBMED_EMAIL"]
+    if config.get("PUBMED_API_KEY"):
+        params["api_key"] = config["PUBMED_API_KEY"]
+    return params
+
+
+def fetch_pubmed_abstracts(pmids: Sequence[str], config: Dict[str, str]) -> Dict[str, str]:
+    if not pmids:
+        return {}
+    params = {
+        "db": "pubmed",
+        "id": ",".join(str(pmid) for pmid in pmids),
+        "retmode": "xml",
+        **pubmed_common_params(config),
+    }
+    try:
+        text = http_text("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?" + urlencode(params), headers={"Accept": "application/xml"})
+        root = ET.fromstring(text)
+    except Exception:
+        return {}
+    abstracts: Dict[str, str] = {}
+    for article in root.findall(".//PubmedArticle"):
+        pmid = article.findtext(".//PMID") or ""
+        parts = []
+        for node in article.findall(".//Abstract/AbstractText"):
+            label = node.attrib.get("Label")
+            text_value = clean_xml_text("".join(node.itertext()))
+            if text_value:
+                parts.append(f"{label}: {text_value}" if label else text_value)
+        if pmid and parts:
+            abstracts[pmid] = " ".join(parts)
+    return abstracts
+
+
+PAPERHUB_CACHE: Optional[List[Dict[str, object]]] = None
+
+
+def load_paperhub_papers() -> List[Dict[str, object]]:
+    global PAPERHUB_CACHE
+    if PAPERHUB_CACHE is not None:
+        return PAPERHUB_CACHE
+    base = "https://raw.githubusercontent.com/Yupu-Wang/paper-hub/main/data"
+    manifest = http_json(base + "/manifest.json")
+    papers: List[Dict[str, object]] = []
+    for shard in manifest.get("shards") or []:
+        if not isinstance(shard, dict) or not shard.get("file"):
+            continue
+        try:
+            payload = http_json(base + "/" + str(shard["file"]))
+        except Exception:
+            continue
+        for paper in payload.get("papers") or []:
+            if isinstance(paper, dict):
+                papers.append(paper)
+    PAPERHUB_CACHE = papers
+    return papers
+
+
+def paperhub_terms(query: str) -> List[str]:
+    stop = {"and", "or", "not", "the", "with", "for", "from", "paper", "papers", "study", "research"}
+    return [term for term in re.findall(r"[A-Za-z0-9][A-Za-z0-9_+-]{1,}", str(query or "").lower()) if term not in stop][:20]
+
+
+def paperhub_score(paper: Dict[str, object], terms: Sequence[str]) -> int:
+    if not terms:
+        return 1
+    title = str(paper.get("title") or "").lower()
+    abstract = str(paper.get("abstract") or "").lower()
+    keywords = " ".join(str(value) for value in (paper.get("keywords") or [])).lower()
+    authors = " ".join(str(value) for value in (paper.get("authors") or [])).lower()
+    venue = f"{paper.get('conference') or ''} {paper.get('year') or ''} {paper.get('presentation') or ''}".lower()
+    score = 0
+    for term in terms:
+        if term in title:
+            score += 8
+        if term in keywords:
+            score += 5
+        if term in abstract:
+            score += 3
+        if term in authors:
+            score += 2
+        if term in venue:
+            score += 4
+    return score
+
+
 def standalone_warnings(config: Dict[str, str]) -> List[str]:
     warnings = ["Standalone Skill runtime does not perform OpenAlex citation expansion; install the full package for citation maps."]
     if not config.get("LLM_API_KEY"):
@@ -1134,11 +1637,27 @@ def strip_tags(value: str) -> str:
     return re.sub(r"<[^>]+>", " ", value).strip()
 
 
+def clean_xml_text(value: str) -> str:
+    return re.sub(r"\s+", " ", unescape(value or "")).strip()
+
+
 def truncate_text(value: str, limit: int) -> str:
     value = " ".join(value.split())
     if len(value) <= limit:
         return value
     return value[: limit - 3].rstrip() + "..."
+
+
+def safe_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def year_from_text(value: str) -> object:
+    match = re.search(r"\b(19|20)\d{2}\b", value or "")
+    return int(match.group(0)) if match else ""
 
 
 def int_env(key: str, default: int) -> int:

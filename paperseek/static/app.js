@@ -11,12 +11,22 @@ const providerSelect = document.getElementById("llmProvider");
 const apiTypeSelect = document.getElementById("llmApiType");
 const modelInput = document.getElementById("llmModel");
 const baseUrlInput = document.getElementById("llmBaseUrl");
+const retrievalEmbeddingProviderSelect = document.getElementById("retrievalEmbeddingProvider");
+const retrievalEmbeddingModelInput = document.getElementById("retrievalEmbeddingModel");
+const retrievalEmbeddingBaseUrlInput = document.getElementById("retrievalEmbeddingBaseUrl");
+const retrievalRerankerProviderSelect = document.getElementById("retrievalRerankerProvider");
+const retrievalRerankerModelInput = document.getElementById("retrievalRerankerModel");
+const retrievalRerankerBaseUrlInput = document.getElementById("retrievalRerankerBaseUrl");
 const exportLogButton = document.getElementById("exportLogButton");
 const exportCsvButton = document.getElementById("exportCsvButton");
 const checkConfigButton = document.getElementById("checkConfigButton");
+const disciplinePicker = document.getElementById("disciplinePicker");
+const disciplinePickerLabel = document.getElementById("disciplinePickerLabel");
 const disciplineOptionsContainer = document.getElementById("disciplineOptions");
 const disciplineSummary = document.getElementById("disciplineSummary");
 const clearDisciplinesButton = document.getElementById("clearDisciplinesButton");
+const fieldHintField = document.getElementById("fieldHintField");
+const fieldHintLabel = document.getElementById("fieldHintLabel");
 const viewTabs = [...document.querySelectorAll(".mode-tabs .tab")];
 const basicSourceName = document.getElementById("basicSourceName");
 const basicSourceMeta = document.getElementById("basicSourceMeta");
@@ -49,6 +59,13 @@ const translations = {
     "Paste a research question, gap paragraph, or plain language search intent.": "粘贴研究问题、研究空白段落，或用自然语言描述检索意图。",
     "Discipline Fields": "学科领域",
     "Any field": "不限学科",
+    "Source Filter": "数据源筛选",
+    "Any filter": "不限筛选",
+    "Field/context hint": "领域/语境提示",
+    "OpenAlex Field": "OpenAlex 学科",
+    "Web of Science Category": "Web of Science 分类",
+    "arXiv Category": "arXiv 分类",
+    "Computer science top conferences": "计算机顶会",
     "Loading discipline fields...": "正在加载学科领域...",
     "Discipline fields unavailable": "学科领域暂不可用",
     "Run Search": "开始检索",
@@ -73,6 +90,7 @@ const translations = {
     "Source details are in Advanced settings.": "数据源详情在高级设置中。",
     "Advanced settings": "高级设置",
     "Protocol, source keys, and run controls": "协议、数据源 Key 和运行控制",
+    "Protocol, source keys, and retrieval settings": "协议、数据源 Key 和检索重排设置",
     "Model protocol": "模型协议",
     "API Type": "API 类型",
     "OpenAI Responses API": "OpenAI Responses API",
@@ -97,6 +115,7 @@ const translations = {
     "Iterations": "迭代次数",
     "Try external abstracts": "尝试外部摘要",
     "Expand citations": "扩展引用",
+    "Adds forward and backward citation traversal; searches may take longer.": "会进行前后向引用遍历，检索耗时可能增加。",
     "System Dashboard": "系统面板",
     "idle": "空闲",
     "Configuration check": "配置检查",
@@ -171,6 +190,10 @@ const translations = {
     "Ranked literature": "排序文献",
     "Run a search before reviewing results.": "请先运行检索，再查看结果。",
     "Search title, author, abstract, DOI": "搜索题名、作者、摘要、DOI",
+    "shown": "已显示",
+    "selected": "已选择",
+    "Rank": "排名",
+    "citations": "引用",
     "All scores": "全部分数",
     "Score >= 7": "分数 >= 7",
     "Score >= 8": "分数 >= 8",
@@ -187,6 +210,7 @@ const translations = {
     "Clear": "清空",
     "No papers match the current filters.": "没有论文匹配当前筛选。",
     "Select paper": "选择论文",
+    "Record": "记录",
     "Local history is disabled": "本地历史记录已禁用",
     "Loading saved runs.": "正在加载保存的运行。",
     "Loading saved runs...": "正在加载保存的运行...",
@@ -230,7 +254,87 @@ const translations = {
     "Unknown error": "未知错误",
     "Ready. Keys and endpoint settings are held only in this browser session.": "就绪。Key 和端点设置仅保存在本次浏览器会话中。",
     "Optional for local Ollama": "本地 Ollama 可选",
+    "Embedding and reranking": "向量召回与重排",
+    "Embedding Provider": "Embedding 服务商",
+    "Embedding Model": "Embedding 模型",
+    "Embedding Base URL": "Embedding Base URL",
+    "Embedding API Key": "Embedding API Key",
+    "Reranker Provider": "重排服务商",
+    "Reranker Model": "重排模型",
+    "Reranker Base URL": "重排 Base URL",
+    "Reranker API Key": "重排 API Key",
+    "Local Python": "本地 Python",
+    "Alibaba Cloud Bailian": "阿里云百炼",
+    "Volcano Ark": "火山方舟",
+    "Off": "关闭",
+    "Local Python when empty": "留空时使用本地 Python",
+    "Provider default": "服务商默认地址",
+    "Optional; defaults to Model API key": "可选；默认复用模型 API Key",
+    "Optional": "可选",
     "Configured via environment": "已通过环境变量配置",
+  },
+};
+
+const runtimeTranslations = {
+  zh: {
+    exact: {
+      "Interpreted intent": "意图识别结果",
+      "Waiting for ranking progress.": "等待排序进度。",
+      "Ranking step": "排序步骤",
+      "progress": "进度",
+      "Preparing LLM candidate list": "准备 LLM 候选池",
+      "Abstract enrichment": "摘要补全",
+      "Multi-lane retrieval": "多路召回",
+      "Embedding similarity": "向量相似度",
+      "RRF fusion": "RRF 融合重排",
+      "External reranker": "外部重排模型",
+      "Citation seed ranking": "引用扩展种子排序",
+      "Citation expansion": "引用扩展",
+      "LLM reranking": "LLM 重排序",
+      "Result ranking": "结果排序",
+      "Fetching missing abstracts when available.": "正在尽可能补全缺失摘要。",
+      "Abstract enrichment completed.": "摘要补全已完成。",
+      "No retrieval lanes returned candidates; using the primary source response.": "多路召回未返回候选，使用主数据源返回结果。",
+      "External embedding completed.": "外部向量服务已完成。",
+      "Using local sparse hashing similarity.": "正在使用本地稀疏哈希相似度。",
+      "ModelScope API-Inference does not support rerank; keeping RRF order.": "ModelScope API-Inference 不支持重排，保留 RRF 顺序。",
+      "Reranker API key or base URL is missing; keeping RRF order.": "重排 API Key 或 Base URL 缺失，保留 RRF 顺序。",
+      "All configured reranker models failed; keeping RRF order.": "已配置的重排模型全部失败，保留 RRF 顺序。",
+      "Ranking initial candidates to choose citation expansion seeds.": "正在排序初始候选，以选择引用扩展种子论文。",
+      "Seed ranking completed.": "种子论文排序已完成。",
+      "No seed papers were available for citation traversal.": "没有可用于引用遍历的种子论文。",
+      "No count": "无计数",
+      "Adjustment rationale": "调整依据",
+      "Next query": "下一轮检索式",
+      "No records found; generated a broader query.": "未找到记录；已生成更宽的检索式。",
+      "No records found before the iteration limit was reached.": "达到迭代上限前仍未找到记录。",
+      "Converted the generated query to the stable WoS Starter subset before calling the API.": "调用 API 前已将检索式转换为稳定的 WoS Starter 子集。",
+      "WoS returned HTTP 512; rewrote the query into a simpler supported form and retried.": "WoS 返回 HTTP 512；已将检索式改写为更简单的受支持形式并重试。",
+      "WoS rejected the query syntax; generated a broader replacement query.": "WoS 拒绝了检索式语法；已生成更宽的替代检索式。",
+    },
+    status: {
+      processing: "处理中",
+      complete: "已完成",
+      skipped: "已跳过",
+      error: "错误",
+    },
+    action: {
+      sanitize: "清洗",
+      repair: "修复",
+      simplify: "简化",
+      broaden: "放宽",
+      narrow: "收窄",
+      accept: "接受",
+      accept_low: "接受偏少结果",
+      accept_high: "接受偏多结果",
+      empty: "无结果",
+    },
+    lane: {
+      relevance: "相关性",
+      impact: "影响力",
+      recent: "近期文献",
+      local_quality: "本地质量",
+    },
   },
 };
 
@@ -239,7 +343,7 @@ const providerDefaults = {
   anthropic: { model: "claude-sonnet-4-6", apiType: "anthropic_messages", baseUrl: "https://api.anthropic.com" },
   google: { model: "gemini-3.5-flash", apiType: "openai_chat", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" },
   deepseek: { model: "deepseek-v4-flash", apiType: "openai_chat", baseUrl: "https://api.deepseek.com" },
-  cstcloud: { model: "DeepSeek-V4-Flash", apiType: "openai_chat", baseUrl: "https://uni-api.cstcloud.cn/v1" },
+  cstcloud: { model: "deepseek-v4-flash", apiType: "openai_chat", baseUrl: "https://uni-api.cstcloud.cn/v1" },
   dashscope: { model: "qwen3.6-plus", apiType: "openai_chat", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
   moonshot: { model: "kimi-k2.6", apiType: "openai_chat", baseUrl: "https://api.moonshot.ai/v1" },
   zhipu: { model: "glm-5.1", apiType: "openai_chat", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
@@ -253,23 +357,52 @@ const providerDefaults = {
   custom: { model: "", apiType: "openai_chat", baseUrl: "" },
 };
 
+const retrievalProviderDefaults = {
+  local: { embeddingModel: "", rerankerModel: "", baseUrl: "" },
+  cstcloud: {
+    embeddingModel: "qwen3-embedding:8b,bge-large-zh:latest",
+    rerankerModel: "qwen3-reranker:8b",
+    baseUrl: "https://uni-api.cstcloud.cn/v1",
+  },
+  openai: { embeddingModel: "text-embedding-3-large", rerankerModel: "", baseUrl: "https://api.openai.com/v1" },
+  dashscope: { embeddingModel: "text-embedding-v4", rerankerModel: "", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+  siliconflow: { embeddingModel: "BAAI/bge-large-zh-v1.5", rerankerModel: "BAAI/bge-reranker-v2-m3", baseUrl: "https://api.siliconflow.cn/v1" },
+  zhipu: { embeddingModel: "embedding-3", rerankerModel: "", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
+  volcengine: { embeddingModel: "", rerankerModel: "", baseUrl: "https://ark.cn-beijing.volces.com/api/v3" },
+  modelscope: { embeddingModel: "Qwen/Qwen3-Embedding-8B,Qwen/Qwen3-Embedding-4B", rerankerModel: "", baseUrl: "https://api-inference.modelscope.cn/v1" },
+  custom: { embeddingModel: "", rerankerModel: "", baseUrl: "" },
+};
+
 const stageOrder = ["query", "search", "ranking", "results"];
 const sourceLabels = {
   openalex: "OpenAlex (precise search)",
+  arxiv: "arXiv (preprints)",
+  semanticscholar: "Semantic Scholar (broad scholarly graph)",
+  pubmed: "PubMed (biomedical literature)",
+  paperhub: "Computer science top conferences",
   crossref: "Crossref (metadata / DOI registry)",
   wos: "Web of Science Starter (temporarily unavailable)",
 };
 const compactSourceLabels = {
   openalex: "OpenAlex",
+  arxiv: "arXiv",
+  semanticscholar: "Semantic Scholar",
+  pubmed: "PubMed",
+  paperhub: "CS top conferences",
   crossref: "Crossref",
   wos: "Web of Science Starter",
 };
 const sourceMetaLabels = {
   openalex: "Optional OpenAlex API key and email are in Advanced settings.",
+  arxiv: "arXiv does not require an API key.",
+  semanticscholar: "Semantic Scholar API key is optional in Advanced settings.",
+  pubmed: "PubMed API key and email are optional in Advanced settings.",
+  paperhub: "Computer science top-conference search needs no key.",
   crossref: "Crossref email is optional but recommended in Advanced settings.",
   wos: "WoS requires an API key in Advanced settings.",
 };
 
+let activeLanguage = loadLanguage();
 let workflowState = createWorkflowState();
 let latestPayload = null;
 let latestResult = null;
@@ -291,13 +424,17 @@ let historyStatus = { enabled: true, path: "" };
 let historyLoading = false;
 let historyError = "";
 let activeSearchController = null;
+let latestStreamHeartbeatLogAt = 0;
 let disciplineOptions = [];
+let sourceFilterDefinitions = {};
 let environmentConfig = {
   has_llm_api_key: false,
   has_wos_api_key: false,
+  has_semantic_scholar_api_key: false,
+  has_pubmed_api_key: false,
+  has_pubmed_email: false,
   llm_provider: "",
 };
-let activeLanguage = loadLanguage();
 
 function loadLanguage() {
   const saved = window.localStorage ? window.localStorage.getItem(languageStorageKey) : "";
@@ -310,6 +447,88 @@ function translatedText(text) {
     return value;
   }
   return translations.zh[value] || value;
+}
+
+function translatedRuntimeText(text) {
+  const value = String(text ?? "");
+  if (activeLanguage !== "zh" || !value) {
+    return value;
+  }
+  const zh = runtimeTranslations.zh;
+  if (zh.exact[value]) {
+    return zh.exact[value];
+  }
+  const patterns = [
+    [/^(\d+) fused candidates before citation expansion\.$/, (_, count) => `${count} 个融合候选进入引用扩展前准备。`],
+    [/^(\d+) candidates ready before LLM ranking\.$/, (_, count) => `${count} 个候选已准备进入 LLM 重排序。`],
+    [/^Starting (.+) lanes; lane limit (\d+)\.$/, (_, lanes, limit) => `启动 ${translatedLaneList(lanes)} 多路召回；单路上限 ${limit}。`],
+    [/^(.+) lane finished; collected (\d+) lane candidates\.$/, (_, lane, count) => `${translatedLaneName(lane)}召回完成；已收集 ${count} 个分路候选。`],
+    [/^Computing semantic similarity for (\d+) unique candidates\.$/, (_, count) => `正在为 ${count} 个去重候选计算语义相似度。`],
+    [/^Fusing lane rank, BM25\/term coverage, and embedding signals for (\d+) candidates\.$/, (_, count) => `正在融合分路排名、BM25/词项覆盖和向量信号，共 ${count} 个候选。`],
+    [/^Fused (\d+) unique candidates into a pool of (\d+)\.$/, (_, total, kept) => `已将 ${total} 个去重候选融合为 ${kept} 个候选池结果。`],
+    [/^Retrieval completed with (\d+) fused candidates\.$/, (_, count) => `多路召回完成，得到 ${count} 个融合候选。`],
+    [/^Calling (.+) reranker for the top (\d+) candidates\.$/, (_, provider, count) => `正在调用 ${provider} 重排模型处理前 ${count} 个候选。`],
+    [/^(.+) reranker completed with model=(.+)\.$/, (_, provider, model) => `${provider} 重排模型已完成；模型=${model}。`],
+    [/^Traversing references and citing works for (\d+) seed papers\.$/, (_, count) => `正在遍历 ${count} 篇种子论文的参考文献和施引文献。`],
+    [/^Citation traversal failed: (.+)$/, (_, reason) => `引用遍历失败：${reason}`],
+    [/^Added (\d+) citation-neighbor candidates; candidate pool=(\d+)\.$/, (_, added, total) => `新增 ${added} 个引用邻近候选；候选池共 ${total} 个。`],
+    [/^Scoring (\d+) candidates in one LLM batch\.$/, (_, count) => `正在用 1 个 LLM 批次为 ${count} 个候选评分。`],
+    [/^Scored (\d+) candidates\.$/, (_, count) => `已为 ${count} 个候选评分。`],
+    [/^Scoring (\d+) candidates in (\d+) LLM batches; concurrency=(\d+)\.$/, (_, count, batches, concurrency) => `正在用 ${batches} 个 LLM 批次为 ${count} 个候选评分；并发=${concurrency}。`],
+    [/^Batch (\d+)\/(\d+) failed at concurrency=(\d+); retrying failed batches with lower concurrency\.$/, (_, index, total, concurrency) => `第 ${index}/${total} 批在并发 ${concurrency} 下失败；将降低并发重试失败批次。`],
+    [/^Completed batch (\d+)\/(\d+) at concurrency=(\d+)\.$/, (_, index, total, concurrency) => `第 ${index}/${total} 批已完成；并发=${concurrency}。`],
+    [/^(\d+) batch\(es\), (\d+) candidates, failed even at concurrency=4\.$/, (_, batches, count) => `${batches} 个批次、${count} 个候选在最低并发 4 下仍失败。`],
+    [/^LLM scoring completed for (\d+)\/(\d+) batches\.$/, (_, done, total) => `LLM 评分已完成 ${done}/${total} 个批次。`],
+    [/^(\d+) records found, above the target maximum of (\d+); generated a narrower query\.$/, (_, count, target) => `找到 ${count} 条记录，高于目标上限 ${target}；已生成更窄的检索式。`],
+    [/^Only (\d+) records found, below the target minimum of (\d+); generated a broader query\.$/, (_, count, target) => `仅找到 ${count} 条记录，低于目标下限 ${target}；已生成更宽的检索式。`],
+    [/^Accepted (\d+) records within the target range\.$/, (_, count) => `接受 ${count} 条记录，数量位于目标范围内。`],
+    [/^Accepted (\d+) records at the iteration limit, above the target maximum of (\d+)\.$/, (_, count, target) => `达到迭代上限后接受 ${count} 条记录，仍高于目标上限 ${target}。`],
+    [/^Accepted (\d+) records at the iteration limit, below the target minimum of (\d+)\.$/, (_, count, target) => `达到迭代上限后接受 ${count} 条记录，仍低于目标下限 ${target}。`],
+    [/^(\d+) records found, above the LLM pre-ranking safety pool of (\d+); generated a narrower query\.$/, (_, count, limit) => `找到 ${count} 条记录，高于 LLM 预排序安全候选池上限 ${limit}；已生成更窄的检索式。`],
+    [/^Accepted (\d+) records at the iteration limit, above the LLM pre-ranking safety pool of (\d+); the fused candidate pool will be truncated before LLM ranking\.$/, (_, count, limit) => `达到迭代上限后接受 ${count} 条记录，高于 LLM 预排序安全候选池上限 ${limit}；融合候选池会在 LLM 排序前截断。`],
+    [/^(.+) rejected the query; repaired the source syntax and retried\.$/, (_, source) => `${source} 拒绝了检索式；已修复数据源语法并重试。`],
+    [/^Sanitized the generated (.+) query before calling the API\.$/, (_, source) => `调用 API 前已清洗 ${source} 检索式。`],
+  ];
+  for (const [pattern, replacement] of patterns) {
+    const match = value.match(pattern);
+    if (match) {
+      return replacement(...match);
+    }
+  }
+  return translatedText(value);
+}
+
+function translatedLaneName(value) {
+  const text = String(value || "").trim();
+  if (activeLanguage !== "zh") {
+    return text;
+  }
+  return runtimeTranslations.zh.lane[text] || text;
+}
+
+function translatedLaneList(value) {
+  return String(value || "")
+    .split(",")
+    .map((lane) => lane.trim())
+    .filter(Boolean)
+    .map(translatedLaneName)
+    .join(activeLanguage === "zh" ? "、" : ", ");
+}
+
+function translatedActionText(value) {
+  const text = String(value || "");
+  if (activeLanguage !== "zh") {
+    return text;
+  }
+  return runtimeTranslations.zh.action[text] || translatedRuntimeText(text);
+}
+
+function translatedStatusText(value) {
+  const text = String(value || "processing").toLowerCase();
+  if (activeLanguage !== "zh") {
+    return text.toUpperCase();
+  }
+  return runtimeTranslations.zh.status[text] || translatedRuntimeText(text);
 }
 
 function translateWithWhitespace(value) {
@@ -531,7 +750,19 @@ function updateSourceSummary() {
   }
 }
 
+function activeSourceFilterDefinition() {
+  const source = dataSourceSelect.value || "openalex";
+  return sourceFilterDefinitions[source] || {
+    mode: "native",
+    label: "OpenAlex Field",
+    options: disciplineOptions,
+  };
+}
+
 function selectedDisciplineFields() {
+  if (activeSourceFilterDefinition().mode !== "native") {
+    return [];
+  }
   if (!disciplineOptionsContainer) {
     return [];
   }
@@ -544,7 +775,7 @@ function updateDisciplineSummary() {
   }
   const selected = selectedDisciplineFields();
   if (!selected.length) {
-    setTranslatedText(disciplineSummary, "Any field");
+    setTranslatedText(disciplineSummary, "Any filter");
     return;
   }
   const labels = selected.map((id) => {
@@ -565,6 +796,39 @@ function setSelectedDisciplineFields(values = []) {
     input.checked = selected.has(String(input.value));
   });
   updateDisciplineSummary();
+}
+
+function updateSourceFilterUi({ reset = false } = {}) {
+  const definition = activeSourceFilterDefinition();
+  const mode = definition.mode || "text";
+  if (disciplinePickerLabel) {
+    setTranslatedText(disciplinePickerLabel, definition.label || "Source Filter");
+  }
+  if (fieldHintLabel) {
+    setTranslatedText(fieldHintLabel, definition.label || "Field/context hint");
+  }
+  if (reset) {
+    setSelectedDisciplineFields([]);
+  }
+  if (mode === "native" && Array.isArray(definition.options) && definition.options.length) {
+    disciplineOptions = definition.options;
+    if (disciplinePicker) {
+      disciplinePicker.classList.remove("is-hidden");
+    }
+    if (fieldHintField) {
+      fieldHintField.classList.add("is-hidden");
+    }
+    renderDisciplineOptions();
+    return;
+  }
+  disciplineOptions = [];
+  if (disciplinePicker) {
+    disciplinePicker.classList.add("is-hidden");
+    disciplinePicker.open = false;
+  }
+  if (fieldHintField) {
+    fieldHintField.classList.remove("is-hidden");
+  }
 }
 
 function renderDisciplineOptions() {
@@ -628,10 +892,14 @@ async function loadDisciplineOptions() {
     }
     const data = await response.json();
     disciplineOptions = Array.isArray(data.disciplines) ? data.disciplines : [];
+    sourceFilterDefinitions = data.sources || {
+      openalex: { mode: "native", label: "OpenAlex Field", options: disciplineOptions },
+    };
   } catch (_) {
     disciplineOptions = [];
+    sourceFilterDefinitions = {};
   }
-  renderDisciplineOptions();
+  updateSourceFilterUi();
 }
 
 function envLlmKeyApplies(provider = providerSelect.value) {
@@ -642,6 +910,9 @@ function updateCredentialPlaceholders() {
   const llmKeyInput = document.getElementById("llmApiKey");
   const wosKeyInput = document.getElementById("wosApiKey");
   const openAlexKeyInput = document.getElementById("openAlexApiKey");
+  const semanticScholarKeyInput = document.getElementById("semanticScholarApiKey");
+  const pubmedKeyInput = document.getElementById("pubmedApiKey");
+  const pubmedEmailInput = document.getElementById("pubmedEmail");
   if (llmKeyInput) {
     if (providerSelect.value === "ollama") {
       setTranslatedAttribute(llmKeyInput, "placeholder", "Optional for local Ollama");
@@ -656,6 +927,15 @@ function updateCredentialPlaceholders() {
   }
   if (openAlexKeyInput && environmentConfig.has_openalex_api_key) {
     setTranslatedAttribute(openAlexKeyInput, "placeholder", "Configured via environment");
+  }
+  if (semanticScholarKeyInput && environmentConfig.has_semantic_scholar_api_key) {
+    setTranslatedAttribute(semanticScholarKeyInput, "placeholder", "Configured via environment");
+  }
+  if (pubmedKeyInput && environmentConfig.has_pubmed_api_key) {
+    setTranslatedAttribute(pubmedKeyInput, "placeholder", "Configured via environment");
+  }
+  if (pubmedEmailInput && environmentConfig.has_pubmed_email) {
+    setTranslatedAttribute(pubmedEmailInput, "placeholder", "Configured via environment");
   }
 }
 
@@ -894,6 +1174,9 @@ function createWorkflowState() {
       title: "Query Generation",
       status: "WAITING",
       description: "LLM will translate the research question into a source-specific search query.",
+      intent: "",
+      source: "",
+      query: "",
       body: emptyState("No query generated yet."),
     },
     search: {
@@ -908,6 +1191,11 @@ function createWorkflowState() {
       title: "Metadata Ranking",
       status: "WAITING",
       description: "Returned records will be ranked with available metadata and abstracts when present.",
+      candidateCount: 0,
+      rankedCount: 0,
+      totalRecords: 0,
+      topScore: 0,
+      rankingSteps: [],
       body: emptyState("No ranking request has run."),
     },
     results: {
@@ -990,20 +1278,76 @@ function switchView(view) {
 }
 
 function emptyState(text) {
-  return `<div class="empty-state">${escapeHtml(text)}</div>`;
+  return `<div class="empty-state">${escapeHtml(translatedRuntimeText(text))}</div>`;
 }
 
 function chipList(items) {
   return `<div class="chip-list">${items.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`;
 }
 
+function renderQueryStage(item) {
+  const intentBlock = item.intent ? `
+    <div class="intent-audit">
+      <span>${escapeHtml(translatedRuntimeText("Interpreted intent"))}</span>
+      <p>${escapeHtml(item.intent)}</p>
+    </div>
+  ` : "";
+  const queryItems = [
+    sourceLabels[item.source] || item.source || getValue("dataSource"),
+    item.query || "",
+  ].filter(Boolean);
+  const queryBlock = queryItems.length ? chipList(queryItems) : emptyState("Calling the LLM to generate a source-specific query.");
+  return `${intentBlock}${queryBlock}`;
+}
+
 function metricRow(items) {
   return `<div class="metric-row">${items.map((item) => `
     <div>
       <strong>${escapeHtml(item.value)}</strong>
-      <span>${escapeHtml(item.label)}</span>
+      <span>${escapeHtml(translatedText(item.label))}</span>
     </div>
   `).join("")}</div>`;
+}
+
+function renderRankingStage(item) {
+  const metrics = item.status === "COMPLETE" ? metricRow([
+    { value: item.totalRecords || 0, label: "TOTAL RECORDS" },
+    { value: item.rankedCount || 0, label: "RANKED RECORDS" },
+    { value: item.topScore || 0, label: "TOP SCORE" },
+  ]) : metricRow([
+    { value: item.candidateCount || item.rankedCount || item.totalRecords || 0, label: item.status === "PROCESSING" ? "CANDIDATES" : "RANKED RECORDS" },
+    { value: item.status || "WAITING", label: "RANKING STATUS" },
+    { value: getValue("dataSource").toUpperCase(), label: "SOURCE" },
+  ]);
+  if (!item.rankingSteps || item.rankingSteps.length === 0) {
+    return `${metrics}${emptyState("Waiting for ranking progress.")}`;
+  }
+  const rows = item.rankingSteps.map((step) => {
+    const total = Number(step.total || 0);
+    const current = Number(step.current || 0);
+    const percent = total > 0 ? Math.max(0, Math.min(100, Math.round((current / total) * 100))) : 0;
+    const hasProgress = total > 0 && ["processing", "complete"].includes(String(step.status || "").toLowerCase());
+    const stepTitle = translatedRuntimeText(step.title || step.id || "Ranking step");
+    const stepStatus = translatedStatusText(step.status || "processing");
+    const stepDetail = translatedRuntimeText(step.detail || "");
+    const meta = [
+      total > 0 ? `${current}/${total}` : "",
+      step.concurrency ? (activeLanguage === "zh" ? `并发 ${step.concurrency}` : `concurrency ${step.concurrency}`) : "",
+      step.candidate_count ? (activeLanguage === "zh" ? `${step.candidate_count} 个候选` : `${step.candidate_count} candidates`) : "",
+    ].filter(Boolean).join(" · ");
+    return `
+      <section class="ranking-step-row ${escapeHtml(String(step.status || "processing").toLowerCase())}">
+        <div class="ranking-step-topline">
+          <strong>${escapeHtml(stepTitle)}</strong>
+          <span class="action-pill ${escapeHtml(String(step.status || "processing").toLowerCase())}">${escapeHtml(stepStatus)}</span>
+        </div>
+        ${stepDetail ? `<p>${escapeHtml(stepDetail)}</p>` : ""}
+        ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+        ${hasProgress ? `<div class="progress-bar" aria-label="${escapeHtml(`${stepTitle} ${translatedRuntimeText("progress")}`)}"><span style="width: ${percent}%"></span></div>` : ""}
+      </section>
+    `;
+  }).join("");
+  return `${metrics}<div class="ranking-step-list">${rows}</div>`;
 }
 
 function renderHistory(history, finalQuery, preview) {
@@ -1012,13 +1356,14 @@ function renderHistory(history, finalQuery, preview) {
       ${history.map((row) => `
         <section class="iteration-row">
           <div class="iteration-meta">
-            <strong>Iteration ${escapeHtml(row.iteration)}</strong>
-            <span class="action-pill ${escapeHtml(row.action)}">${escapeHtml(row.action)}</span>
-            <span>${row.total === null || row.total === undefined ? "No count" : `${escapeHtml(row.total)} records`}</span>
+            <strong>${activeLanguage === "zh" ? `第 ${escapeHtml(row.iteration)} 轮` : `Iteration ${escapeHtml(row.iteration)}`}</strong>
+            <span class="action-pill ${escapeHtml(row.action)}">${escapeHtml(translatedActionText(row.action))}</span>
+            <span>${row.total === null || row.total === undefined ? translatedRuntimeText("No count") : activeLanguage === "zh" ? `${escapeHtml(row.total)} 条记录` : `${escapeHtml(row.total)} records`}</span>
           </div>
           <code>${escapeHtml(row.query)}</code>
-          <p>${escapeHtml(row.message || "")}</p>
-          ${row.next_query ? `<div class="next-query"><span>Next query</span><code>${escapeHtml(row.next_query)}</code></div>` : ""}
+          <p>${escapeHtml(translatedRuntimeText(row.message || ""))}</p>
+          ${row.rationale ? `<div class="query-rationale"><span>${escapeHtml(translatedRuntimeText("Adjustment rationale"))}</span><p>${escapeHtml(row.rationale)}</p></div>` : ""}
+          ${row.next_query ? `<div class="next-query"><span>${escapeHtml(translatedRuntimeText("Next query"))}</span><code>${escapeHtml(row.next_query)}</code></div>` : ""}
         </section>
       `).join("")}
     </div>
@@ -1059,16 +1404,16 @@ function renderPapers(papers) {
   return `
     <div class="paper-list">
       ${papers.map((paper) => {
-        const authors = paper.authors && paper.authors.length ? paper.authors.slice(0, 6).join(", ") : "No author metadata";
+        const authors = paper.authors && paper.authors.length ? paper.authors.slice(0, 6).join(", ") : translatedText("No author metadata");
         const meta = [
           paper.provider || "",
           paper.publish_year || "",
-          paper.citations ? `${paper.citations} citations` : "",
+          paper.citations ? `${paper.citations} ${translatedText("citations")}` : "",
           paper.source || "",
           paper.document_types && paper.document_types.length ? paper.document_types.join("; ") : "",
         ].filter(Boolean).join(" | ");
-        const link = paper.links && paper.links.record ? `<a href="${escapeHtml(paper.links.record)}" target="_blank" rel="noreferrer">Open source record</a>` : "";
-        const pdfLink = paper.links && paper.links.pdf ? `<a href="${escapeHtml(paper.links.pdf)}" target="_blank" rel="noreferrer">Open PDF</a>` : "";
+        const link = paper.links && paper.links.record ? `<a href="${escapeHtml(paper.links.record)}" target="_blank" rel="noreferrer">${escapeHtml(translatedText("Open source record"))}</a>` : "";
+        const pdfLink = paper.links && paper.links.pdf ? `<a href="${escapeHtml(paper.links.pdf)}" target="_blank" rel="noreferrer">${escapeHtml(translatedText("Open PDF"))}</a>` : "";
         return `
           <details class="paper-row" open>
             <summary>
@@ -1078,11 +1423,11 @@ function renderPapers(papers) {
             <div class="paper-body">
               <p>${escapeHtml(authors)}</p>
               <p>${escapeHtml(meta)}</p>
-              ${paper.keywords ? `<p><strong>Keywords:</strong> ${escapeHtml(paper.keywords)}</p>` : ""}
+              ${paper.keywords ? `<p><strong>${escapeHtml(translatedText("Keywords:"))}</strong> ${escapeHtml(paper.keywords)}</p>` : ""}
               ${paper.doi ? `<p><strong>DOI:</strong> ${escapeHtml(paper.doi)}</p>` : ""}
-              ${paper.citations ? `<p><strong>Citations:</strong> ${escapeHtml(paper.citations)}</p>` : ""}
-              ${paper.abstract ? `<p><strong>Abstract:</strong> ${escapeHtml(paper.abstract.slice(0, 900))}${paper.abstract.length > 900 ? "..." : ""}</p>` : ""}
-              ${paper.reasoning ? `<p><strong>Reasoning:</strong> ${escapeHtml(paper.reasoning)}</p>` : ""}
+              ${paper.citations ? `<p><strong>${escapeHtml(translatedText("Citations:"))}</strong> ${escapeHtml(paper.citations)}</p>` : ""}
+              ${paper.abstract ? `<p><strong>${escapeHtml(translatedText("Abstract:"))}</strong> ${escapeHtml(paper.abstract.slice(0, 900))}${paper.abstract.length > 900 ? "..." : ""}</p>` : ""}
+              ${paper.reasoning ? `<p><strong>${escapeHtml(translatedText("Reasoning:"))}</strong> ${escapeHtml(paper.reasoning)}</p>` : ""}
               <div class="paper-links">${link} ${pdfLink}</div>
             </div>
           </details>
@@ -1100,7 +1445,7 @@ function renderResultsView() {
         <div class="workspace-header">
           <div>
             <div class="section-kicker">Results</div>
-            <h2>Ranked literature</h2>
+            <h2>${escapeHtml(translatedText("Ranked literature"))}</h2>
           </div>
         </div>
         ${emptyState("Run a search before reviewing results.")}
@@ -1115,35 +1460,35 @@ function renderResultsView() {
       <div class="workspace-header">
         <div>
           <div class="section-kicker">Results</div>
-          <h2>Ranked literature</h2>
+          <h2>${escapeHtml(translatedText("Ranked literature"))}</h2>
         </div>
         <div class="view-actions">
-          <span>${escapeHtml(filtered.length)} shown</span>
-          <span>${escapeHtml(selectedCount)} selected</span>
+          <span>${escapeHtml(filtered.length)} ${escapeHtml(translatedText("shown"))}</span>
+          <span>${escapeHtml(selectedCount)} ${escapeHtml(translatedText("selected"))}</span>
         </div>
       </div>
       <div class="results-toolbar">
-        <input id="resultSearch" type="search" value="${escapeHtml(resultFilters.query)}" placeholder="Search title, author, abstract, DOI">
+        <input id="resultSearch" type="search" value="${escapeHtml(resultFilters.query)}" placeholder="${escapeHtml(translatedText("Search title, author, abstract, DOI"))}">
         <select id="resultMinScore">
-          <option value="all"${resultFilters.minScore === "all" ? " selected" : ""}>All scores</option>
-          <option value="7"${resultFilters.minScore === "7" ? " selected" : ""}>Score >= 7</option>
-          <option value="8"${resultFilters.minScore === "8" ? " selected" : ""}>Score >= 8</option>
-          <option value="9"${resultFilters.minScore === "9" ? " selected" : ""}>Score >= 9</option>
+          <option value="all"${resultFilters.minScore === "all" ? " selected" : ""}>${escapeHtml(translatedText("All scores"))}</option>
+          <option value="7"${resultFilters.minScore === "7" ? " selected" : ""}>${escapeHtml(translatedText("Score >= 7"))}</option>
+          <option value="8"${resultFilters.minScore === "8" ? " selected" : ""}>${escapeHtml(translatedText("Score >= 8"))}</option>
+          <option value="9"${resultFilters.minScore === "9" ? " selected" : ""}>${escapeHtml(translatedText("Score >= 9"))}</option>
         </select>
         <select id="resultAvailability">
-          <option value="all"${resultFilters.availability === "all" ? " selected" : ""}>All metadata</option>
-          <option value="abstract"${resultFilters.availability === "abstract" ? " selected" : ""}>Has abstract</option>
-          <option value="doi"${resultFilters.availability === "doi" ? " selected" : ""}>Has DOI</option>
-          <option value="pdf"${resultFilters.availability === "pdf" ? " selected" : ""}>Has PDF</option>
+          <option value="all"${resultFilters.availability === "all" ? " selected" : ""}>${escapeHtml(translatedText("All metadata"))}</option>
+          <option value="abstract"${resultFilters.availability === "abstract" ? " selected" : ""}>${escapeHtml(translatedText("Has abstract"))}</option>
+          <option value="doi"${resultFilters.availability === "doi" ? " selected" : ""}>${escapeHtml(translatedText("Has DOI"))}</option>
+          <option value="pdf"${resultFilters.availability === "pdf" ? " selected" : ""}>${escapeHtml(translatedText("Has PDF"))}</option>
         </select>
         <select id="resultSort">
-          <option value="rank"${resultFilters.sort === "rank" ? " selected" : ""}>Sort by rank</option>
-          <option value="score"${resultFilters.sort === "score" ? " selected" : ""}>Sort by score</option>
-          <option value="citations"${resultFilters.sort === "citations" ? " selected" : ""}>Sort by citations</option>
-          <option value="year"${resultFilters.sort === "year" ? " selected" : ""}>Sort by year</option>
+          <option value="rank"${resultFilters.sort === "rank" ? " selected" : ""}>${escapeHtml(translatedText("Sort by rank"))}</option>
+          <option value="score"${resultFilters.sort === "score" ? " selected" : ""}>${escapeHtml(translatedText("Sort by score"))}</option>
+          <option value="citations"${resultFilters.sort === "citations" ? " selected" : ""}>${escapeHtml(translatedText("Sort by citations"))}</option>
+          <option value="year"${resultFilters.sort === "year" ? " selected" : ""}>${escapeHtml(translatedText("Sort by year"))}</option>
         </select>
-        <button class="secondary-button" type="button" data-action="select-all-results">Select all shown</button>
-        <button class="secondary-button" type="button" data-action="clear-result-selection">Clear</button>
+        <button class="secondary-button" type="button" data-action="select-all-results">${escapeHtml(translatedText("Select all shown"))}</button>
+        <button class="secondary-button" type="button" data-action="clear-result-selection">${escapeHtml(translatedText("Clear"))}</button>
       </div>
       ${filtered.length ? renderResultRows(filtered) : emptyState("No papers match the current filters.")}
     </section>
@@ -1156,20 +1501,20 @@ function renderResultRows(papers) {
       ${papers.map((paper) => {
         const id = paperId(paper);
         const checked = selectedPaperIds.has(id) ? " checked" : "";
-        const authors = paper.authors && paper.authors.length ? paper.authors.slice(0, 8).join(", ") : "No author metadata";
+        const authors = paper.authors && paper.authors.length ? paper.authors.slice(0, 8).join(", ") : translatedText("No author metadata");
         const meta = [
-          `Rank ${paper.rank || ""}`,
+          `${translatedText("Rank")} ${paper.rank || ""}`,
           paper.score !== undefined ? `${paper.score}/10` : "",
           paper.publish_year || "",
-          paper.citations ? `${paper.citations} citations` : "",
+          paper.citations ? `${paper.citations} ${translatedText("citations")}` : "",
           paper.source || "",
         ].filter(Boolean).join(" | ");
-        const record = paper.links && paper.links.record ? `<a href="${escapeHtml(paper.links.record)}" target="_blank" rel="noreferrer">Record</a>` : "";
+        const record = paper.links && paper.links.record ? `<a href="${escapeHtml(paper.links.record)}" target="_blank" rel="noreferrer">${escapeHtml(translatedText("Record"))}</a>` : "";
         const pdf = paper.links && paper.links.pdf ? `<a href="${escapeHtml(paper.links.pdf)}" target="_blank" rel="noreferrer">PDF</a>` : "";
         return `
           <details class="review-row" open>
             <summary>
-              <input class="paper-select" type="checkbox" value="${escapeHtml(id)}"${checked} aria-label="Select paper">
+              <input class="paper-select" type="checkbox" value="${escapeHtml(id)}"${checked} aria-label="${escapeHtml(translatedText("Select paper"))}">
               <span class="score">${escapeHtml(paper.score ?? 0)}/10</span>
               <span class="paper-title">${escapeHtml(paper.title || "(no title)")}</span>
             </summary>
@@ -1177,9 +1522,9 @@ function renderResultRows(papers) {
               <p>${escapeHtml(authors)}</p>
               <p>${escapeHtml(meta)}</p>
               ${paper.doi ? `<p><strong>DOI:</strong> ${escapeHtml(paper.doi)}</p>` : ""}
-              ${paper.keywords ? `<p><strong>Keywords:</strong> ${escapeHtml(paper.keywords)}</p>` : ""}
-              ${paper.abstract ? `<p><strong>Abstract:</strong> ${escapeHtml(paper.abstract.slice(0, 1400))}${paper.abstract.length > 1400 ? "..." : ""}</p>` : ""}
-              ${paper.reasoning ? `<p><strong>Reasoning:</strong> ${escapeHtml(paper.reasoning)}</p>` : ""}
+              ${paper.keywords ? `<p><strong>${escapeHtml(translatedText("Keywords:"))}</strong> ${escapeHtml(paper.keywords)}</p>` : ""}
+              ${paper.abstract ? `<p><strong>${escapeHtml(translatedText("Abstract:"))}</strong> ${escapeHtml(paper.abstract.slice(0, 1400))}${paper.abstract.length > 1400 ? "..." : ""}</p>` : ""}
+              ${paper.reasoning ? `<p><strong>${escapeHtml(translatedText("Reasoning:"))}</strong> ${escapeHtml(paper.reasoning)}</p>` : ""}
               <div class="paper-links">${record} ${pdf}</div>
             </div>
           </details>
@@ -1465,7 +1810,7 @@ function renderCitationView() {
         ${seeds.length ? seeds.map((seed) => `
           <button type="button" class="seed-row" data-citation-node="${escapeHtml(seed.id)}">
             <strong>${escapeHtml(seed.title || seed.id)}</strong>
-            <span>${escapeHtml([seed.year, seed.citations ? `${seed.citations} citations` : "", seed.score ? `${seed.score}/10` : ""].filter(Boolean).join(" | "))}</span>
+            <span>${escapeHtml([seed.year, seed.citations ? `${seed.citations} ${translatedText("citations")}` : "", seed.score ? `${seed.score}/10` : ""].filter(Boolean).join(" | "))}</span>
           </button>
         `).join("") : emptyState("No seed papers were recorded.")}
       </div>
@@ -1481,10 +1826,10 @@ function renderCitationNodeDetail(node) {
   return `
     <div class="detail-kicker">${escapeHtml(roles || "node")}</div>
     <h3>${escapeHtml(node.title || node.id)}</h3>
-    <p>${escapeHtml([node.year, node.source, node.citations ? `${node.citations} citations` : ""].filter(Boolean).join(" | "))}</p>
+    <p>${escapeHtml([node.year, node.source, node.citations ? `${node.citations} ${translatedText("citations")}` : ""].filter(Boolean).join(" | "))}</p>
     ${node.score !== undefined ? `<p><strong>Score:</strong> ${escapeHtml(node.score)}/10</p>` : ""}
     ${node.rank ? `<p><strong>Rank:</strong> ${escapeHtml(node.rank)}</p>` : ""}
-    ${node.reasoning ? `<p><strong>Reasoning:</strong> ${escapeHtml(node.reasoning)}</p>` : ""}
+    ${node.reasoning ? `<p><strong>${escapeHtml(translatedText("Reasoning:"))}</strong> ${escapeHtml(node.reasoning)}</p>` : ""}
     <div class="paper-links"><a href="${escapeHtml(node.id)}" target="_blank" rel="noreferrer">Open record</a></div>
   `;
 }
@@ -1769,13 +2114,20 @@ function applyStageEvent(event) {
   stage.status = status;
 
   if (event.stage === "query") {
+    if (data.intent) {
+      stage.intent = data.intent;
+    }
+    if (data.source) {
+      stage.source = data.source;
+    }
+    if (data.query) {
+      stage.query = data.query;
+    }
     if (status === "PROCESSING") {
-      stage.body = emptyState("Calling the LLM to generate a source-specific query.");
+      stage.body = renderQueryStage(stage);
     } else {
-      stage.body = chipList([
-        sourceLabels[data.source] || data.source || getValue("dataSource"),
-        data.query || "No query returned",
-      ]);
+      stage.query = data.query || "No query returned";
+      stage.body = renderQueryStage(stage);
     }
   }
 
@@ -1787,13 +2139,13 @@ function applyStageEvent(event) {
   }
 
   if (event.stage === "ranking") {
-    const candidateCount = data.candidate_count ?? "";
-    const rankedCount = data.ranked_count ?? "";
-    stage.body = metricRow([
-      { value: candidateCount || rankedCount || 0, label: status === "PROCESSING" ? "CANDIDATES" : "RANKED RECORDS" },
-      { value: status, label: "RANKING STATUS" },
-      { value: getValue("dataSource").toUpperCase(), label: "SOURCE" },
-    ]);
+    stage.candidateCount = data.candidate_count ?? stage.candidateCount ?? 0;
+    stage.rankedCount = data.ranked_count ?? stage.rankedCount ?? 0;
+    stage.totalRecords = data.total ?? stage.totalRecords ?? 0;
+    if (data.ranking_steps) {
+      stage.rankingSteps = data.ranking_steps;
+    }
+    stage.body = renderRankingStage(stage);
   }
 
   if (event.stage === "results") {
@@ -1816,23 +2168,29 @@ function applyFinalResult(data) {
   updateExportButtons();
   const hasResults = data.ranked && data.ranked.length > 0;
   workflowState.query.status = "COMPLETE";
-  workflowState.query.body = chipList([
-    data.source || data.db || "source",
-    data.db || "",
-    data.field || "No field hint",
-    `${data.iterations} iteration(s)`,
-  ].filter(Boolean));
+  workflowState.query.intent = data.search_intent || workflowState.query.intent || "";
+  workflowState.query.source = data.source || data.db || "source";
+  workflowState.query.query = data.final_query || "";
+  workflowState.query.body = `
+    ${renderQueryStage(workflowState.query)}
+    ${chipList([
+      data.db || "",
+      data.field || "No field hint",
+      `${data.iterations} iteration(s)`,
+    ].filter(Boolean))}
+  `;
 
   workflowState.search.status = "COMPLETE";
   workflowState.search.body = renderHistory(data.history, data.final_query, []);
   workflowState.search.description = `Accepted query returned ${data.total} total records.`;
 
   workflowState.ranking.status = "COMPLETE";
-  workflowState.ranking.body = metricRow([
-    { value: data.total, label: "TOTAL RECORDS" },
-    { value: data.ranked.length, label: "RANKED RECORDS" },
-    { value: hasResults ? Math.max(...data.ranked.map((p) => Number(p.score || 0))) : 0, label: "TOP SCORE" },
-  ]);
+  workflowState.ranking.candidateCount = data.citation_map?.candidate_pool || data.ranked.length || 0;
+  workflowState.ranking.rankedCount = data.ranked.length;
+  workflowState.ranking.totalRecords = data.total;
+  workflowState.ranking.topScore = hasResults ? Math.max(...data.ranked.map((p) => Number(p.score || 0))) : 0;
+  workflowState.ranking.rankingSteps = data.ranking_steps || workflowState.ranking.rankingSteps || [];
+  workflowState.ranking.body = renderRankingStage(workflowState.ranking);
 
   workflowState.results.status = hasResults ? "READY" : "EMPTY";
   const citationMap = data.citation_map || {};
@@ -1978,11 +2336,23 @@ function buildPayload() {
     openalex_api_key: getValue("openAlexApiKey"),
     openalex_email: getValue("openAlexEmail"),
     crossref_email: getValue("crossrefEmail"),
+    semantic_scholar_api_key: getValue("semanticScholarApiKey"),
+    pubmed_api_key: getValue("pubmedApiKey"),
+    pubmed_email: getValue("pubmedEmail"),
+    pubmed_tool: getValue("pubmedTool") || "paperseek",
     llm_api_key: getValue("llmApiKey"),
     llm_provider: getValue("llmProvider"),
     llm_api_type: getValue("llmApiType"),
     llm_model: getValue("llmModel"),
     llm_base_url: getValue("llmBaseUrl"),
+    retrieval_embedding_provider: getValue("retrievalEmbeddingProvider") || "local",
+    retrieval_embedding_model: getValue("retrievalEmbeddingModel"),
+    retrieval_embedding_base_url: getValue("retrievalEmbeddingBaseUrl"),
+    retrieval_embedding_api_key: getValue("retrievalEmbeddingApiKey"),
+    retrieval_reranker_provider: getValue("retrievalRerankerProvider"),
+    retrieval_reranker_model: getValue("retrievalRerankerModel"),
+    retrieval_reranker_base_url: getValue("retrievalRerankerBaseUrl"),
+    retrieval_reranker_api_key: getValue("retrievalRerankerApiKey"),
     wos_db: getValue("wosDb") || "WOS",
     search_field: getValue("searchField"),
     discipline_fields: selectedDisciplineFields(),
@@ -2077,6 +2447,12 @@ async function readNdjsonStream(response) {
 function handleStreamEvent(event) {
   if (event.type === "log") {
     log(event.message || "");
+  } else if (event.type === "heartbeat") {
+    const now = Date.now();
+    if (!latestStreamHeartbeatLogAt || now - latestStreamHeartbeatLogAt >= 30000) {
+      latestStreamHeartbeatLogAt = now;
+      log("Backend keepalive received; still waiting for upstream services.");
+    }
   } else if (event.type === "run") {
     if (event.run_id) {
       runId.textContent = event.run_id;
@@ -2100,6 +2476,26 @@ function applyProviderDefaults() {
 }
 
 providerSelect.addEventListener("change", applyProviderDefaults);
+
+function applyRetrievalProviderDefaults(kind) {
+  const isReranker = kind === "reranker";
+  const select = isReranker ? retrievalRerankerProviderSelect : retrievalEmbeddingProviderSelect;
+  const modelInputElement = isReranker ? retrievalRerankerModelInput : retrievalEmbeddingModelInput;
+  const baseUrlInputElement = isReranker ? retrievalRerankerBaseUrlInput : retrievalEmbeddingBaseUrlInput;
+  if (!select || !modelInputElement || !baseUrlInputElement) {
+    return;
+  }
+  const defaults = retrievalProviderDefaults[select.value] || retrievalProviderDefaults.custom;
+  modelInputElement.value = isReranker ? defaults.rerankerModel : defaults.embeddingModel;
+  baseUrlInputElement.value = defaults.baseUrl;
+}
+
+if (retrievalEmbeddingProviderSelect) {
+  retrievalEmbeddingProviderSelect.addEventListener("change", () => applyRetrievalProviderDefaults("embedding"));
+}
+if (retrievalRerankerProviderSelect) {
+  retrievalRerankerProviderSelect.addEventListener("change", () => applyRetrievalProviderDefaults("reranker"));
+}
 
 if (stopButton) {
   stopButton.addEventListener("click", () => {
@@ -2304,6 +2700,7 @@ if (clearDisciplinesButton) {
 
 dataSourceSelect.addEventListener("change", () => {
   updateSourceFields();
+  updateSourceFilterUi({ reset: true });
   workflowState = createWorkflowState();
   renderWorkflow();
 });
@@ -2336,6 +2733,7 @@ form.addEventListener("submit", async (event) => {
   workflowState.query.body = emptyState("Submitting request to local backend.");
   renderWorkflow();
   setBusy(true);
+  latestStreamHeartbeatLogAt = 0;
   activeSearchController = new AbortController();
   log(`Run ${id} started.`);
   log(`Source: ${payload.data_source}; provider: ${payload.llm_provider}; api type: ${payload.llm_api_type}; model: ${payload.llm_model || "provider default"}.`);
@@ -2374,6 +2772,8 @@ async function initializeApp() {
   }
   updateSourceFields();
   applyProviderDefaults();
+  applyRetrievalProviderDefaults("embedding");
+  applyRetrievalProviderDefaults("reranker");
   await loadDisciplineOptions();
   await loadServerDefaults();
   updateSourceSummary();
