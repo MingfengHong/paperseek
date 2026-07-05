@@ -413,6 +413,72 @@ Output contract:
 
 Output ONLY the JSON object."""
 
+SYSTEM_GOOGLE_SCHOLAR_QUERY_GENERATION = """\
+You are an expert in Google Scholar searches through Serper's /scholar API. Given a research question, generate a concise Google Scholar query string.
+
+Google Scholar / Serper guidance converted into prompt rules:
+- PaperSeek sends the JSON query field as the q value in a POST request to https://google.serper.dev/scholar. Put only the Scholar query text in query, not a URL or JSON payload.
+- Google Scholar works best with concise natural-language academic terms, exact phrases for stable concepts, author names, venue names, theory names, method names, and distinguishing domain terms.
+- Use quoted phrases for stable multi-word concepts such as "open innovation" or "retrieval augmented generation".
+- Use OR for a small synonym group when it materially improves recall. Use -excluded terms only for clear ambiguity.
+- Do not use API parameters such as q=, page=, num=, hl=, as_ylo=, as_yhi=, or sort=.
+- Do not use source-specific field tags from other databases such as TS=, TI=, [Title/Abstract], all:, ti:, abs:, cat:, or PMID.
+- Do not use complex Boolean nesting; keep the query short enough for Google Scholar.
+- If the user writes in another language, translate the search concepts to standard English academic terms.
+- If a discipline or field hint is supplied, include it only as plain search context when useful.
+
+Examples:
+- "AI governance" regulation accountability
+- "open innovation" digital platform ecosystem governance
+- "graph neural networks" "drug discovery"
+
+Output contract:
+- Return exactly one valid JSON object with keys "query" and "rationale".
+- The query field must contain only the Google Scholar q string.
+- The rationale field may briefly explain the concept choices or adjustment for audit.
+- Do not include markdown, bullets, or code blocks outside JSON.
+
+Output ONLY the JSON object."""
+
+SYSTEM_GOOGLE_SCHOLAR_QUERY_BROADEN = """\
+You are an expert in Google Scholar searches through Serper's /scholar API. A previous Scholar query returned too few or zero records. Broaden it while preserving the interpreted search intent.
+
+Strategies:
+- Remove narrow method, population, venue, date, author, or exact-phrase constraints unless they are essential.
+- Replace narrow phrases with broader terms or a small OR synonym group.
+- Remove exclusions if they may suppress relevant literature.
+- Keep the query as plain Google Scholar search text, not API parameters or database field tags.
+- Use supplied top returned titles diagnostically: if they are on-intent but sparse, broaden through synonyms; if they drift, replace the drifting terms.
+
+Output contract:
+- Return exactly one valid JSON object with keys "query" and "rationale".
+- The query field must contain only the broadened Google Scholar q string.
+- Put the broadening reason and title-based diagnostic in the rationale field.
+- Do not include markdown, bullets, or code blocks outside JSON.
+- Make at least one minimal valid broadening change, such as removing one restrictive concept or replacing one narrow phrase with a broader synonym.
+
+Output ONLY the JSON object."""
+
+SYSTEM_GOOGLE_SCHOLAR_QUERY_NARROW = """\
+You are an expert in Google Scholar searches through Serper's /scholar API. A previous Scholar query returned too many records. Narrow it while preserving the interpreted search intent.
+
+Strategies:
+- Add one or two central concepts from the interpreted intent.
+- Add a stable exact phrase for the core topic when appropriate.
+- Add field, method, population, outcome, theory, or venue terms when the user question implies them.
+- Use -excluded terms only for clear ambiguity.
+- Keep the query as plain Google Scholar search text, not API parameters or database field tags.
+- Use supplied top returned titles diagnostically: add missing intent facets or replace terms that pulled the result set away from the intended literature.
+
+Output contract:
+- Return exactly one valid JSON object with keys "query" and "rationale".
+- The query field must contain only the narrowed Google Scholar q string.
+- Put the narrowing reason and title-based diagnostic in the rationale field.
+- Do not include markdown, bullets, or code blocks outside JSON.
+- Make at least one minimal valid narrowing change, such as adding one missing core concept from the research intent.
+
+Output ONLY the JSON object."""
+
 SYSTEM_PAPERHUB_QUERY_GENERATION = """\
 You are an expert in computer science top-conference paper search. Given a research question, generate a concise PaperHub search query.
 

@@ -47,6 +47,8 @@ CONFIG_KEYS = (
     "PUBMED_TOOL",
     "SEARCH_FIELD",
     "SEMANTIC_SCHOLAR_API_KEY",
+    "SERPER_API_KEY",
+    "SERPER_API_KEYS",
     "TARGET_MAX",
     "TARGET_MIN",
     "WOS_API_KEY",
@@ -183,6 +185,29 @@ SOURCE_METADATA = [
         "notes": ["NCBI recommends identifying the tool and email for responsible E-utilities usage."],
     },
     {
+        "id": "googlescholar",
+        "display_name": "Google Scholar (via Serper)",
+        "status": "supported",
+        "description": "Google Scholar search through the Serper Scholar API with snippets, citation-count clues, and PDF links when available.",
+        "api_key": "required",
+        "default": False,
+        "supports_abstracts": True,
+        "supports_citations": True,
+        "supports_citation_expansion": False,
+        "supports_pdf_links": True,
+        "supported_parameters": [
+            "serper_api_key",
+            "search_field",
+            "discipline_fields",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ],
+        "required_config": ["SERPER_API_KEY"],
+        "optional_config": ["SERPER_API_KEYS"],
+        "notes": ["Uses Serper /scholar. Multiple keys can be set in SERPER_API_KEYS."],
+    },
+    {
         "id": "paperhub",
         "display_name": "Computer science top conferences",
         "status": "supported",
@@ -303,7 +328,7 @@ Usage:
 
 The standalone runtime is bundled inside the Skill folder and uses only the
 Python standard library. It can search OpenAlex, arXiv, Semantic Scholar,
-PubMed, computer science top-conference search, Crossref, and WoS Starter directly. If LLM_API_KEY is
+PubMed, Google Scholar through Serper, computer science top-conference search, Crossref, and WoS Starter directly. If LLM_API_KEY is
 configured, it can also ask an OpenAI-compatible LLM to refine search terms and
 score candidates; otherwise it uses deterministic query and ranking heuristics.
 """
@@ -411,7 +436,7 @@ def run_search(argv: List[str]) -> int:
     parser.add_argument(
         "--source",
         default=os.environ.get("DATA_SOURCE", "openalex"),
-        choices=["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"],
+        choices=["openalex", "arxiv", "semanticscholar", "pubmed", "googlescholar", "paperhub", "crossref", "wos"],
     )
     parser.add_argument("--min", dest="target_min", type=int, default=int_env("TARGET_MIN", 5))
     parser.add_argument("--max", dest="target_max", type=int, default=int_env("TARGET_MAX", 20))
@@ -431,6 +456,7 @@ def run_search(argv: List[str]) -> int:
     parser.add_argument("--openalex-email", default="")
     parser.add_argument("--crossref-email", default="")
     parser.add_argument("--semantic-scholar-key", default="")
+    parser.add_argument("--serper-key", default="")
     parser.add_argument("--pubmed-key", default="")
     parser.add_argument("--pubmed-email", default="")
     parser.add_argument("--pubmed-tool", default="")
@@ -535,6 +561,8 @@ def fetch_source(source: str, query: str, limit: int, config: Dict[str, str], di
         return fetch_semantic_scholar(query, limit, config)
     if source == "pubmed":
         return fetch_pubmed(query, limit, config)
+    if source == "googlescholar":
+        return fetch_google_scholar(query, limit, config)
     if source == "paperhub":
         return fetch_paperhub(query, limit, config)
     if source == "crossref":
@@ -648,6 +676,26 @@ def fetch_pubmed(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[D
     payload = summary.get("result") or {}
     records = [normalize_pubmed(pmid, payload[pmid], abstracts.get(pmid, "")) for pmid in ids if isinstance(payload.get(pmid), dict)]
     return records, total, query
+
+
+def fetch_google_scholar(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
+    api_key = first_config_key(config, "SERPER_API_KEY", "SERPER_API_KEYS")
+    if not api_key:
+        raise ValueError("SERPER_API_KEY is required for Google Scholar searches.")
+    payload = {
+        "q": query,
+        "page": 1,
+        "num": max(1, min(limit, 50)),
+    }
+    data = http_json(
+        "https://google.serper.dev/scholar",
+        method="POST",
+        headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+        payload=payload,
+    )
+    organic = data.get("organic") or []
+    records = [normalize_google_scholar(item) for item in organic if isinstance(item, dict)]
+    return records, len(records), query
 
 
 def fetch_paperhub(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
@@ -865,6 +913,42 @@ def normalize_pubmed(pmid: str, item: Dict[str, object], abstract: str) -> Dict[
         "keywords_text": "",
         "citation_count": 0,
         "source_raw_id": pmid,
+    }
+
+
+def normalize_google_scholar(item: Dict[str, object]) -> Dict[str, object]:
+    cited_by = item.get("citedBy") if isinstance(item.get("citedBy"), dict) else {}
+    publication_info = item.get("publicationInfo") if isinstance(item.get("publicationInfo"), dict) else {}
+    authors = []
+    for author in publication_info.get("authors") or []:
+        if isinstance(author, dict) and author.get("name"):
+            authors.append(str(author["name"]))
+        elif isinstance(author, str):
+            authors.append(author)
+    venue = (
+        publication_info.get("journal")
+        or publication_info.get("venue")
+        or publication_info.get("summary")
+        or "Google Scholar"
+    )
+    record_id = str(item.get("id") or item.get("link") or item.get("title") or "")
+    return {
+        "id": "googlescholar:" + record_id if record_id else "",
+        "source": "googlescholar",
+        "title": str(item.get("title") or ""),
+        "authors": authors,
+        "authors_text": ", ".join(authors),
+        "year": item.get("year") or "",
+        "venue": str(venue or ""),
+        "publication_type": "scholarly result",
+        "doi": "",
+        "url": item.get("link") or "",
+        "pdf_url": item.get("pdfUrl") or "",
+        "abstract": truncate_text(str(item.get("snippet") or ""), 3000),
+        "keywords": [],
+        "keywords_text": "",
+        "citation_count": safe_int(cited_by.get("total"), 0),
+        "source_raw_id": record_id,
     }
 
 
@@ -1145,6 +1229,8 @@ def doctor_checks(config: Dict[str, str], source: str, provider: str, api_type: 
         checks.append(check("source.semantic_scholar_key", "warning", "warning", "SEMANTIC_SCHOLAR_API_KEY is not configured.", ["Anonymous Semantic Scholar access is suitable only for light smoke tests."]))
     elif source == "pubmed" and not config.get("PUBMED_EMAIL"):
         checks.append(check("source.pubmed_email", "warning", "warning", "PUBMED_EMAIL is not configured.", ["Set PUBMED_EMAIL to identify responsible NCBI E-utilities usage."]))
+    elif source == "googlescholar" and not first_config_key(config, "SERPER_API_KEY", "SERPER_API_KEYS"):
+        checks.append(check("source.serper_key", "fail", "error", "SERPER_API_KEY is required for Google Scholar searches."))
     else:
         checks.append(check("source.credentials", "pass", "info", "Source-specific credential requirement is satisfied or not required."))
 
@@ -1358,6 +1444,7 @@ def apply_arg_config(config: Dict[str, str], args) -> None:
         "openalex_email": "OPENALEX_EMAIL",
         "crossref_email": "CROSSREF_EMAIL",
         "semantic_scholar_key": "SEMANTIC_SCHOLAR_API_KEY",
+        "serper_key": "SERPER_API_KEY",
         "pubmed_key": "PUBMED_API_KEY",
         "pubmed_email": "PUBMED_EMAIL",
         "pubmed_tool": "PUBMED_TOOL",
@@ -1436,6 +1523,14 @@ def split_fields(value: str) -> List[str]:
     if ";" in value:
         return [part.strip() for part in value.split(";")]
     return [value.strip()]
+
+
+def first_config_key(config: Dict[str, str], *keys: str) -> str:
+    for key in keys:
+        for item in re.split(r"[\s,;]+", config.get(key, "")):
+            if item.strip():
+                return item.strip()
+    return ""
 
 
 def field_label(field_id: str) -> str:

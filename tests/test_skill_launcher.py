@@ -12,7 +12,7 @@ from urllib.parse import unquote_plus
 from tests.helpers import ROOT, read_text
 
 
-SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"]
+SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "googlescholar", "paperhub", "crossref", "wos"]
 
 
 class SkillLauncherTest(unittest.TestCase):
@@ -68,6 +68,11 @@ class SkillLauncherTest(unittest.TestCase):
                 return {"esearchresult": {"count": "1", "idlist": ["123"]}}
             if "esummary.fcgi" in url:
                 return {"result": {"123": {"title": "Cancer Immunotherapy", "uid": "123", "pubdate": "2024", "authors": [{"name": "Lin"}]}}}
+            if "google.serper.dev/scholar" in url:
+                self.assertEqual(method, "POST")
+                self.assertEqual(headers["X-API-KEY"], "serper-test")
+                self.assertEqual(payload["q"], "graph retrieval")
+                return {"organic": [{"id": "gs1", "title": "Graph Scholar Retrieval", "year": 2025, "snippet": "Scholar result.", "link": "https://example.org/gs", "citedBy": {"total": 3}}]}
             if "manifest.json" in url:
                 return {"shards": [{"file": "shards/iclr-2025.fake.json"}]}
             if "iclr-2025.fake.json" in url:
@@ -98,8 +103,9 @@ class SkillLauncherTest(unittest.TestCase):
         runtime.http_text = fake_http_text
         runtime.PAPERHUB_CACHE = None
 
-        for source in ("arxiv", "semanticscholar", "pubmed", "paperhub"):
-            records, total, used_query = runtime.fetch_source(source, "graph retrieval", 2, {}, [])
+        for source in ("arxiv", "semanticscholar", "pubmed", "googlescholar", "paperhub"):
+            config = {"SERPER_API_KEY": "serper-test"} if source == "googlescholar" else {}
+            records, total, used_query = runtime.fetch_source(source, "graph retrieval", 2, config, [])
             self.assertEqual(total, 1, source)
             self.assertEqual(len(records), 1, source)
             self.assertEqual(records[0]["source"], source)

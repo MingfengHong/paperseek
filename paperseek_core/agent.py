@@ -24,6 +24,9 @@ from paperseek_core.prompts import (
     SYSTEM_PUBMED_QUERY_GENERATION,
     SYSTEM_PUBMED_QUERY_BROADEN,
     SYSTEM_PUBMED_QUERY_NARROW,
+    SYSTEM_GOOGLE_SCHOLAR_QUERY_GENERATION,
+    SYSTEM_GOOGLE_SCHOLAR_QUERY_BROADEN,
+    SYSTEM_GOOGLE_SCHOLAR_QUERY_NARROW,
     SYSTEM_QUERY_GENERATION,
     SYSTEM_QUERY_BROADEN,
     SYSTEM_QUERY_NARROW,
@@ -62,6 +65,7 @@ from paperseek_core.sources.providers import (
     ArxivProvider,
     CitationSeedPlan,
     CrossrefProvider,
+    GoogleScholarSerperProvider,
     OpenAlexProvider,
     PaperAuthor,
     PaperCitation,
@@ -529,6 +533,8 @@ class PaperSeekAgent:
                 email=getattr(config, "pubmed_email", ""),
                 tool=getattr(config, "pubmed_tool", "paperseek"),
             )
+        elif self.data_source == "googlescholar":
+            self.provider = GoogleScholarSerperProvider(api_key=getattr(config, "serper_api_key", ""))
         elif self.data_source == "paperhub":
             self.provider = PaperHubProvider()
         else:
@@ -1068,6 +1074,8 @@ class PaperSeekAgent:
             return SYSTEM_SEMANTIC_SCHOLAR_QUERY_GENERATION + "\nRepair task: return a valid Semantic Scholar query value only."
         if self.data_source == "pubmed":
             return SYSTEM_PUBMED_QUERY_GENERATION + "\nRepair task: return a valid PubMed ESearch term value only."
+        if self.data_source == "googlescholar":
+            return SYSTEM_GOOGLE_SCHOLAR_QUERY_GENERATION + "\nRepair task: return a valid Google Scholar q value only."
         if self.data_source == "paperhub":
             return SYSTEM_PAPERHUB_QUERY_GENERATION + "\nRepair task: return valid plain PaperHub search text only."
         return SYSTEM_QUERY_GENERATION + "\nRepair task: return a valid Web of Science Starter API q value only."
@@ -2013,6 +2021,7 @@ class PaperSeekAgent:
             "arxiv": "arXiv",
             "semanticscholar": "Semantic Scholar",
             "pubmed": "PubMed",
+            "googlescholar": "Google Scholar",
             "paperhub": "Computer science top conferences",
         }
         return labels.get(self.data_source, self.data_source)
@@ -2032,6 +2041,8 @@ class PaperSeekAgent:
             return f"GET /graph/v1/paper/search query={query}{suffix}"
         if self.data_source == "pubmed":
             return f"GET /entrez/eutils/esearch.fcgi term={query}{suffix}"
+        if self.data_source == "googlescholar":
+            return f"POST /scholar q={query}{suffix}"
         if self.data_source == "paperhub":
             return f"GET paper-hub shards query={query}{suffix}"
         return f"{query}{suffix}"
@@ -2196,6 +2207,13 @@ class PaperSeekAgent:
                 "pubmed_query_generation",
                 "PubMed ESearch term string",
             )
+        if self.data_source == "googlescholar":
+            return self._generate_source_query(
+                question,
+                SYSTEM_GOOGLE_SCHOLAR_QUERY_GENERATION,
+                "googlescholar_query_generation",
+                "Google Scholar q string",
+            )
         if self.data_source == "paperhub":
             return self._generate_source_query(
                 question,
@@ -2315,6 +2333,16 @@ class PaperSeekAgent:
                 "pubmed_query_broaden",
                 "too few or zero records",
                 "broadened PubMed ESearch term string",
+                feedback,
+            )
+        if self.data_source == "googlescholar":
+            return self._revise_source_query(
+                question,
+                current_query,
+                SYSTEM_GOOGLE_SCHOLAR_QUERY_BROADEN,
+                "googlescholar_query_broaden",
+                "too few or zero records",
+                "broadened Google Scholar q string",
                 feedback,
             )
         if self.data_source == "paperhub":
@@ -2467,6 +2495,16 @@ class PaperSeekAgent:
                 "pubmed_query_narrow",
                 "too many records",
                 "narrowed PubMed ESearch term string",
+                feedback,
+            )
+        if self.data_source == "googlescholar":
+            return self._revise_source_query(
+                question,
+                current_query,
+                SYSTEM_GOOGLE_SCHOLAR_QUERY_NARROW,
+                "googlescholar_query_narrow",
+                "too many records",
+                "narrowed Google Scholar q string",
                 feedback,
             )
         if self.data_source == "paperhub":

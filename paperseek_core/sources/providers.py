@@ -190,6 +190,10 @@ def get_with_retries(
     raise ProviderError(source, f"{source.title()} request failed after {attempts} attempts: {detail}", query=query) from last_exc
 
 
+def _split_api_keys(value: str) -> List[str]:
+    return list(dict.fromkeys(item.strip() for item in re.split(r"[\s,;]+", value or "") if item.strip()))
+
+
 def _retry_delay(response: requests.Response, attempt: int, source: str = "") -> float:
     retry_after = response.headers.get("Retry-After", "")
     try:
@@ -854,6 +858,208 @@ class CrossrefProvider:
             .replace("&quot;", '"')
         )
         return re.sub(r"\s+", " ", text).strip()
+
+
+class GoogleScholarSerperProvider:
+    BASE_URL = "https://google.serper.dev/scholar"
+
+    def __init__(self, api_key: str = ""):
+        self.api_keys = _split_api_keys(api_key)
+        self.last_response_info: Dict[str, Any] = {}
+        self._lock = threading.Lock()
+        self._index = 0
+
+    def retrieval_capabilities(self) -> ProviderRetrievalCapabilities:
+        return ProviderRetrievalCapabilities(
+            source="googlescholar",
+            lanes=(RetrievalLane.RELEVANCE,),
+            max_lane_limit=100,
+        )
+
+    def search(self, query: str, limit: int = 50, page: int = 1, lane: str = RetrievalLane.RELEVANCE) -> ProviderSearchResult:
+        query = (query or "").strip()
+        if not query:
+            raise ProviderError("googlescholar", "Google Scholar search query is empty.")
+        if not self.api_keys:
+            raise ProviderError("googlescholar", "SERPER_API_KEY or SERPER_API_KEYS is required for Google Scholar searches.", query=query)
+
+        requested_limit = max(1, min(int(limit or 10), 100))
+        page_size = 10
+        page_number = max(1, int(page or 1))
+        records: List[PaperRecord] = []
+        total = 0
+        last_info: Dict[str, Any] = {}
+        while len(records) < requested_limit:
+            payload = {
+                "q": query,
+                "page": page_number,
+            }
+            response, info = self._post_with_key_rotation(payload, query=query)
+            last_info = info
+            if response.status_code >= 400:
+                raise ProviderError(
+                    "googlescholar",
+                    f"Google Scholar via Serper returned HTTP {response.status_code}.",
+                    status=response.status_code,
+                    body=response.text[:1000],
+                    query=query,
+                )
+            try:
+                data = response.json()
+            except ValueError as exc:
+                raise ProviderError("googlescholar", "Google Scholar via Serper returned a non-JSON response.", body=response.text[:1000], query=query) from exc
+
+            items = [item for item in data.get("organic") or [] if isinstance(item, dict)]
+            if not total:
+                total = self._total(data, items, page_number, page_size)
+            records.extend(self._to_record(item) for item in items)
+            if len(items) < page_size:
+                break
+            page_number += 1
+        self.last_response_info = last_info
+        records = records[:requested_limit]
+        if not total:
+            total = len(records)
+        return ProviderSearchResult(
+            metadata=SearchMetadata(total=total, page=max(1, int(page or 1)), limit=requested_limit),
+            hits=records,
+        )
+
+    def _post_with_key_rotation(self, payload: Dict[str, Any], query: str):
+        last_response: Optional[requests.Response] = None
+        last_exc: Optional[requests.RequestException] = None
+        started = time.perf_counter()
+        attempts = max(1, min(max(3, len(self.api_keys)), len(self.api_keys) * 3))
+        for attempt in range(1, attempts + 1):
+            api_key = self._next_api_key()
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "paperseek/1.0",
+                "X-API-KEY": api_key,
+            }
+            try:
+                response = requests.post(self.BASE_URL, json=payload, headers=headers, timeout=45)
+                info = {
+                    "method": "POST",
+                    "url": self.BASE_URL,
+                    "status": response.status_code,
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "attempts": attempt,
+                }
+                last_response = response
+                if response.status_code in {401, 403, 408, 409, 425, 429, 500, 502, 503, 504} and attempt < attempts:
+                    time.sleep(_retry_delay(response, attempt, "googlescholar"))
+                    continue
+                return response, info
+            except requests.RequestException as exc:
+                last_exc = exc
+                if attempt < attempts:
+                    time.sleep(0.7 * attempt)
+        if last_response is not None:
+            return last_response, {
+                "method": "POST",
+                "url": self.BASE_URL,
+                "status": last_response.status_code,
+                "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                "attempts": attempts,
+            }
+        detail = _redact_request_text(last_exc)
+        raise ProviderError("googlescholar", f"Google Scholar via Serper request failed after {attempts} attempts: {detail}", query=query) from last_exc
+
+    def _next_api_key(self) -> str:
+        with self._lock:
+            index = self._index
+            self._index += 1
+        return self.api_keys[index % len(self.api_keys)]
+
+    @staticmethod
+    def _total(data: Dict[str, Any], records: List[Any], page: int, page_size: int) -> int:
+        for path in (
+            ("searchInformation", "totalResults"),
+            ("searchInformation", "total_results"),
+            ("searchParameters", "totalResults"),
+        ):
+            value: Any = data
+            for key in path:
+                value = value.get(key) if isinstance(value, dict) else None
+            try:
+                if value not in (None, ""):
+                    return int(str(value).replace(",", ""))
+            except (TypeError, ValueError):
+                pass
+        return max(len(records), ((page - 1) * page_size) + len(records))
+
+    def _to_record(self, item: Dict[str, Any]) -> PaperRecord:
+        scholar_id = str(item.get("id") or item.get("resultId") or "")
+        title = item.get("title") or scholar_id or item.get("link") or ""
+        link = item.get("link") or ""
+        pdf = item.get("pdfUrl") or ""
+        year = self._year(item.get("year"))
+        publication_info = item.get("publicationInfo") or {}
+        authors = self._authors(publication_info)
+        source_title = self._source_title(publication_info)
+        cited_by = item.get("citedBy") or {}
+        cited_total = 0
+        citing_link = ""
+        if isinstance(cited_by, dict):
+            try:
+                cited_total = int(cited_by.get("total") or 0)
+            except (TypeError, ValueError):
+                cited_total = 0
+            citing_link = cited_by.get("link") or ""
+        elif cited_by not in (None, ""):
+            try:
+                cited_total = int(cited_by)
+            except (TypeError, ValueError):
+                cited_total = 0
+        snippet = item.get("snippet") or ""
+        return PaperRecord(
+            uid=f"googlescholar:{scholar_id}" if scholar_id else link or title,
+            title=title,
+            types=["scholarly result"],
+            source_types=["scholarly result"],
+            source=PaperSource(source_title=source_title or "Google Scholar", publish_year=year),
+            names=PaperNames(authors=authors),
+            links=PaperLinks(record=link, landing_page=link, pdf=pdf, citing_articles=citing_link),
+            citations=[PaperCitation(db="Google Scholar", count=cited_total)] if cited_total else [],
+            identifiers=PaperIdentifiers(),
+            keywords=PaperKeywords(author_keywords=[]),
+            abstract=snippet,
+            provider="googlescholar",
+            raw=item,
+        )
+
+    @staticmethod
+    def _authors(publication_info: Any) -> List[PaperAuthor]:
+        if not isinstance(publication_info, dict):
+            return []
+        authors = []
+        for author in publication_info.get("authors") or []:
+            if isinstance(author, dict):
+                name = author.get("name") or author.get("title") or ""
+            else:
+                name = str(author or "")
+            if name:
+                authors.append(PaperAuthor(display_name=name))
+        return authors
+
+    @staticmethod
+    def _source_title(publication_info: Any) -> str:
+        if isinstance(publication_info, dict):
+            summary = publication_info.get("summary") or publication_info.get("journal") or publication_info.get("venue") or ""
+            return re.sub(r"\s+", " ", str(summary)).strip()
+        return re.sub(r"\s+", " ", str(publication_info or "")).strip()
+
+    @staticmethod
+    def _year(value: Any) -> Optional[int]:
+        try:
+            if value not in (None, ""):
+                return int(value)
+        except (TypeError, ValueError):
+            pass
+        match = re.search(r"\b(19|20)\d{2}\b", str(value or ""))
+        return int(match.group(0)) if match else None
 
 
 class ArxivProvider:

@@ -8,7 +8,7 @@ from paperseek.web_app import SearchRequest, _config_from_payload
 from tests.helpers import CONFIG_ENV_KEYS, temporary_env
 
 
-SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"]
+SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "googlescholar", "paperhub", "crossref", "wos"]
 
 
 class WebAppTest(unittest.TestCase):
@@ -33,6 +33,7 @@ class WebAppTest(unittest.TestCase):
         self.assertEqual(payload["disciplines"][6]["label"], "Computer Science")
         self.assertEqual(payload["sources"]["openalex"]["mode"], "native")
         self.assertEqual(payload["sources"]["wos"]["label"], "Web of Science Category")
+        self.assertEqual(payload["sources"]["googlescholar"]["mode"], "text")
         self.assertEqual(payload["sources"]["paperhub"]["mode"], "text")
         self.assertEqual(payload["sources"]["paperhub"]["options"], [])
 

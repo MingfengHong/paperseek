@@ -6,7 +6,7 @@ from pathlib import Path
 from tests.helpers import CONFIG_ENV_KEYS, run_cli
 
 
-SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"]
+SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "googlescholar", "paperhub", "crossref", "wos"]
 
 
 class CliManagementTest(unittest.TestCase):

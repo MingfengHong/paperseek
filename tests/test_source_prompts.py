@@ -123,6 +123,7 @@ class SourcePromptRoutingTest(unittest.TestCase):
             pubmed_api_key="",
             pubmed_email="",
             pubmed_tool="paperseek",
+            serper_api_key="serper-test",
         )
         return PaperSeekAgent(config, llm), llm
 
@@ -131,6 +132,7 @@ class SourcePromptRoutingTest(unittest.TestCase):
             "arxiv": "arXiv API search_query construction",
             "semanticscholar": "Semantic Scholar Academic Graph keyword search",
             "pubmed": "PubMed ESearch term construction",
+            "googlescholar": "Google Scholar searches through Serper",
             "paperhub": "computer science top-conference paper search",
         }
 
@@ -149,7 +151,7 @@ class SourcePromptRoutingTest(unittest.TestCase):
                 self.assertIn('"query"', user_prompt)
                 self.assertIn('"rationale"', user_prompt)
                 self.assertEqual(llm.calls[-1]["temperature"], 0.0)
-                if source in {"semanticscholar", "pubmed", "paperhub"}:
+                if source in {"semanticscholar", "pubmed", "googlescholar", "paperhub"}:
                     self.assertIn("Research field/context hint: Computer Science", user_prompt)
                 else:
                     self.assertNotIn("Research field/context hint", user_prompt)
@@ -159,6 +161,7 @@ class SourcePromptRoutingTest(unittest.TestCase):
             "arxiv": "arXiv API search_query construction",
             "semanticscholar": "Semantic Scholar Academic Graph keyword search",
             "pubmed": "PubMed ESearch term construction",
+            "googlescholar": "Google Scholar searches through Serper",
             "paperhub": "computer science top-conference paper search",
         }
 
@@ -177,7 +180,7 @@ class SourcePromptRoutingTest(unittest.TestCase):
                 self.assertIn('"query"', user_prompt)
                 self.assertIn('"rationale"', user_prompt)
                 self.assertEqual(llm.calls[-1]["temperature"], 0.0)
-                if source in {"semanticscholar", "pubmed", "paperhub"}:
+                if source in {"semanticscholar", "pubmed", "googlescholar", "paperhub"}:
                     self.assertIn("Research field/context hint: Computer Science", user_prompt)
                 else:
                     self.assertNotIn("Research field/context hint", user_prompt)
@@ -196,7 +199,7 @@ class SourcePromptRoutingTest(unittest.TestCase):
                 self.assertIn('"query"', user_prompt)
                 self.assertIn('"rationale"', user_prompt)
                 self.assertEqual(llm.calls[-1]["temperature"], 0.0)
-                if source in {"semanticscholar", "pubmed", "paperhub"}:
+                if source in {"semanticscholar", "pubmed", "googlescholar", "paperhub"}:
                     self.assertIn("Research field/context hint: Computer Science", user_prompt)
                 else:
                     self.assertNotIn("Research field/context hint", user_prompt)

@@ -50,7 +50,7 @@
 
 ### v0.2.0 - More Sources and Multi-Lane Retrieval
 
-- Added arXiv, Semantic Scholar, PubMed, computer science top-conference search, and Crossref.
+- Added arXiv, Semantic Scholar, PubMed, Google Scholar through Serper, computer science top-conference search, and Crossref.
 - The search loop now uses source-aware query generation, intent analysis, iterative top-result feedback, and lightweight multi-lane pre-ranking.
 - Added lightweight multi-lane pre-ranking: before LLM scoring, PaperSeek combines relevance, impact/citation, recency, and local-quality signals according to each source's capabilities, then fuses candidates with RRF, BM25/term coverage, and local hashing embeddings; OpenAI-compatible embedding/reranker endpoints remain optional.
 - Updated the hosted online account system. PaperSeek now uses email registration and sign-in by default, supports GitHub and ModelScope OAuth, and provides signed-in users with up to 20 successful free searches per day.
@@ -70,7 +70,7 @@ PaperSeek focuses on first-pass paper discovery and metadata organization, helpi
 
 ## What PaperSeek Does
 
-- **Understands research questions**: generate source-specific queries for OpenAlex, arXiv, Semantic Scholar, PubMed, computer science top conferences, Crossref, or WoS Starter from Chinese or English input.
+- **Understands research questions**: generate source-specific queries for OpenAlex, arXiv, Semantic Scholar, PubMed, Google Scholar through Serper, computer science top conferences, Crossref, or WoS Starter from Chinese or English input.
 - **Calibrates search strings**: broaden or narrow queries according to target result counts. The default starts with 5 refinement rounds, then uses a limited adaptive extension when the pool is still empty, too small, or far above the pre-ranking safety pool.
 - **Builds structured candidate sets**: normalize title, authors, venue, year, DOI, abstract, citation count, keywords, and links.
 - **Ranks with reasons**: ask an LLM to score candidates and explain each score briefly.
@@ -336,7 +336,7 @@ export DISCIPLINE_FIELDS="17;14"
 paperseek search "open innovation and digital platforms" --source openalex
 ```
 
-`--field` / `SEARCH_FIELD` is a free-text field/context hint that mainly guides LLM query generation. `--discipline` / `DISCIPLINE_FIELDS` is a structured source filter only for sources with reliable native filtering: OpenAlex applies `primary_topic.field.id`, and arXiv appends `cat:`. WoS Starter currently rejects `WC=`, so selected Web of Science Categories are used only as context for building `TS` / `TI` / `SO` queries. Semantic Scholar, PubMed, Crossref, and computer science top-conference search also use field/context hints instead of hard filtering.
+`--field` / `SEARCH_FIELD` is a free-text field/context hint that mainly guides LLM query generation. `--discipline` / `DISCIPLINE_FIELDS` is a structured source filter only for sources with reliable native filtering: OpenAlex applies `primary_topic.field.id`, and arXiv appends `cat:`. WoS Starter currently rejects `WC=`, so selected Web of Science Categories are used only as context for building `TS` / `TI` / `SO` queries. Semantic Scholar, PubMed, Google Scholar, Crossref, and computer science top-conference search also use field/context hints instead of hard filtering.
 
 ## Data Sources
 
@@ -346,6 +346,7 @@ paperseek search "open innovation and digital platforms" --source openalex
 | arXiv | Supported | Not required | Preprints, computer science, physics, mathematics, statistics, and adjacent quantitative fields | Uses the public arXiv Atom API and returns abstracts, categories, and PDF links. |
 | Semantic Scholar | Supported | Optional | Broad scholarly graph search, citation counts, and open PDF clues | Anonymous access is useful for light tests; an API key improves rate limits. |
 | PubMed | Supported | Optional | Medicine, biomedical, and life-science literature | Uses NCBI E-utilities; set email/tool metadata for responsible usage. |
+| Google Scholar | Supported | Required | Google Scholar results, citation-count clues, and open PDF clues | Uses Serper `/scholar`; set `SERPER_API_KEY` or `SERPER_API_KEYS`. |
 | Computer science top conferences | Supported | Not required | Top CS conference papers from ICLR, ICML, NeurIPS, AAAI, and NDSS | Searches computer science top-conference records and needs no source key. |
 | Crossref | Supported | Usually not required | DOI checks, publication metadata, journal and publisher validation | DOI and metadata registry; useful for metadata verification and DOI completion. |
 | Web of Science Starter | Adapter retained | Required | Users with approved Clarivate API access | Commercial database API; availability and returned fields depend on subscription and institutional entitlement. |
@@ -414,7 +415,7 @@ ModelScope API-Inference can be used for LLM and Qwen embedding, but it is not l
 A search usually has four stages:
 
 1. **Query Generation**: the LLM creates an initial query from the research question, optional field/context hint, and source-specific filters.
-2. **Source Search**: PaperSeek requests the selected source (OpenAlex, arXiv, Semantic Scholar, PubMed, computer science top conferences, Crossref, or WoS Starter) and logs HTTP status and hit counts.
+2. **Source Search**: PaperSeek requests the selected source (OpenAlex, arXiv, Semantic Scholar, PubMed, Google Scholar, computer science top conferences, Crossref, or WoS Starter) and logs HTTP status and hit counts.
 3. **Query Refinement**: if the hit count is too low or too high, the LLM adjusts the query and continues.
 4. **Ranking & Results**: the candidate pool is scored by the LLM, and the top records are returned.
 
@@ -455,12 +456,13 @@ Most parameters already have code defaults. After copying `.env.example`, a norm
 | `LLM_API_TYPE` | provider default | `openai_responses`, `openai_chat`, or `anthropic_messages`. |
 | `LLM_MODEL` | provider default | Model name. |
 | `LLM_BASE_URL` | provider default | API base URL. |
-| `DATA_SOURCE` | `openalex` | `openalex`, `arxiv`, `semanticscholar`, `pubmed`, `paperhub`, `crossref`, or `wos`. |
+| `DATA_SOURCE` | `openalex` | `openalex`, `arxiv`, `semanticscholar`, `pubmed`, `googlescholar`, `paperhub`, `crossref`, or `wos`. |
 | `OPENALEX_API_KEY` | empty | OpenAlex API key, recommended for steadier requests. |
 | `OPENALEX_EMAIL` | empty | OpenAlex contact email. |
 | `SEMANTIC_SCHOLAR_API_KEY` | empty | Semantic Scholar API key, optional; anonymous access is best for light tests. |
 | `PUBMED_EMAIL` / `PUBMED_TOOL` | empty / `paperseek` | PubMed / NCBI responsible-use metadata. |
 | `PUBMED_API_KEY` | empty | NCBI API key, optional; increases PubMed E-utilities request limits. |
+| `SERPER_API_KEY` / `SERPER_API_KEYS` | empty | Google Scholar uses Serper; set one key with `SERPER_API_KEY` or multiple round-robin keys with `SERPER_API_KEYS`. |
 | `CROSSREF_EMAIL` | empty | Crossref polite pool email. |
 
 ### Advanced Settings
@@ -516,6 +518,16 @@ PubMed uses NCBI E-utilities. Set a contact email and tool name for responsible 
 3. Create an API key and copy it.
 4. Fill `PubMed API Key` in the Web UI or set `PUBMED_API_KEY`.
 5. Also set `PUBMED_EMAIL` and `PUBMED_TOOL`, for example `paperseek`.
+
+### Google Scholar / Serper
+
+PaperSeek requests Google Scholar through Serper, so this source requires a Serper API key:
+
+1. Open [Serper](https://serper.dev/) and create or sign in to your account.
+2. Open the API key management page.
+3. Copy the API key.
+4. Fill `Serper API Key` in the Web UI or set `SERPER_API_KEY`.
+5. If you have multiple keys, set `SERPER_API_KEYS` with comma-, semicolon-, or whitespace-separated values. PaperSeek rotates through them per request.
 
 ### Crossref
 
@@ -582,7 +594,7 @@ skills/paperseek/scripts/paperseek.py
 skills/paperseek/scripts/paperseek_skill_runtime.py
 ```
 
-For standalone Skill distribution, copy `skills/paperseek/`. `paperseek.py` first tries the full PaperSeek package; if the package is unavailable, it falls back to `paperseek_skill_runtime.py`, a Python standard-library runtime that can run core OpenAlex, arXiv, Semantic Scholar, PubMed, computer science top-conference, Crossref, and key-backed WoS Starter literature search without installing the package. The full package is still required for the Web UI, citation maps, and complete history management.
+For standalone Skill distribution, copy `skills/paperseek/`. `paperseek.py` first tries the full PaperSeek package; if the package is unavailable, it falls back to `paperseek_skill_runtime.py`, a Python standard-library runtime that can run core OpenAlex, arXiv, Semantic Scholar, PubMed, Google Scholar with a Serper key, computer science top-conference, Crossref, and key-backed WoS Starter literature search without installing the package. The full package is still required for the Web UI, citation maps, and complete history management.
 
 ## MCP Server
 
@@ -632,7 +644,7 @@ You can also start the server with `python -m paperseek.mcp_server`. The MCP ser
 
 ## Project Status
 
-PaperSeek is currently alpha software. CLI, Web UI, OpenAlex, arXiv, Semantic Scholar, PubMed, computer science top-conference search, Crossref, citation expansion, CSV export, the optional Skill, and MCP Server are ready for daily literature search and candidate-set organization.
+PaperSeek is currently alpha software. CLI, Web UI, OpenAlex, arXiv, Semantic Scholar, PubMed, Google Scholar through Serper, computer science top-conference search, Crossref, citation expansion, CSV export, the optional Skill, and MCP Server are ready for daily literature search and candidate-set organization.
 
 Contributions are welcome:
 

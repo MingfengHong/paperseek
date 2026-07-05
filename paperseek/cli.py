@@ -123,7 +123,7 @@ def _search_parser(prog: str) -> argparse.ArgumentParser:
         epilog="""
 Environment variables:
   DATA_SOURCE        "openalex" (default), "arxiv", "semanticscholar", "pubmed",
-                     "paperhub", "crossref", or "wos"
+                     "googlescholar", "paperhub", "crossref", or "wos"
   WOS_API_KEY        Clarivate WoS Starter API key (X-ApiKey)
   OPENALEX_API_KEY   OpenAlex API key, recommended for stable use
   OPENALEX_EMAIL     Optional email for OpenAlex contact/polite usage
@@ -173,6 +173,7 @@ Environment variables:
     parser.add_argument("--pubmed-key", default=None, help="NCBI API key for PubMed E-utilities")
     parser.add_argument("--pubmed-email", default=None, help="Email for PubMed E-utilities")
     parser.add_argument("--pubmed-tool", default=None, help="Tool name for PubMed E-utilities")
+    parser.add_argument("--serper-key", default=None, help="Serper API key or key pool for Google Scholar")
     parser.add_argument("--llm-model", default=None, help="LLM model name")
     parser.add_argument("--llm-base-url", default=None, help="Custom LLM API endpoint")
     parser.add_argument("--llm-max-tokens", type=int, default=None, help="Maximum LLM output tokens per request")
@@ -215,6 +216,8 @@ def _apply_search_args(config: AgentConfig, args) -> AgentConfig:
         config.pubmed_email = args.pubmed_email
     if args.pubmed_tool:
         config.pubmed_tool = args.pubmed_tool
+    if args.serper_key:
+        config.serper_api_key = args.serper_key
     if args.llm_key:
         config.llm_api_key = args.llm_key
     if args.llm_provider:

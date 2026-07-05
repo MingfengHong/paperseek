@@ -10,6 +10,7 @@ Use this reference when deciding which PaperSeek data source to use for a user r
 | arXiv | Preprint discovery in arXiv-covered disciplines | No key, abstracts, arXiv categories, PDF links | Preprint-focused; not a complete scholarly index |
 | Semantic Scholar | Broad scholarly graph search and citation-count reference | Cross-disciplinary graph, abstracts when available, citations, DOI/PubMed/arXiv identifiers | Anonymous access is rate-limited; API key recommended for sustained use |
 | PubMed | Medicine, biomedical, and life-science literature | PMID, journal, publication types, abstracts when available | Biomedical scope; email/tool metadata recommended for NCBI E-utilities |
+| Google Scholar | Google Scholar result discovery through Serper | Scholar snippets, citation-count clues, and PDF links when available | Requires `SERPER_API_KEY` or `SERPER_API_KEYS`; no native citation expansion |
 | Computer science top conferences | Top CS conference papers | ICLR/ICML/NeurIPS/AAAI/NDSS-oriented conference paper search | Not exhaustive; no citation graph or DOI registry guarantees |
 | Crossref | DOI and publisher bibliographic metadata | DOI/title/venue/year verification, publisher metadata, broad registry | Abstracts often absent; not ideal as the only semantic recall source |
 | Web of Science Starter | Institution-backed WoS metadata when key and entitlement exist | Curated citation index metadata and citation counts | Key required; UI marks temporarily unavailable; native abstracts should not be assumed |
@@ -46,6 +47,12 @@ Use PubMed when:
 - the topic is medicine, biomedical science, or life science;
 - PMID and journal metadata matter;
 - `PUBMED_EMAIL` is configured for responsible NCBI E-utilities usage.
+
+Use Google Scholar through Serper when:
+
+- the user explicitly asks for Google Scholar;
+- `SERPER_API_KEY` or `SERPER_API_KEYS` is configured;
+- Scholar snippets, citation-count clues, and PDF links are useful enough for screening.
 
 Use computer science top-conference search when:
 

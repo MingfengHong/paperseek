@@ -50,6 +50,7 @@
                 <option value="arxiv">arXiv (preprints)</option>
                 <option value="semanticscholar">Semantic Scholar (broad scholarly graph)</option>
                 <option value="pubmed">PubMed (biomedical literature)</option>
+                <option value="googlescholar">Google Scholar (via Serper)</option>
                 <option value="paperhub">Computer science top conferences</option>
                 <option value="crossref">Crossref (metadata / DOI registry)</option>
                 <option value="wos">Web of Science Starter (temporarily unavailable)</option>
@@ -243,6 +244,10 @@
                     <label id="pubmedToolField" class="field source-field source-pubmed">
                       <span>PubMed Tool</span>
                       <input id="pubmedTool" type="text" value="paperseek" autocomplete="off">
+                    </label>
+                    <label id="serperKeyField" class="field span-2 source-field source-googlescholar">
+                      <span>Serper API Key</span>
+                      <input id="serperApiKey" type="password" placeholder="Required for Google Scholar" autocomplete="off">
                     </label>
                     <label id="wosKeyField" class="field span-2 source-field source-wos">
                       <span>WoS API Key</span>

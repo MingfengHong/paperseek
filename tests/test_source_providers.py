@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from paperseek_core.sources.providers import (
     ArxivProvider,
+    GoogleScholarSerperProvider,
     PaperHubProvider,
     PubMedProvider,
     SemanticScholarProvider,
@@ -167,6 +168,46 @@ class SourceProviderTest(unittest.TestCase):
         self.assertEqual(record.identifiers.pmid, "123")
         self.assertEqual(record.identifiers.doi, "10.1234/pubmed")
         self.assertEqual(record.abstract, "PubMed abstract.")
+
+    def test_google_scholar_serper_provider_posts_query_and_maps_results(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-1",
+                    "title": "AI Governance and Accountability",
+                    "link": "https://example.org/paper",
+                    "pdfUrl": "https://example.org/paper.pdf",
+                    "snippet": "A Google Scholar result snippet.",
+                    "year": 2024,
+                    "publicationInfo": {
+                        "summary": "A Ada - Journal of AI Policy, 2024",
+                        "authors": [{"name": "A Ada"}],
+                    },
+                    "citedBy": {"total": 12, "link": "https://scholar.google.com/scholar?cites=1"},
+                }
+            ]
+        }
+        captured = {}
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            captured.update({"url": url, "json": json, "headers": headers, "timeout": timeout})
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a,serper-b").search("AI governance", limit=5, page=2)
+
+        self.assertEqual(captured["url"], "https://google.serper.dev/scholar")
+        self.assertEqual(captured["json"]["q"], "AI governance")
+        self.assertEqual(captured["json"]["page"], 2)
+        self.assertNotIn("num", captured["json"])
+        self.assertIn(captured["headers"]["X-API-KEY"], {"serper-a", "serper-b"})
+        self.assertEqual(result.metadata.total, 11)
+        record = result.hits[0]
+        self.assertEqual(record.provider, "googlescholar")
+        self.assertEqual(record.uid, "googlescholar:gs-1")
+        self.assertEqual(record.links.pdf, "https://example.org/paper.pdf")
+        self.assertEqual(record.citations[0].count, 12)
+        self.assertEqual(record.abstract, "A Google Scholar result snippet.")
 
     def test_paperhub_provider_loads_manifest_and_scores_shards(self):
         PaperHubProvider._paper_cache = None

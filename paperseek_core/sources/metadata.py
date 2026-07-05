@@ -159,6 +159,31 @@ SOURCE_METADATA: Dict[str, SourceMetadata] = {
             "Biomedical field/context hints are used only to help the LLM choose PubMed terms.",
         ],
     ),
+    "googlescholar": SourceMetadata(
+        id="googlescholar",
+        display_name="Google Scholar (Serper)",
+        status="supported",
+        description="Google Scholar results accessed through Serper's /scholar API, useful for broad discovery across scholarly pages and citation metadata exposed by Google Scholar.",
+        api_key="required",
+        supports_abstracts=True,
+        supports_citations=True,
+        supports_citation_expansion=False,
+        supports_pdf_links=True,
+        supported_parameters=[
+            "serper_api_key",
+            "search_field",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ] + RETRIEVAL_PARAMETERS,
+        required_config=["SERPER_API_KEY"],
+        optional_config=["SERPER_API_KEYS"],
+        notes=[
+            "Uses Serper's Google Scholar endpoint and requires a Serper API key.",
+            "SERPER_API_KEYS can contain multiple keys separated by commas, semicolons, spaces, or newlines; PaperSeek rotates them across requests.",
+            "Field/context hints are used only to help the LLM choose better Google Scholar terms.",
+        ],
+    ),
     "paperhub": SourceMetadata(
         id="paperhub",
         display_name="Computer science top conferences",
@@ -225,7 +250,7 @@ def require_source_metadata(source: str) -> SourceMetadata:
 def list_source_metadata() -> List[Dict[str, object]]:
     return [
         SOURCE_METADATA[key].to_dict()
-        for key in ("openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos")
+        for key in ("openalex", "arxiv", "semanticscholar", "pubmed", "googlescholar", "paperhub", "crossref", "wos")
     ]
 
 

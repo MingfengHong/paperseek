@@ -46,7 +46,7 @@ Common flags:
 
 | Flag | Meaning |
 | --- | --- |
-| `--source openalex|crossref|wos` | Literature source. Default is OpenAlex. |
+| `--source openalex|arxiv|semanticscholar|pubmed|googlescholar|paperhub|crossref|wos` | Literature source. Default is OpenAlex. |
 | `--field FIELD` | Optional discipline or field hint. |
 | `--min N` / `--max N` | Target result range. |
 | `--iterations N` | Maximum query broaden/narrow cycles. |
@@ -69,6 +69,11 @@ Source flags:
 ```bash
 --openalex-key YOUR_KEY
 --openalex-email you@example.org
+--semantic-scholar-key YOUR_KEY
+--serper-key YOUR_KEY
+--pubmed-key YOUR_KEY
+--pubmed-email you@example.org
+--pubmed-tool paperseek
 --crossref-email you@example.org
 --wos-key YOUR_KEY
 --db WOS

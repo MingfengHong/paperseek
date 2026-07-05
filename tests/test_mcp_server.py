@@ -4,7 +4,7 @@ from unittest.mock import patch
 from tests.helpers import CONFIG_ENV_KEYS, temporary_env
 
 
-SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"]
+SOURCE_IDS = ["openalex", "arxiv", "semanticscholar", "pubmed", "googlescholar", "paperhub", "crossref", "wos"]
 
 
 def _mcp_available() -> bool:
