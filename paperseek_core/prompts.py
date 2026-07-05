@@ -55,7 +55,7 @@ Strategies:
 - Remove year restrictions (PY=)
 - Use broader terms with wildcards (e.g., educat* instead of "education")
 - Replace exact phrase quotation marks with broader wildcard terms joined by AND
-- Use the supplied top returned titles diagnostically: if they are on-intent but sparse, add synonyms; if they are off-intent, replace the drifting terms rather than merely adding more terms
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -76,7 +76,7 @@ Strategies:
 - Add additional AND conditions with specific terms
 - For discipline-specific queries, add SO= for key journals in the field
 - Replace broad wildcards with more specific terms
-- Use the supplied top returned titles diagnostically: keep terms reflected in relevant titles and add missing intent facets; if titles reveal topic drift, exclude or replace the drifting concept
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -121,7 +121,7 @@ Strategies:
 - Keep the query concise enough for OpenAlex relevance search.
 - Do not use wildcard characters such as * or ?.
 - Keep all quotation marks and parentheses balanced.
-- Use supplied top returned titles diagnostically: if they match the intent, broaden through synonyms; if they drift, replace the drifting terms.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -142,7 +142,7 @@ Strategies:
 - Do not use wildcard characters such as * or ?.
 - Do not add API parameters such as filter= or sort=.
 - Keep all quotation marks and parentheses balanced.
-- Use supplied top returned titles diagnostically: add missing intent facets or replace terms that pulled the result set away from the intended literature.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -182,7 +182,7 @@ Strategies:
 - Remove exact phrases.
 - Use broader topic words.
 - Keep it as plain bibliographic terms, not Boolean syntax.
-- Use supplied top returned titles diagnostically: broaden terms that are still on-intent and replace terms that produced off-topic metadata.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -200,7 +200,7 @@ Strategies:
 - Add one or two highly central topic, theory, method, or field terms.
 - Keep it as plain bibliographic terms.
 - Do not add API parameters or field tags.
-- Use supplied top returned titles diagnostically: retain on-intent terms and add missing concepts that distinguish the target literature.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -247,7 +247,7 @@ Official arXiv API guidance converted into prompt rules:
 - Replace narrow terms with broader synonyms using OR.
 - Keep Boolean operators uppercase: AND, OR, ANDNOT.
 - Do not output API parameters or URLs.
-- Use supplied top returned titles diagnostically: if they are on-intent but too sparse, broaden field prefixes or synonyms; if they drift, replace the drifting term.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -268,7 +268,7 @@ Official arXiv API guidance converted into prompt rules:
 - Add cat: only when the user's topic clearly belongs to a known arXiv category.
 - Use parentheses for synonym groups and uppercase AND, OR, ANDNOT.
 - Do not output API parameters or URLs.
-- Use supplied top returned titles diagnostically: add missing task/method/domain facets or replace a term that caused off-topic preprints.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -315,7 +315,7 @@ Official Semantic Scholar API guidance converted into prompt rules:
 - Prefer broader title/abstract terms and common synonyms joined with OR-style grouping when helpful.
 - Keep the query short enough for relevance search.
 - Do not output API parameters, URLs, or source-specific field tags.
-- Use supplied top returned titles diagnostically: broaden on-intent wording and replace words that pulled the top titles away from the target literature.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -335,7 +335,7 @@ Official Semantic Scholar API guidance converted into prompt rules:
 - Use quoted phrases for stable named concepts.
 - Use +required terms sparingly for central concepts and -excluded terms only for clear ambiguity.
 - Do not output API parameters, URLs, or source-specific field tags.
-- Use supplied top returned titles diagnostically: keep terms seen in relevant titles and add missing intent facets that would separate the target papers from broad matches.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -381,7 +381,7 @@ Official PubMed/NCBI E-utilities guidance converted into prompt rules:
 - Replace exact phrase chains with broader OR synonym groups.
 - Keep Boolean operators uppercase: AND, OR, NOT.
 - Do not output E-utilities parameters or URLs.
-- Use supplied top returned titles diagnostically: broaden biomedical synonyms when titles are on-intent, or replace terms that caused off-topic clinical/biological drift.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -402,7 +402,7 @@ Official PubMed/NCBI E-utilities guidance converted into prompt rules:
 - Use [Date - Publication] only when the user explicitly gives a date range.
 - Keep Boolean operators uppercase: AND, OR, NOT.
 - Do not output E-utilities parameters or URLs.
-- Use supplied top returned titles diagnostically: add missing disease/intervention/outcome facets or replace ambiguous terms exposed by the titles.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -448,7 +448,7 @@ Strategies:
 - Replace narrow phrases with broader terms or a small OR synonym group.
 - Remove exclusions if they may suppress relevant literature.
 - Keep the query as plain Google Scholar search text, not API parameters or database field tags.
-- Use supplied top returned titles diagnostically: if they are on-intent but sparse, broaden through synonyms; if they drift, replace the drifting terms.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -470,7 +470,7 @@ Strategies:
 - Remove broad standalone terms that pull in off-topic titles.
 - Use -excluded terms only for clear ambiguity.
 - Keep the query as plain Google Scholar search text, not API parameters or database field tags.
-- Use supplied top returned titles diagnostically: replace terms that pulled the result set away from the intended literature, or add one missing mandatory facet.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -514,7 +514,7 @@ PaperHub guidance converted into prompt rules:
 - Remove narrow dataset, author, conference, year, or presentation-type terms unless essential.
 - Use broader method/task words and common synonyms.
 - Avoid API parameters, field tags, and database-specific syntax.
-- Use supplied top returned titles diagnostically: broaden method/task terms when titles are on-intent, or replace terms that pulled matches away from the intended CS literature.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -535,7 +535,7 @@ PaperHub guidance converted into prompt rules:
 - Prefer one central method/task phrase and one mandatory dataset, benchmark, venue, or year term from the original question when helpful.
 - Prefer terms likely to occur in top-conference paper titles, abstracts, keywords, or metadata, but avoid broad standalone terms.
 - Avoid API parameters, field tags, and database-specific syntax.
-- Use supplied top returned titles diagnostically: replace terms that caused broad top-conference drift, or add one missing mandatory facet.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -574,7 +574,7 @@ Strategies:
 - Remove exact phrases.
 - Use broader topic words and common synonyms.
 - Keep it as plain search terms, not API parameters.
-- Use supplied top returned titles diagnostically: broaden on-intent wording and replace terms that caused topic drift.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -592,7 +592,7 @@ Strategies:
 - Add one or two highly central topic, method, venue, disease, population, or field terms from the original question.
 - Prefer stable phrase terms for named concepts.
 - Keep it as plain search terms, not API parameters.
-- Use supplied top returned titles diagnostically: keep on-intent terms and add missing facets that separate the desired literature from broad matches.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -621,3 +621,4 @@ Output a JSON array:
 [{"uid": "...", "score": N, "reasoning": "One sentence in the user's language explaining why."}, ...]
 
 Sort by score descending. Output ONLY the JSON array, no markdown, no code blocks."""
+

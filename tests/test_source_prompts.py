@@ -236,6 +236,8 @@ class SourcePromptRoutingTest(unittest.TestCase):
         self.assertIn("Top returned candidate titles", revision_prompt)
         self.assertIn("Digital Platform Governance and Algorithmic Control", revision_prompt)
         self.assertIn("above target maximum", revision_prompt)
+        self.assertIn("on-intent", revision_prompt)
+        self.assertIn("off-intent", revision_prompt)
         self.assertIn("JSON rationale field", revision_prompt)
         self.assertIn("Structured output contract", revision_prompt)
         self.assertEqual(result["history"][0]["rationale"], "Narrowed toward algorithmic governance after title review.")

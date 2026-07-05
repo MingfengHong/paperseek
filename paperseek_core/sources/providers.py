@@ -889,13 +889,18 @@ class GoogleScholarSerperProvider:
         records: List[PaperRecord] = []
         total = 0
         last_info: Dict[str, Any] = {}
-        while len(records) < requested_limit:
+        seen = set()
+        pages_scanned = 0
+        empty_pages = 0
+        max_pages = self._max_pages_to_scan(requested_limit, page_size)
+        while pages_scanned < max_pages:
             payload = {
                 "q": query,
                 "page": page_number,
             }
             response, info = self._post_with_key_rotation(payload, query=query)
             last_info = info
+            pages_scanned += 1
             if response.status_code >= 400:
                 raise ProviderError(
                     "googlescholar",
@@ -910,20 +915,55 @@ class GoogleScholarSerperProvider:
                 raise ProviderError("googlescholar", "Google Scholar via Serper returned a non-JSON response.", body=response.text[:1000], query=query) from exc
 
             items = [item for item in data.get("organic") or [] if isinstance(item, dict)]
-            if not total:
-                total = self._total(data, items, page_number, page_size)
-            records.extend(self._to_record(item) for item in items)
-            if len(items) < page_size:
-                break
+            if items:
+                empty_pages = 0
+                total = max(total, self._total(data, items, page_number, page_size))
+                for item in items:
+                    key = self._record_key(item)
+                    if key and key in seen:
+                        continue
+                    if key:
+                        seen.add(key)
+                    if len(records) < requested_limit:
+                        records.append(self._to_record(item))
+                if len(records) >= requested_limit or len(items) < page_size:
+                    break
+            else:
+                empty_pages += 1
+                if empty_pages >= self._empty_page_stop_threshold(records):
+                    break
             page_number += 1
+        if last_info:
+            last_info = dict(last_info)
+            last_info["pages_scanned"] = pages_scanned
+            last_info["returned_before_truncate"] = len(records)
+            last_info["estimated_total"] = total or len(records)
         self.last_response_info = last_info
-        records = records[:requested_limit]
         if not total:
             total = len(records)
+        elif records:
+            total = max(total, len(records))
         return ProviderSearchResult(
             metadata=SearchMetadata(total=total, page=max(1, int(page or 1)), limit=requested_limit),
-            hits=records,
+            hits=records[:requested_limit],
         )
+
+    @staticmethod
+    def _max_pages_to_scan(requested_limit: int, page_size: int) -> int:
+        pages_needed = max(1, (requested_limit + page_size - 1) // page_size)
+        return min(50, max(10, pages_needed * 3))
+
+    @staticmethod
+    def _empty_page_stop_threshold(records: List[PaperRecord]) -> int:
+        return 3 if records else 5
+
+    @staticmethod
+    def _record_key(item: Dict[str, Any]) -> str:
+        for key in ("id", "resultId", "link", "title"):
+            value = str(item.get(key) or "").strip().lower()
+            if value:
+                return value
+        return ""
 
     def _post_with_key_rotation(self, payload: Dict[str, Any], query: str):
         last_response: Optional[requests.Response] = None

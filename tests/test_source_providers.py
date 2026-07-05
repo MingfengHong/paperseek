@@ -209,6 +209,30 @@ class SourceProviderTest(unittest.TestCase):
         self.assertEqual(record.citations[0].count, 12)
         self.assertEqual(record.abstract, "A Google Scholar result snippet.")
 
+    def test_google_scholar_serper_provider_skips_transient_empty_pages(self):
+        payloads = [
+            {"organic": []},
+            {
+                "organic": [
+                    {"id": "gs-2", "title": "AI Governance", "link": "https://example.org/2"},
+                    {"id": "gs-3", "title": "AI Accountability", "link": "https://example.org/3"},
+                ]
+            },
+        ]
+        pages = []
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            pages.append(json["page"])
+            payload = payloads.pop(0) if payloads else {"organic": []}
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("AI governance", limit=5)
+
+        self.assertEqual(pages[:2], [1, 2])
+        self.assertEqual(len(result.hits), 2)
+        self.assertEqual(result.metadata.total, 12)
+
     def test_paperhub_provider_loads_manifest_and_scores_shards(self):
         PaperHubProvider._paper_cache = None
 

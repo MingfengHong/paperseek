@@ -2158,9 +2158,13 @@ class PaperSeekAgent:
         else:
             lines.append("- Top returned candidate titles: none returned.")
         lines.append(
-            "Use the titles to choose the next adjustment. Put the adjustment direction, "
-            "title-based diagnostic, and reason in the JSON rationale field. Put only the revised "
-            "source query in the JSON query field."
+            "Before revising the query, compare these titles with the interpreted search intent. "
+            "Decide whether the returned set is on-intent, off-intent, or missing a core facet. "
+            "If titles are off-intent, remove or replace the drift-causing terms rather than "
+            "mechanically adding more keywords. If titles are on-intent but the count is still "
+            "wrong, adjust specificity or recall while preserving the invariant intent. Put the "
+            "adjustment direction, title-based diagnostic, and reason in the JSON rationale field. "
+            "Put only the revised source query in the JSON query field."
         )
         return "\n".join(lines) + "\n"
 
@@ -2175,9 +2179,9 @@ class PaperSeekAgent:
             "- Return exactly one valid JSON object and no text outside JSON.\n"
             "- Use this schema: {\"query\":\"...\", \"rationale\":\"...\"}.\n"
             f"- The query field must contain exactly one complete {output_label}; it is the only value PaperSeek will send to the source API.\n"
-            "- The rationale field may briefly explain the adjustment, direction, or title-based diagnostic for audit.\n"
+            "- The rationale field may briefly explain the adjustment, direction, or title-intent diagnostic for audit.\n"
             "- Do not put the rationale, labels, markdown, bullets, or comments inside the query field.\n"
-            "- If you compare returned titles with the intent, put the conclusion in rationale and keep query clean.\n"
+            "- If you compare returned titles with the intent, put the on-intent/off-intent conclusion in rationale and keep query clean.\n"
             "- If you cannot improve the query, repeat the current valid query in query and explain why in rationale.\n"
         )
 
