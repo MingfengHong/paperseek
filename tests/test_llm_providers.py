@@ -25,6 +25,12 @@ class LLMProviderTest(unittest.TestCase):
         self.assertEqual(default_model("cstcloud"), "deepseek-v4-flash")
         self.assertEqual(default_base_url("cstcloud"), "https://uni-api.cstcloud.cn/v1")
 
+    def test_nvidia_provider_defaults(self):
+        self.assertIn("nvidia", SUPPORTED_LLM_PROVIDERS)
+        self.assertEqual(default_api_type("nvidia"), "openai_chat")
+        self.assertEqual(default_model("nvidia"), "nvidia/llama-3.3-nemotron-super-49b-v1.5")
+        self.assertEqual(default_base_url("nvidia"), "https://integrate.api.nvidia.com/v1")
+
     def test_blank_model_and_base_url_fall_back_to_provider_defaults(self):
         with temporary_env(
             {
@@ -63,6 +69,32 @@ class LLMProviderTest(unittest.TestCase):
         self.assertEqual(post.call_args.args[0], "https://api.kimi.com/coding/v1/chat/completions")
         self.assertEqual(post.call_args.kwargs["json"]["temperature"], 0.6)
         self.assertEqual(post.call_args.kwargs["json"]["thinking"], {"type": "disabled"})
+
+    def test_openai_chat_rotates_key_pool_on_retryable_status(self):
+        class FakeResponse:
+            headers = {}
+
+            def __init__(self, status_code, payload=None, text=""):
+                self.status_code = status_code
+                self._payload = payload or {}
+                self.text = text
+
+            def json(self):
+                return self._payload
+
+        calls = []
+
+        def fake_post(url, **kwargs):
+            calls.append(kwargs["headers"].get("Authorization"))
+            if len(calls) == 1:
+                return FakeResponse(429, text='{"status":429}')
+            return FakeResponse(200, {"choices": [{"message": {"content": "clean answer"}}]})
+
+        with patch("paperseek_core.llm.requests.post", side_effect=fake_post):
+            client = OpenAIChatClient("sk-rotate-a,sk-rotate-b", model="gpt-test", base_url="https://example.test/v1")
+            self.assertEqual(client.chat([{"role": "user", "content": "ping"}]), "clean answer")
+
+        self.assertEqual(calls, ["Bearer sk-rotate-a", "Bearer sk-rotate-b"])
 
     def test_blank_or_invalid_llm_max_tokens_falls_back_safely(self):
         import importlib
@@ -111,6 +143,34 @@ class LLMProviderTest(unittest.TestCase):
         self.assertIn('value="cstcloud"', html)
         self.assertIn("deepseek-v4-flash", app_js)
         self.assertIn("https://uni-api.cstcloud.cn/v1", app_js)
+
+    def test_nvidia_provider_is_available_in_web_ui(self):
+        html = read_text("paperseek/static/index.html")
+        app_js = read_text("paperseek/static/app.js")
+        self.assertIn('value="nvidia"', html)
+        self.assertIn("nvidia/llama-3.3-nemotron-super-49b-v1.5", app_js)
+        self.assertIn("nvidia/nv-embedqa-e5-v5", app_js)
+        self.assertIn("nv-rerank-qa-mistral-4b:1", app_js)
+
+    def test_openrouter_retrieval_is_available_in_web_ui(self):
+        html = read_text("paperseek/static/index.html")
+        app_js = read_text("paperseek/static/app.js")
+        self.assertIn('value="openrouter"', html)
+        self.assertIn("openai/text-embedding-3-small", app_js)
+        self.assertIn("jinaai/jina-reranker-v2-base-multilingual", app_js)
+
+    def test_ranking_llm_timeout_defaults_to_preview_safe_value(self):
+        with temporary_env(clear=("RANKING_LLM_TIMEOUT_SECONDS",)):
+            config = AgentConfig.from_env()
+            self.assertEqual(config.ranking_llm_timeout_seconds, 60)
+
+        with temporary_env({"RANKING_LLM_TIMEOUT_SECONDS": "15"}):
+            config = AgentConfig.from_env()
+            self.assertEqual(config.ranking_llm_timeout_seconds, 15)
+
+        with temporary_env({"RANKING_LLM_TIMEOUT_SECONDS": "2"}):
+            config = AgentConfig.from_env()
+            self.assertEqual(config.ranking_llm_timeout_seconds, 10)
 
     def test_llm_timeout_is_configurable_and_keeps_safe_minimum(self):
         import importlib

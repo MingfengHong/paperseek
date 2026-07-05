@@ -419,16 +419,22 @@ You are an expert in computer science top-conference paper search. Given a resea
 PaperHub guidance converted into prompt rules:
 - PaperHub is for computer science top-conference papers.
 - Put plain search text in the JSON query field, not a URL.
-- PaperHub search is keyword-oriented over title, abstract, authors, keywords, conference, year, and presentation type.
+- PaperHub search is over title, abstract, authors, keywords, conference, year, and presentation type.
+- Use this Google / Google Scholar style subset only:
+  - space-separated terms are required together, for example: graph retrieval
+  - quoted phrases require exact phrase matches, for example: "graph neural"
+  - uppercase OR creates alternatives inside one required group, for example: "graph neural" OR GNN retrieval
+  - prefix a term or phrase with - to exclude it, for example: retrieval -survey
+  - metadata filters may be used only when explicit in the intent: conference:ICLR, venue:NeurIPS, year:2025, after:2022, before:2026
 - Prefer method names, task names, dataset names, system names, benchmark names, author names, conference names, years, and presentation terms when they are central to the question.
 - Use concise English computer-science terms that are likely to appear in paper titles, abstracts, keywords, or conference metadata.
-- Do not use API parameters or field tags such as query=, title:, abstract:, author:, conference:, year:, TS=, [Title/Abstract], all:, ti:, or cat:.
+- Do not use API parameters or unsupported field tags such as query=, title:, abstract:, author:, TS=, [Title/Abstract], all:, ti:, or cat:.
 - If the user writes in another language, translate the search concepts to standard English computer-science terms.
 
 Examples:
-- graph neural networks retrieval ICLR
-- transformer efficient inference NeurIPS
-- diffusion models image generation spotlight
+- "graph neural" OR GNN retrieval conference:ICLR
+- transformer "efficient inference" venue:NeurIPS
+- "diffusion models" "image generation" spotlight
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -443,9 +449,9 @@ You are an expert in computer science top-conference paper search. A previous Pa
 
 PaperHub guidance converted into prompt rules:
 - Keep the JSON query field as plain search text.
-- Remove narrow dataset, author, conference, year, or presentation-type terms unless essential.
-- Use broader method/task words and common synonyms.
-- Avoid API parameters, field tags, and database-specific syntax.
+- Use the same Google / Google Scholar style subset as PaperHub generation: required terms by spaces, quoted phrases, OR alternatives, - exclusions, and conference:/venue:/year:/after:/before: metadata filters.
+- Broaden by removing one required term, changing an exact phrase to broader words, adding an OR synonym inside an existing required group, or dropping a metadata/exclusion filter that is not essential.
+- Avoid unsupported API parameters, unsupported field tags, and database-specific syntax.
 - Use supplied top returned titles diagnostically: broaden method/task terms when titles are on-intent, or replace terms that pulled matches away from the intended CS literature.
 
 Output contract:
@@ -462,10 +468,12 @@ You are an expert in computer science top-conference paper search. A previous Pa
 
 PaperHub guidance converted into prompt rules:
 - Keep the JSON query field as plain search text.
-- Add central method, task, dataset, conference, year, or presentation-type terms from the original question when helpful.
+- Use the same Google / Google Scholar style subset as PaperHub generation: required terms by spaces, quoted phrases, OR alternatives, - exclusions, and conference:/venue:/year:/after:/before: metadata filters.
+- Narrow by adding one missing required concept, changing a broad term into an exact phrase, replacing a broad OR group with fewer alternatives, adding an exclusion for off-topic drift, or adding conference/year filters only when explicit in the user intent.
+- Do not narrow by appending many optional synonyms. In PaperHub, extra plain terms become required constraints; OR alternatives broaden the query.
 - Prefer terms likely to occur in top-conference paper titles, abstracts, keywords, or metadata.
-- Avoid API parameters, field tags, and database-specific syntax.
-- Use supplied top returned titles diagnostically: add missing method/task/domain facets or replace terms that caused broad top-conference drift.
+- Avoid unsupported API parameters, unsupported field tags, and database-specific syntax.
+- Use supplied top returned titles diagnostically: add one missing method/task/domain facet, tighten a phrase, or remove broad alternatives that caused drift.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".

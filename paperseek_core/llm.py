@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict
+from itertools import count
 import os
+import re
 import requests
+from threading import Lock
 import time
 
 
@@ -26,6 +29,44 @@ def _llm_max_tokens() -> int:
 
 DEFAULT_LLM_TIMEOUT_SECONDS = _llm_timeout_seconds()
 DEFAULT_LLM_MAX_TOKENS = _llm_max_tokens()
+_API_KEY_COUNTER_LOCK = Lock()
+_API_KEY_COUNTERS = {}
+
+
+def _coerce_timeout_seconds(value, default=DEFAULT_LLM_TIMEOUT_SECONDS) -> int:
+    try:
+        return max(1, int(value if value not in (None, "") else default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _split_api_keys(api_key: str) -> List[str]:
+    keys = [item.strip() for item in re.split(r"[\s,;]+", api_key or "") if item.strip()]
+    return list(dict.fromkeys(keys))
+
+
+def _next_api_key(keys: List[str]) -> str:
+    if not keys:
+        return ""
+    if len(keys) == 1:
+        return keys[0]
+    pool_key = "\0".join(keys)
+    with _API_KEY_COUNTER_LOCK:
+        counter = _API_KEY_COUNTERS.setdefault(pool_key, count())
+        index = next(counter)
+    return keys[index % len(keys)]
+
+
+def _api_key_attempts(api_key: str, max_attempts: int = 3) -> List[str]:
+    keys = _split_api_keys(api_key)
+    if not keys:
+        return [""]
+    attempts = min(max(1, int(max_attempts or 1)), len(keys))
+    return [_next_api_key(keys) for _ in range(attempts)]
+
+
+def _retryable_external_status(status_code: int) -> bool:
+    return status_code in (401, 403, 408, 409, 425, 429) or status_code >= 500
 
 
 class LLMClient(ABC):
@@ -69,11 +110,19 @@ def format_modelscope_quota(quota: Dict[str, str]) -> str:
 
 
 class OpenAIChatClient(LLMClient):
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str = "", max_tokens: int = DEFAULT_LLM_MAX_TOKENS):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o-mini",
+        base_url: str = "",
+        max_tokens: int = DEFAULT_LLM_MAX_TOKENS,
+        timeout_seconds: int = DEFAULT_LLM_TIMEOUT_SECONDS,
+    ):
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/") if base_url else "https://api.openai.com/v1"
         self.max_tokens = max(0, int(max_tokens or 0))
+        self.timeout_seconds = _coerce_timeout_seconds(timeout_seconds)
         self.last_response_info = {}
 
     def chat(self, messages, temperature=0.3):
@@ -87,54 +136,77 @@ class OpenAIChatClient(LLMClient):
             body["thinking"] = {"type": "disabled"}
         if self.max_tokens:
             body["max_tokens"] = self.max_tokens
-        try:
-            resp = requests.post(
-                url,
-                headers=_auth_headers(self.api_key),
-                json=body,
-                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
-            )
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": resp.status_code,
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-                "quota": extract_modelscope_quota(resp.headers),
-            }
-            resp.raise_for_status()
-            return _extract_openai_chat_content(resp.json())
-        except requests.Timeout:
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": "timeout",
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-            }
-            raise LLMError(f"LLM request timed out after {DEFAULT_LLM_TIMEOUT_SECONDS}s")
-        except requests.HTTPError as e:
-            detail = e.response.text if e.response is not None else str(e)
-            quota_text = format_modelscope_quota((self.last_response_info or {}).get("quota", {}))
-            quota_suffix = f" Quota: {quota_text}." if quota_text else ""
-            status = e.response.status_code if e.response is not None else "unknown"
-            raise LLMError(f"LLM API error ({status}): {detail}{quota_suffix}")
-        except requests.RequestException as e:
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": "request_error",
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-            }
-            raise LLMError(f"LLM network error: {e}") from e
-        except (KeyError, IndexError, TypeError, ValueError) as e:
-            raise LLMError(f"LLM Chat Completions response did not contain message content: {e}") from e
+        attempts = _api_key_attempts(self.api_key)
+        last_error = None
+        for attempt_index, api_key in enumerate(attempts, 1):
+            try:
+                resp = requests.post(
+                    url,
+                    headers=_auth_headers(api_key),
+                    json=body,
+                    timeout=self.timeout_seconds,
+                )
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": resp.status_code,
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "quota": extract_modelscope_quota(resp.headers),
+                    "attempts": attempt_index,
+                }
+                if resp.status_code < 200 or resp.status_code >= 300:
+                    detail = resp.text
+                    quota_text = format_modelscope_quota((self.last_response_info or {}).get("quota", {}))
+                    quota_suffix = f" Quota: {quota_text}." if quota_text else ""
+                    last_error = LLMError(f"LLM API error ({resp.status_code}): {detail}{quota_suffix}")
+                    if attempt_index < len(attempts) and _retryable_external_status(resp.status_code):
+                        continue
+                    raise last_error
+                try:
+                    return _extract_openai_chat_content(resp.json())
+                except (KeyError, IndexError, TypeError, ValueError) as e:
+                    raise LLMError(f"LLM Chat Completions response did not contain message content: {e}") from e
+            except requests.Timeout:
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": "timeout",
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "attempts": attempt_index,
+                }
+                last_error = LLMError(f"LLM request timed out after {self.timeout_seconds}s")
+                if attempt_index < len(attempts):
+                    continue
+                raise last_error
+            except requests.RequestException as e:
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": "request_error",
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "attempts": attempt_index,
+                }
+                last_error = LLMError(f"LLM network error: {e}")
+                if attempt_index < len(attempts):
+                    continue
+                raise last_error from e
+        raise last_error or LLMError("LLM request failed.")
 
 
 class OpenAIResponsesClient(LLMClient):
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str = "", max_tokens: int = DEFAULT_LLM_MAX_TOKENS):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o-mini",
+        base_url: str = "",
+        max_tokens: int = DEFAULT_LLM_MAX_TOKENS,
+        timeout_seconds: int = DEFAULT_LLM_TIMEOUT_SECONDS,
+    ):
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/") if base_url else "https://api.openai.com/v1"
         self.max_tokens = max(0, int(max_tokens or 0))
+        self.timeout_seconds = _coerce_timeout_seconds(timeout_seconds)
         self.last_response_info = {}
 
     def chat(self, messages, temperature=0.3):
@@ -151,44 +223,58 @@ class OpenAIResponsesClient(LLMClient):
             body["max_output_tokens"] = self.max_tokens
         if instructions:
             body["instructions"] = instructions
-        try:
-            resp = requests.post(
-                url,
-                headers=_auth_headers(self.api_key),
-                json=body,
-                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
-            )
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": resp.status_code,
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-                "quota": extract_modelscope_quota(resp.headers),
-            }
-            resp.raise_for_status()
-            return self._extract_text(resp.json())
-        except requests.Timeout:
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": "timeout",
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-            }
-            raise LLMError(f"LLM request timed out after {DEFAULT_LLM_TIMEOUT_SECONDS}s")
-        except requests.HTTPError as e:
-            detail = e.response.text if e.response is not None else str(e)
-            quota_text = format_modelscope_quota((self.last_response_info or {}).get("quota", {}))
-            quota_suffix = f" Quota: {quota_text}." if quota_text else ""
-            status = e.response.status_code if e.response is not None else "unknown"
-            raise LLMError(f"LLM API error ({status}): {detail}{quota_suffix}")
-        except requests.RequestException as e:
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": "request_error",
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-            }
-            raise LLMError(f"LLM network error: {e}") from e
+        attempts = _api_key_attempts(self.api_key)
+        last_error = None
+        for attempt_index, api_key in enumerate(attempts, 1):
+            try:
+                resp = requests.post(
+                    url,
+                    headers=_auth_headers(api_key),
+                    json=body,
+                    timeout=self.timeout_seconds,
+                )
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": resp.status_code,
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "quota": extract_modelscope_quota(resp.headers),
+                    "attempts": attempt_index,
+                }
+                if resp.status_code < 200 or resp.status_code >= 300:
+                    detail = resp.text
+                    quota_text = format_modelscope_quota((self.last_response_info or {}).get("quota", {}))
+                    quota_suffix = f" Quota: {quota_text}." if quota_text else ""
+                    last_error = LLMError(f"LLM API error ({resp.status_code}): {detail}{quota_suffix}")
+                    if attempt_index < len(attempts) and _retryable_external_status(resp.status_code):
+                        continue
+                    raise last_error
+                return self._extract_text(resp.json())
+            except requests.Timeout:
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": "timeout",
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "attempts": attempt_index,
+                }
+                last_error = LLMError(f"LLM request timed out after {self.timeout_seconds}s")
+                if attempt_index < len(attempts):
+                    continue
+                raise last_error
+            except requests.RequestException as e:
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": "request_error",
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "attempts": attempt_index,
+                }
+                last_error = LLMError(f"LLM network error: {e}")
+                if attempt_index < len(attempts):
+                    continue
+                raise last_error from e
+        raise last_error or LLMError("LLM request failed.")
 
     @staticmethod
     def _extract_text(payload) -> str:
@@ -205,11 +291,19 @@ class OpenAIResponsesClient(LLMClient):
 
 
 class AnthropicClient(LLMClient):
-    def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307", base_url: str = "", max_tokens: int = DEFAULT_LLM_MAX_TOKENS):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "claude-3-haiku-20240307",
+        base_url: str = "",
+        max_tokens: int = DEFAULT_LLM_MAX_TOKENS,
+        timeout_seconds: int = DEFAULT_LLM_TIMEOUT_SECONDS,
+    ):
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/") if base_url else "https://api.anthropic.com"
         self.max_tokens = max(1, int(max_tokens or DEFAULT_LLM_MAX_TOKENS))
+        self.timeout_seconds = _coerce_timeout_seconds(timeout_seconds)
         self.last_response_info = {}
 
     def chat(self, messages, temperature=0.3):
@@ -232,58 +326,90 @@ class AnthropicClient(LLMClient):
 
         url = f"{self.base_url}/v1/messages"
         started = time.perf_counter()
-        try:
-            resp = requests.post(
-                url,
-                headers={
-                    "x-api-key": self.api_key,
-                    "anthropic-version": "2023-06-01",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
-            )
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": resp.status_code,
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-                "quota": extract_modelscope_quota(resp.headers),
-            }
-            resp.raise_for_status()
-            return resp.json()["content"][0]["text"]
-        except requests.Timeout:
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": "timeout",
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-            }
-            raise LLMError(f"LLM request timed out after {DEFAULT_LLM_TIMEOUT_SECONDS}s")
-        except requests.HTTPError as e:
-            detail = e.response.text if e.response is not None else str(e)
-            quota_text = format_modelscope_quota((self.last_response_info or {}).get("quota", {}))
-            quota_suffix = f" Quota: {quota_text}." if quota_text else ""
-            status = e.response.status_code if e.response is not None else "unknown"
-            raise LLMError(f"LLM API error ({status}): {detail}{quota_suffix}")
-        except requests.RequestException as e:
-            self.last_response_info = {
-                "method": "POST",
-                "url": url,
-                "status": "request_error",
-                "elapsed_ms": int((time.perf_counter() - started) * 1000),
-            }
-            raise LLMError(f"LLM network error: {e}") from e
+        attempts = _api_key_attempts(self.api_key)
+        last_error = None
+        for attempt_index, api_key in enumerate(attempts, 1):
+            try:
+                resp = requests.post(
+                    url,
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json",
+                    },
+                    json=body,
+                    timeout=self.timeout_seconds,
+                )
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": resp.status_code,
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "quota": extract_modelscope_quota(resp.headers),
+                    "attempts": attempt_index,
+                }
+                if resp.status_code < 200 or resp.status_code >= 300:
+                    detail = resp.text
+                    quota_text = format_modelscope_quota((self.last_response_info or {}).get("quota", {}))
+                    quota_suffix = f" Quota: {quota_text}." if quota_text else ""
+                    last_error = LLMError(f"LLM API error ({resp.status_code}): {detail}{quota_suffix}")
+                    if attempt_index < len(attempts) and _retryable_external_status(resp.status_code):
+                        continue
+                    raise last_error
+                return _extract_anthropic_messages_text(resp.json())
+            except requests.Timeout:
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": "timeout",
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "attempts": attempt_index,
+                }
+                last_error = LLMError(f"LLM request timed out after {self.timeout_seconds}s")
+                if attempt_index < len(attempts):
+                    continue
+                raise last_error
+            except requests.RequestException as e:
+                self.last_response_info = {
+                    "method": "POST",
+                    "url": url,
+                    "status": "request_error",
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000),
+                    "attempts": attempt_index,
+                }
+                last_error = LLMError(f"LLM network error: {e}")
+                if attempt_index < len(attempts):
+                    continue
+                raise last_error from e
+        raise last_error or LLMError("LLM request failed.")
+
+
+def _extract_anthropic_messages_text(payload) -> str:
+    texts = []
+    for item in payload.get("content", []) or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "text" and item.get("text"):
+            texts.append(str(item["text"]))
+    if texts:
+        return "\n".join(texts)
+    for item in payload.get("content", []) or []:
+        if isinstance(item, dict) and item.get("text"):
+            texts.append(str(item["text"]))
+    if texts:
+        return "\n".join(texts)
+    raise LLMError("LLM Anthropic Messages response did not contain text content")
 
 
 def create_llm_client(config) -> LLMClient:
     api_type = (getattr(config, "llm_api_type", "") or "").lower()
     max_tokens = getattr(config, "llm_max_tokens", DEFAULT_LLM_MAX_TOKENS)
+    timeout_seconds = getattr(config, "llm_timeout_seconds", DEFAULT_LLM_TIMEOUT_SECONDS)
     if api_type == "anthropic_messages":
-        return AnthropicClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens)
+        return AnthropicClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
     if api_type == "openai_responses":
-        return OpenAIResponsesClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens)
-    return OpenAIChatClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens)
+        return OpenAIResponsesClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
+    return OpenAIChatClient(config.llm_api_key, config.llm_model, config.llm_base_url, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
 
 
 def _extract_openai_chat_content(payload) -> str:

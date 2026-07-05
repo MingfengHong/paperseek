@@ -216,6 +216,7 @@ class SourcePromptRoutingTest(unittest.TestCase):
             target_max=2,
             max_iterations=2,
             fetch_abstracts=False,
+            retrieval_pool_max=3,
         )
         agent = PaperSeekAgent(config, llm)
         agent.provider = FeedbackProvider()
@@ -232,7 +233,7 @@ class SourcePromptRoutingTest(unittest.TestCase):
         self.assertIn("Previous source feedback", revision_prompt)
         self.assertIn("Top returned candidate titles", revision_prompt)
         self.assertIn("Digital Platform Governance and Algorithmic Control", revision_prompt)
-        self.assertIn("above target maximum", revision_prompt)
+        self.assertIn("above LLM pre-ranking safety pool", revision_prompt)
         self.assertIn("JSON rationale field", revision_prompt)
         self.assertIn("Structured output contract", revision_prompt)
         self.assertEqual(result["history"][0]["rationale"], "Narrowed toward algorithmic governance after title review.")

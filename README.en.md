@@ -48,12 +48,18 @@
 
 ## Release Notes
 
+### v0.2.1 - Hosted Service and Model Routing
+
+- Hosted PaperSeek Service now exposes Semantic Scholar, PubMed, and Crossref. Crossref does not require an API key.
+- Hosted model service routing now supports Auto / Custom mode. Auto selects an available model route, while Custom lets users choose the request model, embedding model, and pre-reranking method.
+- Updated hosted-mode documentation for the PaperSeek Service, Third-party Service, and Bring your own Key / BYOK boundaries.
+
 ### v0.2.0 - More Sources and Multi-Lane Retrieval
 
 - Added arXiv, Semantic Scholar, PubMed, computer science top-conference search, and Crossref.
 - The search loop now uses source-aware query generation, intent analysis, iterative top-result feedback, and lightweight multi-lane pre-ranking.
 - Added lightweight multi-lane pre-ranking: before LLM scoring, PaperSeek combines relevance, impact/citation, recency, and local-quality signals according to each source's capabilities, then fuses candidates with RRF, BM25/term coverage, and local hashing embeddings; OpenAI-compatible embedding/reranker endpoints remain optional.
-- Updated the hosted online account system. PaperSeek now uses email registration and sign-in by default, supports GitHub and ModelScope OAuth, and provides signed-in users with up to 20 successful free searches per day.
+- Updated the hosted online account system. PaperSeek now uses email registration and sign-in by default, supports GitHub, ModelScope, and Hugging Face OAuth, and provides signed-in users with up to 20 successful free searches per day.
 
 ### v0.1.1 - Language, History, and Discipline Filters
 
@@ -80,7 +86,7 @@ PaperSeek focuses on first-pass paper discovery and metadata organization, helpi
 
 ## Choose Your Path
 
-- **Hosted online edition**: use [paperseek.xyz](https://www.paperseek.xyz/) with Quick Start, ModelScope Service, or Use your own API; see the [hosted demo guide](docs/online-demo.md).
+- **Hosted online edition**: use [paperseek.xyz](https://www.paperseek.xyz/) with PaperSeek Service, Third-party Service (ModelScope, OpenRouter, or Hugging Face), or Bring your own Key. Bring your own Key means bring your own provider keys (BYOK); see the [hosted demo guide](docs/online-demo.md).
 - **Self-hosted open-source edition**: install from PyPI or source, or run with Docker/VPS for longer searches, citation expansion, and heavier request volume.
 - **ModelScope Studio**: use the public [PaperSeek Studio](https://modelscope.cn/studios/HongMingfeng/PaperSeek) or deploy your own Docker Studio from the guide.
 - **Agent Skill**: copy `skills/paperseek/` into a skill-aware agent platform; the Skill includes a lightweight runtime for core search without installing the full package.
@@ -366,6 +372,7 @@ PaperSeek supports two mainstream API protocol families: OpenAI-style APIs and A
 | Zhipu AI GLM | `openai_chat` | `glm-5.1` |
 | SiliconFlow | `openai_chat` | `deepseek-ai/DeepSeek-V4-Flash` |
 | OpenRouter | `openai_chat` | `openai/gpt-5.4-mini` |
+| NVIDIA NIM | `openai_chat` | `nvidia/llama-3.3-nemotron-super-49b-v1.5` |
 | Volcengine Ark | `openai_chat` | `doubao-seed-2-0-mini-260428` |
 | Tencent Hunyuan | `openai_chat` | `hunyuan-turbos-latest` |
 | Baidu Qianfan | `openai_chat` | `ernie-5.0` |
@@ -386,6 +393,8 @@ Embedding is used in the lightweight multi-lane pre-ranking step before LLM scor
 | OpenAI | `text-embedding-3-large` | `https://api.openai.com/v1` |
 | Alibaba Cloud Bailian / DashScope | `text-embedding-v4` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | SiliconFlow | `BAAI/bge-large-zh-v1.5` | `https://api.siliconflow.cn/v1` |
+| OpenRouter | `openai/text-embedding-3-small` | `https://openrouter.ai/api/v1` |
+| NVIDIA NIM | `nvidia/nv-embedqa-e5-v5` | `https://integrate.api.nvidia.com/v1` |
 | Zhipu AI GLM | `embedding-3` | `https://open.bigmodel.cn/api/paas/v4` |
 | Volcano Ark | Empty | `https://ark.cn-beijing.volces.com/api/v3` |
 | ModelScope API-Inference | `Qwen/Qwen3-Embedding-8B,Qwen/Qwen3-Embedding-4B` | `https://api-inference.modelscope.cn/v1` |
@@ -401,11 +410,13 @@ Rerank is an optional external step after RRF fusion. It is off by default. The 
 | --- | --- | --- |
 | Off | Empty | Empty |
 | CSTCloud | `qwen3-reranker:8b` | `https://uni-api.cstcloud.cn/v1` |
+| OpenRouter | `jinaai/jina-reranker-v2-base-multilingual` | `https://openrouter.ai/api/v1` |
+| NVIDIA NIM | `nv-rerank-qa-mistral-4b:1` | `https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking` |
 | SiliconFlow | `BAAI/bge-reranker-v2-m3` | `https://api.siliconflow.cn/v1` |
 | Custom | Empty | Empty |
 
 If `RETRIEVAL_RERANKER_API_KEY` is empty, PaperSeek reuses `LLM_API_KEY`. If the external reranker is unavailable, PaperSeek keeps the local RRF order and continues.
-ModelScope API-Inference can be used for LLM and Qwen embedding, but it is not listed as a Rerank provider.
+ModelScope API-Inference can be used for LLM and Qwen embedding, but it is not listed as a Rerank provider. NVIDIA NIM embedding and rerank use different endpoints; PaperSeek selects the provider-specific request shape automatically.
 
 > CSTCloud LLM, Embedding, and Rerank endpoints are accessed through OpenAI-compatible APIs with the same Base URL: `https://uni-api.cstcloud.cn/v1`. To get a key, open [CSTCloud API Keys](https://uni-api.cstcloud.cn/api_keys), sign in with CSTCloud unified authentication, and submit the requested application information. Chinese Academy of Sciences intramural users can sign in with a CSTCloud Pass, usually their institutional email account and password. See the [CSTCloud LLM API manual](https://uni-api.cstcloud.cn/doc/llm/) for Chats, Embeddings, and Rerank endpoint details.
 
@@ -420,9 +431,9 @@ A search usually has four stages:
 
 When OpenAlex citation expansion is enabled, PaperSeek selects up to 30 seed papers across relevance, impact, and recency lanes. High-relevance seeds expand both references and citing works; highly cited seeds focus on references; recent seeds focus on citing works. The expanded records are merged into the same candidate pool before pre-ranking and LLM scoring.
 
-Large candidate pools are ranked in concurrent LLM batches. The default batch size is `8` and default concurrency is `16`; above 16 candidates, PaperSeek adapts the batch size to keep the total batch count near the concurrency level. If one or more ranking batches fail, PaperSeek retries those batches with lower concurrency in the `16 -> 8 -> 4` sequence. If the endpoint still fails at concurrency `4`, only the failed batch falls back to zero-score source order instead of failing the whole search. Advanced users can still set `RANKING_CONCURRENCY=32`, which uses the `32 -> 16 -> 8 -> 4` fallback sequence.
+Large candidate pools are ranked in concurrent LLM batches. The default batch size is `8` and default concurrency is `16`; above 16 candidates, PaperSeek adapts the batch size to keep the total batch count near the concurrency level. If one or more ranking batches fail, PaperSeek retries those batches with lower concurrency in the `16 -> 8 -> 4` sequence. If the endpoint still fails at concurrency `4`, only the failed batch falls back to zero-score source order instead of failing the whole search. Ranking batches use `RANKING_LLM_TIMEOUT_SECONDS=60` by default and fall back to local pre-ranking on timeout, so a slow endpoint does not break the full run. Advanced users can still set `RANKING_CONCURRENCY=32`, which uses the `32 -> 16 -> 8 -> 4` fallback sequence.
 
-Before LLM scoring, PaperSeek now runs lightweight multi-lane pre-ranking across the selected source's supported signals: relevance, impact/citation when available, recency, and local quality for the computer science top-conference index. It deduplicates candidates, fuses retrieval ranks with RRF, and adds pure-Python hashing cosine plus BM25/term coverage. The default fused pool limit is `3000`; community installs use the local pure-Python embedding path unless you explicitly configure an OpenAI-compatible embedding endpoint. The Web UI advanced settings include embedding provider choices for Local Python, CSTCloud, OpenAI, Alibaba Cloud Bailian, SiliconFlow, Zhipu AI, Volcano Ark, ModelScope, and Custom endpoints. ModelScope API-Inference uses only `Qwen/Qwen3-Embedding-8B` and `Qwen/Qwen3-Embedding-4B` for embedding. Optional external embedding/reranking can use models such as `qwen3-embedding:8b`, `bge-large-zh:latest`, or `qwen3-reranker:8b`; comma-separated model lists are tried in order and failures fall back to the local RRF order.
+Before LLM scoring, PaperSeek now runs lightweight multi-lane pre-ranking across the selected source's supported signals: relevance, impact/citation when available, recency, and local quality for the computer science top-conference index. It deduplicates candidates, fuses retrieval ranks with RRF, and adds pure-Python hashing cosine plus BM25/term coverage. The default fused pool limit is `3000`; community installs use the local pure-Python embedding path unless you explicitly configure an external embedding endpoint. The Web UI advanced settings include embedding provider choices for Local Python, CSTCloud, OpenAI, Alibaba Cloud Bailian, SiliconFlow, OpenRouter, NVIDIA NIM, Zhipu AI, Volcano Ark, ModelScope, and Custom endpoints. ModelScope API-Inference uses only `Qwen/Qwen3-Embedding-8B` and `Qwen/Qwen3-Embedding-4B` for embedding. Optional external embedding/reranking can use models such as `qwen3-embedding:8b`, `bge-large-zh:latest`, OpenRouter embedding/rerank models, or NVIDIA NIM `nvidia/nv-embedqa-e5-v5` and `nv-rerank-qa-mistral-4b:1`; comma-separated model lists are tried in order and failures fall back to the local RRF order.
 
 `TARGET_MAX` guides query refinement; it is not a hard display cap. LLM scoring receives at most `RANKING_CANDIDATE_LIMIT` candidates, default `256`. Results show all candidates when the scored pool is under 50, otherwise at least the top 50; if more than 50 candidates score `5` or above, all of those high-scoring candidates are shown.
 
@@ -476,7 +487,8 @@ Most parameters already have code defaults. After copying `.env.example`, a norm
 | `CITATION_SEED_COUNT` / `CITATION_PER_SEED` / `CITATION_MAX_RECORDS` | `30` / `4` / `160` | Citation expansion size controls. |
 | `CITATION_DEPTH` | `2` | OpenAlex citation traversal depth. |
 | `RANKING_BATCH_SIZE` / `RANKING_CONCURRENCY` | `8` / `16` | LLM ranking batch size and concurrency. |
-| `LLM_MAX_TOKENS` / `LLM_TIMEOUT_SECONDS` | `2048` / `180` | LLM output length and per-request timeout. |
+| `LLM_MAX_TOKENS` / `LLM_TIMEOUT_SECONDS` | `2048` / `180` | LLM output length and regular per-request timeout. |
+| `RANKING_LLM_TIMEOUT_SECONDS` | `60` | Timeout only for LLM ranking batches; timed-out ranking falls back to local pre-ranking. |
 | `RETRIEVAL_POOL_MAX` / `RETRIEVAL_POOL_MIN` | `3000` / `5` | Fused candidate pool range before LLM ranking. |
 | `RETRIEVAL_LANE_LIMIT` / `RETRIEVAL_RRF_K` | `1000` / `60` | Retrieval lane cap and RRF fusion constant. |
 | `RETRIEVAL_EMBEDDING_PROVIDER` | `local` | Community edition uses local pure-Python pre-ranking by default; set an OpenAI-compatible embedding provider if needed. |

@@ -12,7 +12,7 @@ class PackagingTest(unittest.TestCase):
             pyproject,
             (
                 'name = "paperseek"',
-                'version = "0.2.0"',
+                'version = "0.2.1"',
                 'Homepage = "https://www.paperseek.xyz/"',
                 'Repository = "https://github.com/MingfengHong/paperseek"',
                 'Documentation = "https://docs.paperseek.xyz/"',

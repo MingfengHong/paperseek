@@ -1335,6 +1335,16 @@ class PubMedProvider:
         return int(match.group(0)) if match else None
 
 
+@dataclass
+class PaperHubQuery:
+    groups: List[List[str]] = field(default_factory=list)
+    excludes: List[str] = field(default_factory=list)
+    conference: Optional[str] = None
+    year: Optional[int] = None
+    after: Optional[int] = None
+    before: Optional[int] = None
+
+
 class PaperHubProvider:
     MANIFEST_URL = "https://raw.githubusercontent.com/Yupu-Wang/paper-hub/main/data/manifest.json"
     RAW_BASE_URL = "https://raw.githubusercontent.com/Yupu-Wang/paper-hub/main/data"
@@ -1357,10 +1367,10 @@ class PaperHubProvider:
             raise ProviderError("paperhub", "Paper Hub search query is empty.")
         papers = self._load_papers(query)
         scored = []
-        terms = self._terms(query)
+        parsed_query = self._parse_query(query)
         for paper in papers:
-            score = self._score(paper, terms)
-            if score > 0:
+            score = self._match_score(paper, parsed_query)
+            if score is not None:
                 scored.append((score, paper))
         if lane == RetrievalLane.RECENT:
             scored.sort(key=lambda item: (int(item[1].get("year") or 0), item[0], item[1].get("conference") or ""), reverse=True)
@@ -1410,32 +1420,127 @@ class PaperHubProvider:
             PaperHubProvider._paper_cache = papers
             return papers
 
-    @staticmethod
-    def _terms(query: str) -> List[str]:
-        terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9_+-]{1,}", query.lower())
-        stop = {"and", "or", "not", "the", "with", "for", "from", "paper", "papers", "study", "research"}
-        return [term for term in terms if term not in stop][:20]
+    @classmethod
+    def _parse_query(cls, query: str) -> PaperHubQuery:
+        parsed = PaperHubQuery()
+        append_to_previous_group = False
+        token_pattern = re.compile(r'(-?)"([^"]+)"|(\S+)')
+        stop = {"and", "the", "with", "for", "from", "paper", "papers", "study", "research"}
+        for match in token_pattern.finditer(query or ""):
+            quoted = bool(match.group(2))
+            value = match.group(2) if quoted else match.group(3)
+            excluded = bool(match.group(1))
+            value = cls._normalize_query_token(value)
+            if not value:
+                continue
+            if value.upper() == "OR":
+                append_to_previous_group = True
+                continue
+            if not quoted and value.startswith("-"):
+                excluded = True
+                value = cls._normalize_query_token(value[1:])
+            if value.startswith("+"):
+                value = cls._normalize_query_token(value[1:])
+            if not value:
+                continue
 
-    def _score(self, paper: Dict[str, Any], terms: List[str]) -> int:
-        if not terms:
-            return 1
+            field_match = re.match(r"^(conference|conf|venue|year|after|before):(.+)$", value, flags=re.I)
+            if field_match and not excluded:
+                field_name = field_match.group(1).lower()
+                field_value = cls._normalize_query_token(field_match.group(2)).strip('"')
+                if field_name in {"conference", "conf", "venue"}:
+                    parsed.conference = field_value.upper()
+                else:
+                    year_match = re.search(r"(19|20)\d{2}", field_value)
+                    if year_match:
+                        setattr(parsed, field_name, int(year_match.group(0)))
+                append_to_previous_group = False
+                continue
+
+            term = value.lower()
+            if not quoted and term in stop:
+                append_to_previous_group = False
+                continue
+            if excluded:
+                parsed.excludes.append(term)
+                append_to_previous_group = False
+            elif append_to_previous_group and parsed.groups:
+                parsed.groups[-1].append(term)
+                append_to_previous_group = False
+            else:
+                parsed.groups.append([term])
+        return parsed
+
+    @staticmethod
+    def _normalize_query_token(value: str) -> str:
+        return re.sub(r"^[()]+|[()]+$", "", str(value or "").strip()).strip()
+
+    def _match_score(self, paper: Dict[str, Any], query: PaperHubQuery) -> Optional[int]:
+        if not self._metadata_matches(paper, query):
+            return None
+        text = self._paper_text(paper)
+        if any(term and term in text for term in query.excludes):
+            return None
+        score = 0
+        for group in query.groups:
+            best = 0
+            for term in group:
+                if term and term in text:
+                    best = max(best, self._score_term(paper, term))
+            if best <= 0:
+                return None
+            score += best
+        return max(score, 1)
+
+    @staticmethod
+    def _metadata_matches(paper: Dict[str, Any], query: PaperHubQuery) -> bool:
+        conference = str(paper.get("conference") or "").upper()
+        if query.conference and conference != query.conference:
+            return False
+        try:
+            year = int(paper.get("year") or 0)
+        except (TypeError, ValueError):
+            year = 0
+        if query.year and year != query.year:
+            return False
+        if query.after and year <= query.after:
+            return False
+        if query.before and year >= query.before:
+            return False
+        return True
+
+    @staticmethod
+    def _paper_text(paper: Dict[str, Any]) -> str:
+        return " ".join(
+            [
+                str(paper.get("title") or ""),
+                str(paper.get("abstract") or ""),
+                " ".join(str(value) for value in (paper.get("keywords") or [])),
+                " ".join(str(value) for value in (paper.get("authors") or [])),
+                str(paper.get("conference") or ""),
+                str(paper.get("year") or ""),
+                str(paper.get("presentation") or ""),
+            ]
+        ).lower()
+
+    @staticmethod
+    def _score_term(paper: Dict[str, Any], term: str) -> int:
         title = str(paper.get("title") or "").lower()
         abstract = str(paper.get("abstract") or "").lower()
         keywords = " ".join(str(value) for value in (paper.get("keywords") or [])).lower()
         authors = " ".join(str(value) for value in (paper.get("authors") or [])).lower()
         venue = f"{paper.get('conference') or ''} {paper.get('year') or ''} {paper.get('presentation') or ''}".lower()
         score = 0
-        for term in terms:
-            if term in title:
-                score += 8
-            if term in keywords:
-                score += 5
-            if term in abstract:
-                score += 3
-            if term in authors:
-                score += 2
-            if term in venue:
-                score += 4
+        if term in title:
+            score += 8
+        if term in keywords:
+            score += 5
+        if term in abstract:
+            score += 3
+        if term in authors:
+            score += 2
+        if term in venue:
+            score += 4
         return score
 
     @staticmethod
