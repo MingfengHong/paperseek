@@ -48,6 +48,11 @@
 
 ## 更新说明
 
+### v0.2.1 - 在线服务数据源开放
+
+- 在线版 PaperSeek Service 放开 Semantic Scholar、PubMed 和 Crossref 数据源；Semantic Scholar 和 PubMed 使用服务端配置的站点 Key，Crossref 不需要 API Key，可使用站点 polite-pool 邮箱。
+- 补充在线版数据源、站点 Key、PaperSeek Service 与 Bring your own Key / BYOK 使用边界说明。
+
 ### v0.2.0 - 多源检索与多路召回
 
 - 新增 arXiv、Semantic Scholar、PubMed、计算机顶会和 Crossref 数据源。

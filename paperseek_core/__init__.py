@@ -6,7 +6,7 @@ from paperseek_core.agent import LiteratureSearchAgent, PaperSeekAgent, WosSearc
 from paperseek_core.config import LLMConfig, SearchConfig, SourceConfig, build_runtime_config
 from paperseek_core.llm import create_llm_client
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 def run_search(

@@ -48,6 +48,11 @@
 
 ## Release Notes
 
+### v0.2.1 - Hosted Service Source Access
+
+- Hosted PaperSeek Service now exposes Semantic Scholar, PubMed, and Crossref. Semantic Scholar and PubMed use server-side source keys when configured; Crossref does not require an API key and can use the site polite-pool email.
+- Updated hosted-mode documentation for source keys and the PaperSeek Service / Bring your own Key / BYOK boundary.
+
 ### v0.2.0 - More Sources and Multi-Lane Retrieval
 
 - Added arXiv, Semantic Scholar, PubMed, computer science top-conference search, and Crossref.
