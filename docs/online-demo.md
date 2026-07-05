@@ -14,11 +14,11 @@ https://www.paperseek.xyz/
 
 ### PaperSeek Service
 
-`PaperSeek Service` 是注册用户的轻量试用模式。用户登录并完成邮箱验证后即可使用，不需要自己填写模型 Key 或 OpenAlex Key。
+`PaperSeek Service` 是注册用户的轻量试用模式。用户登录并完成邮箱验证后即可使用，不需要自己填写模型 Key 或已纳入服务范围的数据源 Key。
 
 - 默认每日额度为 20 次成功检索；失败不消耗额度。
-- 当前支持 OpenAlex、arXiv 和计算机顶会检索。
-- OpenAlex 使用站点 OpenAlex key 池。
+- 当前支持 OpenAlex、arXiv、Semantic Scholar、PubMed 和计算机顶会检索。
+- OpenAlex 使用站点 OpenAlex key 池；Semantic Scholar 和 PubMed 在服务端配置了对应 Key 时使用站点 Key。
 - `Auto` 模式会自动选择当前最合适的模型，默认使用本地 hashing sparse cosine 和 RRF 预重排。
 - `Custom` 模式允许用户选择站点提供的请求模型、Embedding 模型和预重排方式；前端只显示模型名，后端负责映射到对应服务商。
 - 免费模型仅面向个人注册用户提供轻量使用支持。PaperSeek 是个人维护的开源项目，免费额度有限且不做 SLA 稳定性保证；重度使用请部署开源版并填写自己的 API key。
@@ -96,7 +96,7 @@ The hosted PaperSeek edition lets users try the full Web UI without deploying th
 
 The hosted configuration panel has three mutually exclusive modes:
 
-- `PaperSeek Service`: requires sign-in and a verified email. PaperSeek provides hosted model routes and the OpenAlex key pool. The default quota is 20 successful searches per day; failed searches do not consume quota. Auto mode keeps embedding local and pre-ranking on RRF, while Custom mode lets users choose hosted request, embedding, and rerank models.
+- `PaperSeek Service`: requires sign-in and a verified email. PaperSeek provides hosted model routes plus server-side source keys for OpenAlex, Semantic Scholar, and PubMed where configured. It currently exposes OpenAlex, arXiv, Semantic Scholar, PubMed, and computer science top-conference search. The default quota is 20 successful searches per day; failed searches do not consume quota. Auto mode keeps embedding local and pre-ranking on RRF, while Custom mode lets users choose hosted request, embedding, and rerank models.
 - `Third-party Service`: uses the user's own third-party inference quota. ModelScope uses the signed-in user's API-Inference provider token; OpenRouter uses a browser PKCE session and can automatically try current free text models; Hugging Face uses Supabase custom OAuth/OIDC with the `inference-api` scope and the OpenAI-compatible Router endpoint. Automatic embedding/rerank only uses clearly identifiable free models and otherwise falls back to local hashing, BM25, and RRF.
 - `Bring your own Key`: can be used without sign-in. Users follow the bring your own provider keys (BYOK) pattern, including their own model API key and, when anonymous, their own OpenAlex key for OpenAlex searches.
 
