@@ -184,8 +184,8 @@ Environment variables:
     parser.add_argument("--retrieval-pool-min", type=int, default=None, help="Minimum useful candidate count after adaptive iterations (default: 5)")
     parser.add_argument("--retrieval-lane-limit", type=int, default=None, help="Maximum records per retrieval lane before fusion (default: 1000)")
     parser.add_argument("--ranking-candidate-limit", type=int, default=None, help="Maximum candidates sent to LLM scoring after pre-ranking (default: 256)")
-    retrieval_providers = ["local", "cstcloud", "openai", "dashscope", "siliconflow", "zhipu", "volcengine", "modelscope", "custom"]
-    reranker_providers = ["off", "cstcloud", "openai", "dashscope", "siliconflow", "zhipu", "volcengine", "custom"]
+    retrieval_providers = ["local", "cstcloud", "openai", "dashscope", "siliconflow", "openrouter", "nvidia", "zhipu", "volcengine", "modelscope", "custom"]
+    reranker_providers = ["off", "cstcloud", "openai", "dashscope", "siliconflow", "openrouter", "nvidia", "zhipu", "volcengine", "custom"]
     parser.add_argument("--retrieval-embedding-provider", default=None, choices=retrieval_providers, help="Embedding provider for pre-ranking")
     parser.add_argument("--retrieval-embedding-model", default=None, help="Embedding model for external pre-ranking")
     parser.add_argument("--retrieval-reranker-provider", default=None, choices=reranker_providers, help="Optional reranker provider after RRF fusion")

@@ -44,7 +44,7 @@ features:
 PaperSeek 的社区文档分为两个主要入口：
 
 - **开源自托管版**：阅读 [开源版完整用户手册](user-manual.md)，适合本地运行、Docker/VPS/ModelScope 创空间部署、配置自己的 LLM Key、数据源 Key 和默认 Discipline Fields。
-- **在线体验版**：阅读 [在线体验版用户手册](online-demo.md)，适合直接访问 [paperseek.xyz](https://www.paperseek.xyz/) 试用完整 Web UI。在线版支持 Quick Start、ModelScope Service 和 Use your own API 三种模式，并提供与自托管版一致的源特定过滤逻辑；登录影响 Quick Start、ModelScope Service 与云端历史。
+- **在线体验版**：阅读 [在线体验版用户手册](online-demo.md)，适合直接访问 [paperseek.xyz](https://www.paperseek.xyz/) 试用完整 Web UI。在线版支持 PaperSeek Service、Third-party Service（ModelScope、OpenRouter、Hugging Face）和 Bring your own Key / BYOK 三种模式，并提供与自托管版一致的源特定过滤逻辑；登录和第三方授权会影响 PaperSeek Service、Third-party Service 与云端历史。
 - **Agent 集成**：用户手册中的 [Agent Skill](user-manual.md#agent-skill) 和 [MCP Server](user-manual.md#mcp-server) 章节说明如何把 PaperSeek 接入支持 Skill 或 MCP 的 AI agent。
 
 部署 Docker、Docker Compose、Vercel 或 ModelScope 创空间时，阅读 [部署指南](deployment.md)。

@@ -357,6 +357,7 @@ const providerDefaults = {
   zhipu: { model: "glm-5.1", apiType: "openai_chat", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
   siliconflow: { model: "deepseek-ai/DeepSeek-V4-Flash", apiType: "openai_chat", baseUrl: "https://api.siliconflow.cn/v1" },
   openrouter: { model: "openai/gpt-5.4-mini", apiType: "openai_chat", baseUrl: "https://openrouter.ai/api/v1" },
+  nvidia: { model: "nvidia/llama-3.3-nemotron-super-49b-v1.5", apiType: "openai_chat", baseUrl: "https://integrate.api.nvidia.com/v1" },
   volcengine: { model: "doubao-seed-2-0-mini-260428", apiType: "openai_chat", baseUrl: "https://ark.cn-beijing.volces.com/api/v3" },
   hunyuan: { model: "hunyuan-turbos-latest", apiType: "openai_chat", baseUrl: "https://tokenhub.tencentmaas.com/v1" },
   qianfan: { model: "ernie-5.0", apiType: "openai_chat", baseUrl: "https://qianfan.baidubce.com/v2" },
@@ -375,6 +376,18 @@ const retrievalProviderDefaults = {
   openai: { embeddingModel: "text-embedding-3-large", rerankerModel: "", baseUrl: "https://api.openai.com/v1" },
   dashscope: { embeddingModel: "text-embedding-v4", rerankerModel: "", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
   siliconflow: { embeddingModel: "BAAI/bge-large-zh-v1.5", rerankerModel: "BAAI/bge-reranker-v2-m3", baseUrl: "https://api.siliconflow.cn/v1" },
+  openrouter: {
+    embeddingModel: "openai/text-embedding-3-small",
+    rerankerModel: "jinaai/jina-reranker-v2-base-multilingual",
+    baseUrl: "https://openrouter.ai/api/v1",
+  },
+  nvidia: {
+    embeddingModel: "nvidia/nv-embedqa-e5-v5",
+    rerankerModel: "nv-rerank-qa-mistral-4b:1",
+    embeddingBaseUrl: "https://integrate.api.nvidia.com/v1",
+    rerankerBaseUrl: "https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+  },
   zhipu: { embeddingModel: "embedding-3", rerankerModel: "", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
   volcengine: { embeddingModel: "", rerankerModel: "", baseUrl: "https://ark.cn-beijing.volces.com/api/v3" },
   modelscope: { embeddingModel: "Qwen/Qwen3-Embedding-8B,Qwen/Qwen3-Embedding-4B", rerankerModel: "", baseUrl: "https://api-inference.modelscope.cn/v1" },
@@ -2507,7 +2520,7 @@ function applyRetrievalProviderDefaults(kind) {
   }
   const defaults = retrievalProviderDefaults[select.value] || retrievalProviderDefaults.custom;
   modelInputElement.value = isReranker ? defaults.rerankerModel : defaults.embeddingModel;
-  baseUrlInputElement.value = defaults.baseUrl;
+  baseUrlInputElement.value = isReranker ? (defaults.rerankerBaseUrl || defaults.baseUrl) : (defaults.embeddingBaseUrl || defaults.baseUrl);
 }
 
 if (retrievalEmbeddingProviderSelect) {

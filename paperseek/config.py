@@ -34,6 +34,7 @@ class AgentConfig:
     llm_model: str = ""
     llm_base_url: str = ""
     llm_max_tokens: int = 2048
+    ranking_llm_timeout_seconds: int = 60
     wos_db: str = "WOS"
     search_field: str = ""
     discipline_fields: tuple[str, ...] = field(default_factory=tuple)
@@ -84,6 +85,7 @@ class AgentConfig:
             llm_model=os.environ.get("LLM_MODEL") or default_model(provider),
             llm_base_url=os.environ.get("LLM_BASE_URL") or default_base_url(provider, api_type),
             llm_max_tokens=_int_env("LLM_MAX_TOKENS", 2048),
+            ranking_llm_timeout_seconds=_int_env("RANKING_LLM_TIMEOUT_SECONDS", 60, minimum=10),
             wos_db=os.environ.get("WOS_DB", "WOS"),
             search_field=os.environ.get("SEARCH_FIELD", ""),
             discipline_fields=os.environ.get("DISCIPLINE_FIELDS", ""),
@@ -150,6 +152,7 @@ SUPPORTED_LLM_PROVIDERS = (
     "zhipu",
     "siliconflow",
     "openrouter",
+    "nvidia",
     "volcengine",
     "hunyuan",
     "qianfan",
@@ -183,6 +186,7 @@ def default_model(provider: str) -> str:
         "zhipu": "glm-5.1",
         "siliconflow": "deepseek-ai/DeepSeek-V4-Flash",
         "openrouter": "openai/gpt-5.4-mini",
+        "nvidia": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
         "volcengine": "doubao-seed-2-0-mini-260428",
         "hunyuan": "hunyuan-turbos-latest",
         "qianfan": "ernie-5.0",
@@ -207,6 +211,7 @@ def default_base_url(provider: str, api_type: str = "") -> str:
         "zhipu": "https://open.bigmodel.cn/api/paas/v4",
         "siliconflow": "https://api.siliconflow.cn/v1",
         "openrouter": "https://openrouter.ai/api/v1",
+        "nvidia": "https://integrate.api.nvidia.com/v1",
         "volcengine": "https://ark.cn-beijing.volces.com/api/v3",
         "hunyuan": "https://tokenhub.tencentmaas.com/v1",
         "qianfan": "https://qianfan.baidubce.com/v2",
