@@ -913,6 +913,8 @@ class GoogleScholarSerperProvider:
                 data = response.json()
             except ValueError as exc:
                 raise ProviderError("googlescholar", "Google Scholar via Serper returned a non-JSON response.", body=response.text[:1000], query=query) from exc
+            if not isinstance(data, dict):
+                raise ProviderError("googlescholar", "Google Scholar via Serper returned an unexpected JSON structure.", body=response.text[:1000], query=query)
 
             items = [item for item in data.get("organic") or [] if isinstance(item, dict)]
             if items:
@@ -1008,6 +1010,8 @@ class GoogleScholarSerperProvider:
         raise ProviderError("googlescholar", f"Google Scholar via Serper request failed after {attempts} attempts: {detail}", query=query) from last_exc
 
     def _next_api_key(self) -> str:
+        if not self.api_keys:
+            return ""
         with self._lock:
             index = self._index
             self._index += 1
@@ -1074,12 +1078,15 @@ class GoogleScholarSerperProvider:
     def _authors(publication_info: Any) -> List[PaperAuthor]:
         if not isinstance(publication_info, dict):
             return []
+        authors_list = publication_info.get("authors")
+        if not isinstance(authors_list, list):
+            return []
         authors = []
-        for author in publication_info.get("authors") or []:
+        for author in authors_list:
             if isinstance(author, dict):
                 name = author.get("name") or author.get("title") or ""
             else:
-                name = str(author or "")
+                name = str(author or "").strip()
             if name:
                 authors.append(PaperAuthor(display_name=name))
         return authors

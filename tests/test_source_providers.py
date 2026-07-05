@@ -209,6 +209,33 @@ class SourceProviderTest(unittest.TestCase):
         self.assertEqual(record.citations[0].count, 12)
         self.assertEqual(record.abstract, "A Google Scholar result snippet.")
 
+    def test_google_scholar_serper_provider_rejects_unexpected_json(self):
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=["not", "a", "dict"], status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            with self.assertRaisesRegex(Exception, "unexpected JSON structure"):
+                GoogleScholarSerperProvider(api_key="serper-a").search("AI governance", limit=5)
+
+    def test_google_scholar_serper_provider_ignores_non_list_authors(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-authors",
+                    "title": "AI Governance",
+                    "publicationInfo": {"authors": "Alice, Bob"},
+                }
+            ]
+        }
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("AI governance", limit=1)
+
+        self.assertEqual(result.hits[0].names.authors, [])
+
     def test_google_scholar_serper_provider_skips_transient_empty_pages(self):
         payloads = [
             {"organic": []},

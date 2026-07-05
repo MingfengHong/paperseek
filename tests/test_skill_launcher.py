@@ -72,6 +72,8 @@ class SkillLauncherTest(unittest.TestCase):
                 self.assertEqual(method, "POST")
                 self.assertEqual(headers["X-API-KEY"], "serper-test")
                 self.assertEqual(payload["q"], "graph retrieval")
+                self.assertEqual(payload["page"], 1)
+                self.assertNotIn("num", payload)
                 return {"organic": [{"id": "gs1", "title": "Graph Scholar Retrieval", "year": 2025, "snippet": "Scholar result.", "link": "https://example.org/gs", "citedBy": {"total": 3}}]}
             if "manifest.json" in url:
                 return {"shards": [{"file": "shards/iclr-2025.fake.json"}]}
@@ -110,6 +112,30 @@ class SkillLauncherTest(unittest.TestCase):
             self.assertEqual(len(records), 1, source)
             self.assertEqual(records[0]["source"], source)
             self.assertTrue(used_query)
+
+    def test_standalone_google_scholar_rotates_serper_keys(self):
+        runtime = self._load_runtime()
+        seen_keys = []
+
+        def fake_http_json(url, method="GET", headers=None, payload=None):
+            self.assertIn("google.serper.dev/scholar", url)
+            seen_keys.append(headers["X-API-KEY"])
+            if headers["X-API-KEY"] == "bad-key":
+                raise RuntimeError("HTTP 403 from Serper")
+            return {"organic": [{"id": "gs1", "title": "Recovered Scholar Result", "publicationInfo": {"authors": "not-a-list"}}]}
+
+        runtime.http_json = fake_http_json
+
+        records, total, _ = runtime.fetch_google_scholar(
+            "AI governance",
+            5,
+            {"SERPER_API_KEYS": "bad-key; good-key"},
+        )
+
+        self.assertEqual(seen_keys, ["bad-key", "good-key"])
+        self.assertEqual(total, 1)
+        self.assertEqual(records[0]["title"], "Recovered Scholar Result")
+        self.assertEqual(records[0]["authors"], [])
 
     def test_standalone_arxiv_query_escapes_quotes(self):
         runtime = self._load_runtime()

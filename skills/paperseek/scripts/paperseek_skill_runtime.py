@@ -679,22 +679,58 @@ def fetch_pubmed(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[D
 
 
 def fetch_google_scholar(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
-    api_key = first_config_key(config, "SERPER_API_KEY", "SERPER_API_KEYS")
-    if not api_key:
+    api_keys = config_keys(config, "SERPER_API_KEY", "SERPER_API_KEYS")
+    if not api_keys:
         raise ValueError("SERPER_API_KEY is required for Google Scholar searches.")
-    payload = {
-        "q": query,
-        "page": 1,
-        "num": max(1, min(limit, 50)),
-    }
-    data = http_json(
-        "https://google.serper.dev/scholar",
-        method="POST",
-        headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
-        payload=payload,
-    )
-    organic = data.get("organic") or []
-    records = [normalize_google_scholar(item) for item in organic if isinstance(item, dict)]
+    requested_limit = max(1, min(limit, 50))
+    records = []
+    seen = set()
+    page = 1
+    empty_pages = 0
+    max_pages = min(50, max(5, ((requested_limit + 9) // 10) * 3))
+    last_error: Optional[Exception] = None
+    while len(records) < requested_limit and page <= max_pages:
+        data = None
+        for api_key in api_keys:
+            payload = {"q": query, "page": page}
+            try:
+                data = http_json(
+                    "https://google.serper.dev/scholar",
+                    method="POST",
+                    headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+                    payload=payload,
+                )
+                break
+            except RuntimeError as exc:
+                last_error = exc
+                continue
+        if data is None:
+            raise RuntimeError(f"Google Scholar via Serper failed for all configured keys: {last_error}")
+        if not isinstance(data, dict):
+            organic = []
+        else:
+            organic = data.get("organic") or []
+        if not isinstance(organic, list) or not organic:
+            empty_pages += 1
+            if empty_pages >= (3 if records else 5):
+                break
+            page += 1
+            continue
+        empty_pages = 0
+        for item in organic:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("id") or item.get("resultId") or item.get("link") or item.get("title") or "").strip().lower()
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            records.append(normalize_google_scholar(item))
+            if len(records) >= requested_limit:
+                break
+        if len(organic) < 10:
+            break
+        page += 1
     return records, len(records), query
 
 
@@ -919,12 +955,14 @@ def normalize_pubmed(pmid: str, item: Dict[str, object], abstract: str) -> Dict[
 def normalize_google_scholar(item: Dict[str, object]) -> Dict[str, object]:
     cited_by = item.get("citedBy") if isinstance(item.get("citedBy"), dict) else {}
     publication_info = item.get("publicationInfo") if isinstance(item.get("publicationInfo"), dict) else {}
+    authors_list = publication_info.get("authors")
     authors = []
-    for author in publication_info.get("authors") or []:
-        if isinstance(author, dict) and author.get("name"):
-            authors.append(str(author["name"]))
-        elif isinstance(author, str):
-            authors.append(author)
+    if isinstance(authors_list, list):
+        for author in authors_list:
+            if isinstance(author, dict) and author.get("name"):
+                authors.append(str(author["name"]))
+            elif isinstance(author, str) and author.strip():
+                authors.append(author.strip())
     venue = (
         publication_info.get("journal")
         or publication_info.get("venue")
@@ -1526,11 +1564,17 @@ def split_fields(value: str) -> List[str]:
 
 
 def first_config_key(config: Dict[str, str], *keys: str) -> str:
+    values = config_keys(config, *keys)
+    return values[0] if values else ""
+
+
+def config_keys(config: Dict[str, str], *keys: str) -> List[str]:
+    values = []
     for key in keys:
-        for item in re.split(r"[\s,;]+", config.get(key, "")):
+        for item in re.split(r"[\s,;]+", config.get(key) or ""):
             if item.strip():
-                return item.strip()
-    return ""
+                values.append(item.strip())
+    return values
 
 
 def field_label(field_id: str) -> str:
