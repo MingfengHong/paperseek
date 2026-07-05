@@ -463,19 +463,21 @@ SYSTEM_GOOGLE_SCHOLAR_QUERY_NARROW = """\
 You are an expert in Google Scholar searches through Serper's /scholar API. A previous Scholar query returned too many records. Narrow it while preserving the interpreted search intent.
 
 Strategies:
-- Add one or two central concepts from the interpreted intent.
-- Add a stable exact phrase for the core topic when appropriate.
-- Add field, method, population, outcome, theory, or venue terms when the user question implies them.
+- Narrow by making existing broad concepts more specific, not by adding more alternative keywords.
+- If the current query has OR alternatives, reduce or replace weak alternatives instead of adding new OR terms.
+- Prefer one stable exact phrase for the core topic plus one mandatory facet from the interpreted intent.
+- Add field, method, population, outcome, theory, or venue terms only when they are mandatory to the user's question.
+- Remove broad standalone terms that pull in off-topic titles.
 - Use -excluded terms only for clear ambiguity.
 - Keep the query as plain Google Scholar search text, not API parameters or database field tags.
-- Use supplied top returned titles diagnostically: add missing intent facets or replace terms that pulled the result set away from the intended literature.
+- Use supplied top returned titles diagnostically: replace terms that pulled the result set away from the intended literature, or add one missing mandatory facet.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
 - The query field must contain only the narrowed Google Scholar q string.
 - Put the narrowing reason and title-based diagnostic in the rationale field.
 - Do not include markdown, bullets, or code blocks outside JSON.
-- Make at least one minimal valid narrowing change, such as adding one missing core concept from the research intent.
+- Make at least one minimal valid narrowing change, such as reducing an OR group, replacing a broad term with a narrower phrase, or adding one mandatory facet.
 
 Output ONLY the JSON object."""
 
@@ -528,17 +530,19 @@ You are an expert in computer science top-conference paper search. A previous Pa
 
 PaperHub guidance converted into prompt rules:
 - Keep the JSON query field as plain search text.
-- Add central method, task, dataset, conference, year, or presentation-type terms from the original question when helpful.
-- Prefer terms likely to occur in top-conference paper titles, abstracts, keywords, or metadata.
+- Narrow by making the query more selective, not by appending a long keyword list.
+- If the current query has many alternatives, reduce weak alternatives before adding any new term.
+- Prefer one central method/task phrase and one mandatory dataset, benchmark, venue, or year term from the original question when helpful.
+- Prefer terms likely to occur in top-conference paper titles, abstracts, keywords, or metadata, but avoid broad standalone terms.
 - Avoid API parameters, field tags, and database-specific syntax.
-- Use supplied top returned titles diagnostically: add missing method/task/domain facets or replace terms that caused broad top-conference drift.
+- Use supplied top returned titles diagnostically: replace terms that caused broad top-conference drift, or add one missing mandatory facet.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
 - The query field must contain only the narrowed source-specific query string.
 - Put the narrowing reason and title-based diagnostic in the rationale field.
 - Do not include markdown, bullets, or code blocks outside JSON.
-- Make at least one minimal valid narrowing change, such as adding one missing core concept from the research intent.
+- Make at least one minimal valid narrowing change, such as reducing alternatives, replacing a broad term with a narrower phrase, or adding one mandatory facet.
 
 Output ONLY the JSON object."""
 
