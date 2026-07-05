@@ -44,6 +44,31 @@ class ResultsTest(unittest.TestCase):
         self.assertIn("open innovation", row["keywords"])
         self.assertIn("open innovation", row["keywords_text"])
 
+    def test_google_scholar_summary_metadata_is_split_for_display(self):
+        record = PaperRecord(
+            uid="googlescholar:gs-1",
+            title="Main issues on foreign investment in China's regional development",
+            source=PaperSource(
+                source_title="M Taube, M Ogutcu\u0431\u043d - Foreign Direct Investment in China, 2002 - books.google.com",
+                publish_year=3505,
+            ),
+            names=PaperNames(authors=[]),
+            links=PaperLinks(record="https://books.google.com/example"),
+            citations=[PaperCitation(db="Google Scholar", count=66)],
+            identifiers=PaperIdentifiers(),
+            keywords=PaperKeywords(author_keywords=[]),
+            abstract="Abstract.",
+            provider="googlescholar",
+        )
+        rows = ranked_items_to_dict([{"document": record, "score": 9, "reasoning": "Relevant."}])
+        row = rows[0]
+        self.assertEqual(row["authors"], ["M Taube", "M Ogutcu"])
+        self.assertEqual(row["authors_text"], "M Taube; M Ogutcu")
+        self.assertEqual(row["venue"], "Foreign Direct Investment in China")
+        self.assertEqual(row["source"], "Foreign Direct Investment in China")
+        self.assertEqual(row["year"], 2002)
+        self.assertEqual(row["publish_year"], 2002)
+
 
 if __name__ == "__main__":
     unittest.main()

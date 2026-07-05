@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+import re
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def safe_get(obj: Any, attr: str, default: Any = "") -> Any:
@@ -72,6 +74,69 @@ def source_type_from_doc(doc: Any) -> str:
     return ""
 
 
+def plausible_year(value: Any) -> Optional[int]:
+    current_year = time.gmtime().tm_year + 2
+    try:
+        if value not in (None, ""):
+            year = int(value)
+            if 1500 <= year <= current_year:
+                return year
+    except (TypeError, ValueError):
+        pass
+    text = str(value or "")
+    for match in re.finditer(r"\b(?:1[5-9]\d{2}|20\d{2})\b", text):
+        year = int(match.group(0))
+        if year <= current_year:
+            return year
+    return None
+
+
+def clean_google_scholar_fragment(value: Any) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").replace("\u00a0", " ")).strip()
+    text = text.replace("\u0431\u043d", "...")
+    text = re.sub(r"\b(?:1[5-9]\d{2}|20\d{2})\b", "", text)
+    text = re.sub(r"\bAvailable at\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bSSRN\s+\d+\b", "SSRN", text, flags=re.IGNORECASE)
+    text = text.replace("...", " ")
+    return re.sub(r"\s+", " ", text).strip(" ,;:-")
+
+
+def google_scholar_summary_parts(value: Any) -> List[str]:
+    return [clean_google_scholar_fragment(part) for part in re.split(r"\s+-\s+", str(value or "")) if clean_google_scholar_fragment(part)]
+
+
+def author_names_from_google_scholar_summary(value: Any) -> List[str]:
+    parts = google_scholar_summary_parts(value)
+    if len(parts) < 2 or plausible_year(parts[0]):
+        return []
+    authors = []
+    for part in re.split(r"\s*,\s*|;\s*", parts[0]):
+        name = clean_google_scholar_fragment(part)
+        if not name or plausible_year(name):
+            continue
+        if re.search(r"://|www\.|\.com\b|\.org\b|\.net\b|\.edu\b", name, flags=re.IGNORECASE):
+            continue
+        authors.append(name)
+    return authors
+
+
+def venue_from_google_scholar_summary(value: Any) -> str:
+    parts = google_scholar_summary_parts(value)
+    for part in parts[1:]:
+        if part and not plausible_year(part):
+            return part
+    return ""
+
+
+def normalize_google_scholar_metadata(provider: str, authors: List[str], year: Optional[int], venue: str) -> Tuple[List[str], Optional[int], str]:
+    if provider != "googlescholar":
+        return authors, year, venue
+    normalized_year = plausible_year(year) or plausible_year(venue)
+    normalized_authors = authors or author_names_from_google_scholar_summary(venue)
+    normalized_venue = venue_from_google_scholar_summary(venue) if " - " in str(venue or "") else clean_google_scholar_fragment(venue)
+    return normalized_authors, normalized_year, normalized_venue or "Google Scholar"
+
+
 @dataclass
 class PaperResult:
     rank: int
@@ -116,15 +181,19 @@ def ranked_entry_to_result(entry: Dict[str, Any], rank: int) -> PaperResult:
         score_value: Optional[float] = float(score) if score is not None and score != "" else None
     except (TypeError, ValueError):
         score_value = None
+    authors = authors_from_doc(doc)
+    year = getattr(source, "publish_year", None) if source else None
+    venue = getattr(source, "source_title", "") if source else ""
+    authors, year, venue = normalize_google_scholar_metadata(provider, authors, year, venue)
 
     return PaperResult(
         rank=rank,
         source=provider,
         id=first_non_empty(safe_get(doc, "uid"), getattr(identifiers, "openalex", "") if identifiers else "", doi),
         title=first_non_empty(safe_get(doc, "title"), "(no title)"),
-        authors=authors_from_doc(doc),
-        year=getattr(source, "publish_year", None) if source else None,
-        venue=getattr(source, "source_title", "") if source else "",
+        authors=authors,
+        year=year,
+        venue=venue,
         publication_type=source_type_from_doc(doc),
         doi=doi or "",
         url=url,

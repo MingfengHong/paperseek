@@ -27,6 +27,7 @@ class AgentConfig:
     pubmed_api_key: str = ""
     pubmed_email: str = ""
     pubmed_tool: str = "paperseek"
+    serper_api_key: str = ""
     llm_api_key: str = ""
     llm_provider: str = "openai"
     llm_api_type: str = ""
@@ -77,6 +78,7 @@ class AgentConfig:
             pubmed_api_key=os.environ.get("PUBMED_API_KEY", ""),
             pubmed_email=os.environ.get("PUBMED_EMAIL", ""),
             pubmed_tool=os.environ.get("PUBMED_TOOL", "paperseek"),
+            serper_api_key=os.environ.get("SERPER_API_KEYS", "") or os.environ.get("SERPER_API_KEY", ""),
             llm_api_key=os.environ.get("LLM_API_KEY", ""),
             llm_provider=provider,
             llm_api_type=api_type,
@@ -122,6 +124,8 @@ class AgentConfig:
         self.discipline_fields = normalize_source_filter_values(self.data_source, self.discipline_fields)
         if self.data_source == "wos" and not self.wos_api_key:
             missing.append("WOS_API_KEY")
+        if self.data_source == "googlescholar" and not self.serper_api_key:
+            missing.append("SERPER_API_KEY")
         self.llm_provider = (self.llm_provider or "openai").lower()
         self.llm_api_type = (self.llm_api_type or default_api_type(self.llm_provider)).lower()
         if not self.llm_api_key and self.llm_provider != "ollama":

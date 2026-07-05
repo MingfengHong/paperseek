@@ -56,6 +56,7 @@ class SourceConfig:
     pubmed_api_key: str = ""
     pubmed_email: str = ""
     pubmed_tool: str = "paperseek"
+    serper_api_key: str = ""
 
 
 @dataclass
@@ -101,6 +102,7 @@ class RuntimeConfig:
     pubmed_api_key: str
     pubmed_email: str
     pubmed_tool: str
+    serper_api_key: str
 
 
 def build_runtime_config(
@@ -154,4 +156,5 @@ def build_runtime_config(
         pubmed_api_key=source.pubmed_api_key,
         pubmed_email=source.pubmed_email,
         pubmed_tool=source.pubmed_tool or "paperseek",
+        serper_api_key=source.serper_api_key,
     )

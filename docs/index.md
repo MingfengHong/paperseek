@@ -24,7 +24,7 @@ hero:
 
 features:
   - title: 自然语言检索
-    details: 输入中文或英文研究问题，由 LLM 生成适合 OpenAlex、arXiv、Semantic Scholar、PubMed、计算机顶会、Crossref 或 WoS Starter 的检索查询。
+    details: 输入中文或英文研究问题，由 LLM 生成适合 OpenAlex、arXiv、Semantic Scholar、PubMed、Google Scholar、计算机顶会、Crossref 或 WoS Starter 的检索查询。
   - title: 可观察工作流
     details: 实时查看查询生成、数据源请求、检索式调整、结果排序、引用扩展和系统日志；排序阶段会拆分显示多路召回、embedding、RRF、LLM 批量打分和摘要补全等子步骤。
   - title: 学科领域限制

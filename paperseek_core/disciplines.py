@@ -468,6 +468,7 @@ def source_filter_label(source: str) -> str:
         "arxiv": "arXiv Category",
         "semanticscholar": "Field/context hint",
         "pubmed": "Biomedical field/context hint",
+        "googlescholar": "Google Scholar field/context hint",
         "paperhub": "Computer science field/context hint",
         "crossref": "Bibliographic field/context hint",
     }

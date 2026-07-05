@@ -47,6 +47,8 @@ CONFIG_KEYS = (
     "PUBMED_TOOL",
     "SEARCH_FIELD",
     "SEMANTIC_SCHOLAR_API_KEY",
+    "SERPER_API_KEY",
+    "SERPER_API_KEYS",
     "TARGET_MAX",
     "TARGET_MIN",
     "WOS_API_KEY",
@@ -183,6 +185,29 @@ SOURCE_METADATA = [
         "notes": ["NCBI recommends identifying the tool and email for responsible E-utilities usage."],
     },
     {
+        "id": "googlescholar",
+        "display_name": "Google Scholar (via Serper)",
+        "status": "supported",
+        "description": "Google Scholar search through the Serper Scholar API with snippets, citation-count clues, and PDF links when available.",
+        "api_key": "required",
+        "default": False,
+        "supports_abstracts": True,
+        "supports_citations": True,
+        "supports_citation_expansion": False,
+        "supports_pdf_links": True,
+        "supported_parameters": [
+            "serper_api_key",
+            "search_field",
+            "discipline_fields",
+            "target_min",
+            "target_max",
+            "max_iterations",
+        ],
+        "required_config": ["SERPER_API_KEY"],
+        "optional_config": ["SERPER_API_KEYS"],
+        "notes": ["Uses Serper /scholar. Multiple keys can be set in SERPER_API_KEYS."],
+    },
+    {
         "id": "paperhub",
         "display_name": "Computer science top conferences",
         "status": "supported",
@@ -303,7 +328,7 @@ Usage:
 
 The standalone runtime is bundled inside the Skill folder and uses only the
 Python standard library. It can search OpenAlex, arXiv, Semantic Scholar,
-PubMed, computer science top-conference search, Crossref, and WoS Starter directly. If LLM_API_KEY is
+PubMed, Google Scholar through Serper, computer science top-conference search, Crossref, and WoS Starter directly. If LLM_API_KEY is
 configured, it can also ask an OpenAI-compatible LLM to refine search terms and
 score candidates; otherwise it uses deterministic query and ranking heuristics.
 """
@@ -411,7 +436,7 @@ def run_search(argv: List[str]) -> int:
     parser.add_argument(
         "--source",
         default=os.environ.get("DATA_SOURCE", "openalex"),
-        choices=["openalex", "arxiv", "semanticscholar", "pubmed", "paperhub", "crossref", "wos"],
+        choices=["openalex", "arxiv", "semanticscholar", "pubmed", "googlescholar", "paperhub", "crossref", "wos"],
     )
     parser.add_argument("--min", dest="target_min", type=int, default=int_env("TARGET_MIN", 5))
     parser.add_argument("--max", dest="target_max", type=int, default=int_env("TARGET_MAX", 20))
@@ -431,6 +456,7 @@ def run_search(argv: List[str]) -> int:
     parser.add_argument("--openalex-email", default="")
     parser.add_argument("--crossref-email", default="")
     parser.add_argument("--semantic-scholar-key", default="")
+    parser.add_argument("--serper-key", default="")
     parser.add_argument("--pubmed-key", default="")
     parser.add_argument("--pubmed-email", default="")
     parser.add_argument("--pubmed-tool", default="")
@@ -535,6 +561,8 @@ def fetch_source(source: str, query: str, limit: int, config: Dict[str, str], di
         return fetch_semantic_scholar(query, limit, config)
     if source == "pubmed":
         return fetch_pubmed(query, limit, config)
+    if source == "googlescholar":
+        return fetch_google_scholar(query, limit, config)
     if source == "paperhub":
         return fetch_paperhub(query, limit, config)
     if source == "crossref":
@@ -648,6 +676,62 @@ def fetch_pubmed(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[D
     payload = summary.get("result") or {}
     records = [normalize_pubmed(pmid, payload[pmid], abstracts.get(pmid, "")) for pmid in ids if isinstance(payload.get(pmid), dict)]
     return records, total, query
+
+
+def fetch_google_scholar(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
+    api_keys = config_keys(config, "SERPER_API_KEY", "SERPER_API_KEYS")
+    if not api_keys:
+        raise ValueError("SERPER_API_KEY is required for Google Scholar searches.")
+    requested_limit = max(1, min(limit, 50))
+    records = []
+    seen = set()
+    page = 1
+    empty_pages = 0
+    max_pages = min(50, max(5, ((requested_limit + 9) // 10) * 3))
+    last_error: Optional[Exception] = None
+    while len(records) < requested_limit and page <= max_pages:
+        data = None
+        for api_key in api_keys:
+            payload = {"q": query, "page": page}
+            try:
+                data = http_json(
+                    "https://google.serper.dev/scholar",
+                    method="POST",
+                    headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+                    payload=payload,
+                )
+                break
+            except RuntimeError as exc:
+                last_error = exc
+                continue
+        if data is None:
+            raise RuntimeError(f"Google Scholar via Serper failed for all configured keys: {last_error}")
+        if not isinstance(data, dict):
+            organic = []
+        else:
+            organic = data.get("organic") or []
+        if not isinstance(organic, list) or not organic:
+            empty_pages += 1
+            if empty_pages >= (3 if records else 5):
+                break
+            page += 1
+            continue
+        empty_pages = 0
+        for item in organic:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("id") or item.get("resultId") or item.get("link") or item.get("title") or "").strip().lower()
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            records.append(normalize_google_scholar(item))
+            if len(records) >= requested_limit:
+                break
+        if len(organic) < 10:
+            break
+        page += 1
+    return records, len(records), query
 
 
 def fetch_paperhub(query: str, limit: int, config: Dict[str, str]) -> Tuple[List[Dict[str, object]], int, str]:
@@ -866,6 +950,146 @@ def normalize_pubmed(pmid: str, item: Dict[str, object], abstract: str) -> Dict[
         "citation_count": 0,
         "source_raw_id": pmid,
     }
+
+
+def normalize_google_scholar(item: Dict[str, object]) -> Dict[str, object]:
+    cited_by = item.get("citedBy") if isinstance(item.get("citedBy"), dict) else {}
+    publication_info = item.get("publicationInfo") if isinstance(item.get("publicationInfo"), dict) else {}
+    authors_list = publication_info.get("authors")
+    authors = []
+    if isinstance(authors_list, list):
+        for author in authors_list:
+            if isinstance(author, dict) and author.get("name"):
+                name = clean_google_scholar_author(author["name"])
+                if name:
+                    authors.append(name)
+            elif isinstance(author, str) and author.strip():
+                name = clean_google_scholar_author(author)
+                if name:
+                    authors.append(name)
+    if not authors:
+        authors = authors_from_google_scholar_summary(item.get("publicationInfo"))
+    venue = google_scholar_source_title(item.get("publicationInfo"))
+    record_id = str(item.get("id") or item.get("link") or item.get("title") or "")
+    title = clean_google_scholar_text(item.get("title") or "")
+    snippet = clean_google_scholar_snippet(item.get("snippet") or "")
+    year = plausible_year(item.get("year")) or year_from_text(google_scholar_publication_summary(item.get("publicationInfo"))) or ""
+    return {
+        "id": "googlescholar:" + record_id if record_id else "",
+        "source": "googlescholar",
+        "title": title,
+        "authors": authors,
+        "authors_text": ", ".join(authors),
+        "year": year,
+        "venue": str(venue or ""),
+        "publication_type": "scholarly result",
+        "doi": "",
+        "url": item.get("link") or "",
+        "pdf_url": item.get("pdfUrl") or "",
+        "abstract": truncate_text(snippet, 3000),
+        "keywords": [],
+        "keywords_text": "",
+        "citation_count": safe_int(cited_by.get("total") or cited_by.get("cites") or cited_by.get("count") or cited_by.get("value"), 0),
+        "source_raw_id": record_id,
+    }
+
+
+def google_scholar_publication_summary(publication_info: object) -> str:
+    if isinstance(publication_info, dict):
+        return clean_google_scholar_text(publication_info.get("summary") or "")
+    return clean_google_scholar_text(publication_info)
+
+
+def google_scholar_summary_parts(publication_info: object) -> List[str]:
+    summary = google_scholar_publication_summary(publication_info)
+    return [part for part in (clean_google_scholar_text(item) for item in re.split(r"\s+-\s+", summary)) if part]
+
+
+def authors_from_google_scholar_summary(publication_info: object) -> List[str]:
+    parts = google_scholar_summary_parts(publication_info)
+    if len(parts) < 2 or year_from_text(parts[0]):
+        return []
+    authors = []
+    for part in re.split(r"\s*,\s*|;\s*", parts[0]):
+        name = clean_google_scholar_author(part)
+        if name:
+            authors.append(name)
+    return authors
+
+
+def google_scholar_source_title(publication_info: object) -> str:
+    if isinstance(publication_info, dict):
+        for key in ("journal", "venue"):
+            source = clean_google_scholar_source(publication_info.get(key))
+            if source:
+                return source
+    for part in google_scholar_summary_parts(publication_info)[1:]:
+        source = clean_google_scholar_source(part)
+        if source:
+            return source
+    return "Google Scholar"
+
+
+def clean_google_scholar_author(value: object) -> str:
+    text = clean_google_scholar_text(value)
+    text = re.sub(r"\bet\s+al\.?$", "", text, flags=re.IGNORECASE).strip()
+    text = text.replace("...", "").strip(" ,;.-")
+    if not text or year_from_text(text):
+        return ""
+    if re.search(r"://|www\.|\.com\b|\.org\b|\.net\b|\.edu\b", text, flags=re.IGNORECASE):
+        return ""
+    return text
+
+
+def clean_google_scholar_source(value: object) -> str:
+    text = clean_google_scholar_text(value)
+    text = re.sub(r"\b(19|20)\d{2}\b", "", text)
+    text = re.sub(r"\bAvailable at\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bSSRN\s+\d+\b", "SSRN", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bet\s+al\.?\b", "", text, flags=re.IGNORECASE)
+    text = text.replace("...", " ")
+    return re.sub(r"\s+", " ", text).strip(" ,;:-")
+
+
+def clean_google_scholar_snippet(value: object) -> str:
+    text = clean_google_scholar_text(value)
+    text = re.sub(r"^(?:\.\.\.|…)\s*,?\s*", "", text)
+    text = re.sub(r"\s*(?:\.\.\.|…)$", "", text)
+    return text.strip()
+
+
+def clean_google_scholar_text(value: object) -> str:
+    text = unescape(str(value or ""))
+    text = text.replace("\u00a0", " ")
+    text = repair_google_scholar_mojibake(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def repair_google_scholar_mojibake(text: str) -> str:
+    replacements = {
+        "â€¦": "...",
+        "â€“": "–",
+        "â€”": "—",
+        "â€œ": "“",
+        "â€�": "”",
+        "â€˜": "‘",
+        "â€™": "’",
+        "鈥�": "...",
+        "鈥?": "...",
+        "\u0431\u043d": "...",
+    }
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+
+    def replace_pair(match: re.Match) -> str:
+        token = match.group(0)
+        try:
+            repaired = token.encode("gbk").decode("utf-8")
+        except UnicodeError:
+            return token
+        return repaired if "\ufffd" not in repaired else token
+
+    return re.sub(r"鈥[\u4e00-\u9fff]", replace_pair, text)
 
 
 def normalize_paperhub(paper: Dict[str, object]) -> Dict[str, object]:
@@ -1145,6 +1369,8 @@ def doctor_checks(config: Dict[str, str], source: str, provider: str, api_type: 
         checks.append(check("source.semantic_scholar_key", "warning", "warning", "SEMANTIC_SCHOLAR_API_KEY is not configured.", ["Anonymous Semantic Scholar access is suitable only for light smoke tests."]))
     elif source == "pubmed" and not config.get("PUBMED_EMAIL"):
         checks.append(check("source.pubmed_email", "warning", "warning", "PUBMED_EMAIL is not configured.", ["Set PUBMED_EMAIL to identify responsible NCBI E-utilities usage."]))
+    elif source == "googlescholar" and not first_config_key(config, "SERPER_API_KEY", "SERPER_API_KEYS"):
+        checks.append(check("source.serper_key", "fail", "error", "SERPER_API_KEY is required for Google Scholar searches."))
     else:
         checks.append(check("source.credentials", "pass", "info", "Source-specific credential requirement is satisfied or not required."))
 
@@ -1358,6 +1584,7 @@ def apply_arg_config(config: Dict[str, str], args) -> None:
         "openalex_email": "OPENALEX_EMAIL",
         "crossref_email": "CROSSREF_EMAIL",
         "semantic_scholar_key": "SEMANTIC_SCHOLAR_API_KEY",
+        "serper_key": "SERPER_API_KEY",
         "pubmed_key": "PUBMED_API_KEY",
         "pubmed_email": "PUBMED_EMAIL",
         "pubmed_tool": "PUBMED_TOOL",
@@ -1436,6 +1663,20 @@ def split_fields(value: str) -> List[str]:
     if ";" in value:
         return [part.strip() for part in value.split(";")]
     return [value.strip()]
+
+
+def first_config_key(config: Dict[str, str], *keys: str) -> str:
+    values = config_keys(config, *keys)
+    return values[0] if values else ""
+
+
+def config_keys(config: Dict[str, str], *keys: str) -> List[str]:
+    values = []
+    for key in keys:
+        for item in re.split(r"[\s,;]+", config.get(key) or ""):
+            if item.strip():
+                values.append(item.strip())
+    return values
 
 
 def field_label(field_id: str) -> str:
@@ -1657,7 +1898,20 @@ def safe_int(value, default: int = 0) -> int:
 
 def year_from_text(value: str) -> object:
     match = re.search(r"\b(19|20)\d{2}\b", value or "")
-    return int(match.group(0)) if match else ""
+    if not match:
+        return ""
+    return plausible_year(match.group(0)) or ""
+
+
+def plausible_year(value: object) -> object:
+    try:
+        if value not in (None, ""):
+            year = int(value)
+            if 1500 <= year <= time.gmtime().tm_year + 2:
+                return year
+    except (TypeError, ValueError):
+        return ""
+    return ""
 
 
 def int_env(key: str, default: int) -> int:

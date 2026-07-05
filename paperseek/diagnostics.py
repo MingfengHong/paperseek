@@ -19,6 +19,7 @@ from paperseek.disciplines import (
 from paperseek.providers import (
     ArxivProvider,
     CrossrefProvider,
+    GoogleScholarSerperProvider,
     OpenAlexProvider,
     PaperHubProvider,
     ProviderError,
@@ -119,6 +120,14 @@ def run_doctor(config: AgentConfig) -> Dict[str, Any]:
             severity="warning",
             summary="PUBMED_EMAIL is not configured.",
             actions=["Set PUBMED_EMAIL and optionally PUBMED_API_KEY for responsible NCBI E-utilities usage."],
+        ))
+    elif source == "googlescholar" and not getattr(config, "serper_api_key", ""):
+        checks.append(DiagnosticCheck(
+            id="source.serper_key",
+            status="fail",
+            severity="error",
+            summary="SERPER_API_KEY or SERPER_API_KEYS is required for Google Scholar searches.",
+            actions=["Set SERPER_API_KEY or SERPER_API_KEYS, or choose a source that does not require Serper."],
         ))
     else:
         checks.append(DiagnosticCheck(
@@ -252,6 +261,8 @@ def smoke_source(config: AgentConfig, query: str = "machine learning", limit: in
                 getattr(config, "pubmed_email", ""),
                 getattr(config, "pubmed_tool", "paperseek"),
             ).search(query, limit=limit)
+        elif source == "googlescholar":
+            result = GoogleScholarSerperProvider(getattr(config, "serper_api_key", "")).search(query, limit=limit)
         elif source == "paperhub":
             result = PaperHubProvider().search(query, limit=limit)
         else:

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from paperseek_core.sources.providers import (
     ArxivProvider,
+    GoogleScholarSerperProvider,
     PaperHubProvider,
     PubMedProvider,
     SemanticScholarProvider,
@@ -167,6 +168,175 @@ class SourceProviderTest(unittest.TestCase):
         self.assertEqual(record.identifiers.pmid, "123")
         self.assertEqual(record.identifiers.doi, "10.1234/pubmed")
         self.assertEqual(record.abstract, "PubMed abstract.")
+
+    def test_google_scholar_serper_provider_posts_query_and_maps_results(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-1",
+                    "title": "AI Governance and Accountability",
+                    "link": "https://example.org/paper",
+                    "pdfUrl": "https://example.org/paper.pdf",
+                    "snippet": "A Google Scholar result snippet.",
+                    "year": 2024,
+                    "publicationInfo": {
+                        "summary": "A Ada - Journal of AI Policy, 2024",
+                        "authors": [{"name": "A Ada"}],
+                    },
+                    "citedBy": {"total": 12, "link": "https://scholar.google.com/scholar?cites=1"},
+                }
+            ]
+        }
+        captured = {}
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            captured.update({"url": url, "json": json, "headers": headers, "timeout": timeout})
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a,serper-b").search("AI governance", limit=5, page=2)
+
+        self.assertEqual(captured["url"], "https://google.serper.dev/scholar")
+        self.assertEqual(captured["json"]["q"], "AI governance")
+        self.assertEqual(captured["json"]["page"], 2)
+        self.assertNotIn("num", captured["json"])
+        self.assertIn(captured["headers"]["X-API-KEY"], {"serper-a", "serper-b"})
+        self.assertEqual(result.metadata.total, 11)
+        record = result.hits[0]
+        self.assertEqual(record.provider, "googlescholar")
+        self.assertEqual(record.uid, "googlescholar:gs-1")
+        self.assertEqual(record.links.pdf, "https://example.org/paper.pdf")
+        self.assertEqual(record.citations[0].count, 12)
+        self.assertEqual(record.abstract, "A Google Scholar result snippet.")
+
+    def test_google_scholar_serper_provider_rejects_unexpected_json(self):
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=["not", "a", "dict"], status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            with self.assertRaisesRegex(Exception, "unexpected JSON structure"):
+                GoogleScholarSerperProvider(api_key="serper-a").search("AI governance", limit=5)
+
+    def test_google_scholar_serper_provider_ignores_non_list_authors(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-authors",
+                    "title": "AI Governance",
+                    "publicationInfo": {"authors": "Alice, Bob"},
+                }
+            ]
+        }
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("AI governance", limit=1)
+
+        self.assertEqual(result.hits[0].names.authors, [])
+
+    def test_google_scholar_serper_provider_cleans_summary_metadata(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-clean",
+                    "title": "Digital\u9225\u63dceal Economy Integration",
+                    "link": "https://example.org/clean",
+                    "snippet": "\u9225?, resource allocation and industrial innovation \u9225?",
+                    "publicationInfo": {
+                        "summary": "Y Feng, Y Gao, L Yang\u9225? - Resources Policy, 2024 - Elsevier",
+                    },
+                    "citedBy": {"cites": 41},
+                }
+            ]
+        }
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("digital economy", limit=1)
+
+        record = result.hits[0]
+        self.assertEqual(record.title, "Digital\u2013Real Economy Integration")
+        self.assertEqual([author.display_name for author in record.names.authors], ["Y Feng", "Y Gao", "L Yang"])
+        self.assertEqual(record.source.source_title, "Resources Policy")
+        self.assertEqual(record.source.publish_year, 2024)
+        self.assertEqual(record.abstract, "resource allocation and industrial innovation")
+        self.assertEqual(record.citations[0].count, 41)
+
+    def test_google_scholar_serper_provider_uses_domain_when_summary_has_no_venue(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-book",
+                    "title": "Governing China's Digital Transformation",
+                    "publicationInfo": {"summary": "J Qian - 2025 - books.google.com"},
+                }
+            ]
+        }
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("digital transformation", limit=1)
+
+        record = result.hits[0]
+        self.assertEqual([author.display_name for author in record.names.authors], ["J Qian"])
+        self.assertEqual(record.source.source_title, "books.google.com")
+        self.assertEqual(record.source.publish_year, 2025)
+
+    def test_google_scholar_serper_provider_rejects_implausible_item_year(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-ssrn",
+                    "title": "Do Foreign Direct Investments Crowd In or Crowd Out Domestic Investment?",
+                    "year": 3505,
+                    "publicationInfo": {
+                        "summary": "JMR Oualy\u0431\u043d - Available at SSRN 3505572, 2019 - papers.ssrn.com",
+                    },
+                    "citedBy": {"total": 12},
+                }
+            ]
+        }
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("foreign direct investment", limit=1)
+
+        record = result.hits[0]
+        self.assertEqual([author.display_name for author in record.names.authors], ["JMR Oualy"])
+        self.assertEqual(record.source.source_title, "SSRN")
+        self.assertEqual(record.source.publish_year, 2019)
+
+    def test_google_scholar_serper_provider_skips_transient_empty_pages(self):
+        payloads = [
+            {"organic": []},
+            {
+                "organic": [
+                    {"id": "gs-2", "title": "AI Governance", "link": "https://example.org/2"},
+                    {"id": "gs-3", "title": "AI Accountability", "link": "https://example.org/3"},
+                ]
+            },
+        ]
+        pages = []
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            pages.append(json["page"])
+            payload = payloads.pop(0) if payloads else {"organic": []}
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("AI governance", limit=5)
+
+        self.assertEqual(pages[:2], [1, 2])
+        self.assertEqual(len(result.hits), 2)
+        self.assertEqual(result.metadata.total, 12)
 
     def test_paperhub_provider_loads_manifest_and_scores_shards(self):
         PaperHubProvider._paper_cache = None

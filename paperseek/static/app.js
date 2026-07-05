@@ -81,11 +81,18 @@ const translations = {
     "Source": "数据源",
     "OpenAlex": "OpenAlex",
     "OpenAlex (precise search)": "OpenAlex（精确检索）",
+    "arXiv (preprints)": "arXiv（预印本）",
+    "Semantic Scholar (broad scholarly graph)": "Semantic Scholar（广域学术图谱）",
+    "PubMed (biomedical literature)": "PubMed（生物医学文献）",
+    "Google Scholar (via Serper)": "Google Scholar（通过 Serper）",
     "Crossref (metadata / DOI registry)": "Crossref（元数据 / DOI 注册库）",
     "Web of Science Starter (temporarily unavailable)": "Web of Science Starter（暂不可用）",
     "Optional source keys are in Advanced settings.": "可选数据源 Key 在高级设置中。",
     "Optional OpenAlex API key and email are in Advanced settings.": "可选 OpenAlex API Key 和邮箱在高级设置中。",
     "Crossref email is optional but recommended in Advanced settings.": "Crossref 邮箱可选，但建议在高级设置中填写。",
+    "Google Scholar requires a Serper API key in Advanced settings.": "Google Scholar 需要在高级设置中填写 Serper API Key。",
+    "Serper API Key": "Serper API Key",
+    "Required for Google Scholar": "Google Scholar 必填",
     "WoS requires an API key in Advanced settings.": "WoS 需要在高级设置中填写 API Key。",
     "Source details are in Advanced settings.": "数据源详情在高级设置中。",
     "Advanced settings": "高级设置",
@@ -163,6 +170,7 @@ const translations = {
     "No final result was produced for this run.": "本次运行没有生成最终结果。",
     "Research Question is required.": "请填写研究问题。",
     "WoS API Key is required for WoS searches.": "WoS 检索需要 WoS API Key。",
+    "Serper API Key is required for Google Scholar searches.": "Google Scholar 检索需要 Serper API Key。",
     "LLM API Key is required for this provider.": "当前服务商需要 LLM API Key。",
     "API Type is required.": "请填写 API 类型。",
     "Min Results and Max Results must be numbers.": "最少结果和最多结果必须是数字。",
@@ -392,6 +400,7 @@ const sourceLabels = {
   arxiv: "arXiv (preprints)",
   semanticscholar: "Semantic Scholar (broad scholarly graph)",
   pubmed: "PubMed (biomedical literature)",
+  googlescholar: "Google Scholar (via Serper)",
   paperhub: "Computer science top conferences",
   crossref: "Crossref (metadata / DOI registry)",
   wos: "Web of Science Starter (temporarily unavailable)",
@@ -401,6 +410,7 @@ const compactSourceLabels = {
   arxiv: "arXiv",
   semanticscholar: "Semantic Scholar",
   pubmed: "PubMed",
+  googlescholar: "Google Scholar",
   paperhub: "CS top conferences",
   crossref: "Crossref",
   wos: "Web of Science Starter",
@@ -410,6 +420,7 @@ const sourceMetaLabels = {
   arxiv: "arXiv does not require an API key.",
   semanticscholar: "Semantic Scholar API key is optional in Advanced settings.",
   pubmed: "PubMed API key and email are optional in Advanced settings.",
+  googlescholar: "Google Scholar requires a Serper API key in Advanced settings.",
   paperhub: "Computer science top-conference search needs no key.",
   crossref: "Crossref email is optional but recommended in Advanced settings.",
   wos: "WoS requires an API key in Advanced settings.",
@@ -446,6 +457,7 @@ let environmentConfig = {
   has_semantic_scholar_api_key: false,
   has_pubmed_api_key: false,
   has_pubmed_email: false,
+  has_serper_api_key: false,
   llm_provider: "",
 };
 
@@ -926,6 +938,7 @@ function updateCredentialPlaceholders() {
   const semanticScholarKeyInput = document.getElementById("semanticScholarApiKey");
   const pubmedKeyInput = document.getElementById("pubmedApiKey");
   const pubmedEmailInput = document.getElementById("pubmedEmail");
+  const serperKeyInput = document.getElementById("serperApiKey");
   if (llmKeyInput) {
     if (providerSelect.value === "ollama") {
       setTranslatedAttribute(llmKeyInput, "placeholder", "Optional for local Ollama");
@@ -949,6 +962,9 @@ function updateCredentialPlaceholders() {
   }
   if (pubmedEmailInput && environmentConfig.has_pubmed_email) {
     setTranslatedAttribute(pubmedEmailInput, "placeholder", "Configured via environment");
+  }
+  if (serperKeyInput && environmentConfig.has_serper_api_key) {
+    setTranslatedAttribute(serperKeyInput, "placeholder", "Configured via environment");
   }
 }
 
@@ -1017,13 +1033,86 @@ function paperId(paper) {
   return String(paper.uid || paper.doi || paper.title || paper.rank || "");
 }
 
+function plausiblePublishYear(value) {
+  const current = new Date().getUTCFullYear() + 2;
+  if (value !== null && value !== undefined && value !== "") {
+    const direct = Number(value);
+    if (Number.isInteger(direct) && direct >= 1500 && direct <= current) {
+      return direct;
+    }
+  }
+  const match = String(value || "").match(/\b(1[5-9]\d{2}|20\d{2})\b/);
+  if (!match) {
+    return "";
+  }
+  const year = Number(match[1]);
+  return year <= current ? year : "";
+}
+
+function cleanScholarFragment(value) {
+  return String(value || "")
+    .replace(/\u0431\u043d/g, "...")
+    .replace(/\b(1[5-9]\d{2}|20\d{2})\b/g, "")
+    .replace(/\bAvailable at\s+/gi, "")
+    .replace(/\bSSRN\s+\d+\b/gi, "SSRN")
+    .replace(/\.\.\./g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[,;: -]+|[,;: -]+$/g, "");
+}
+
+function splitScholarSummary(value) {
+  return String(value || "")
+    .split(/\s+-\s+/)
+    .map(cleanScholarFragment)
+    .filter(Boolean);
+}
+
+function normalizeScholarPaper(paper) {
+  if (!paper || paper.provider !== "googlescholar") {
+    return paper;
+  }
+  const source = String(paper.source || paper.venue || "");
+  const next = { ...paper };
+  const year = plausiblePublishYear(paper.publish_year || paper.year) || plausiblePublishYear(source);
+  if (year) {
+    next.publish_year = year;
+    next.year = year;
+  }
+  if (source.includes(" - ")) {
+    const parts = splitScholarSummary(source);
+    if ((!Array.isArray(next.authors) || next.authors.length === 0) && parts.length > 1 && !plausiblePublishYear(parts[0])) {
+      next.authors = parts[0]
+        .split(/\s*,\s*|;\s*/)
+        .map(cleanScholarFragment)
+        .filter((name) => name && !plausiblePublishYear(name) && !/:\/\/|www\.|\.(com|org|net|edu)\b/i.test(name));
+    }
+    const venue = parts.slice(1).find((part) => part && !plausiblePublishYear(part));
+    if (venue) {
+      next.source = venue;
+      next.venue = venue;
+    }
+  } else if (source) {
+    const cleanSource = cleanScholarFragment(source);
+    if (cleanSource) {
+      next.source = cleanSource;
+      next.venue = cleanSource;
+    }
+  }
+  return next;
+}
+
+function normalizePapers(papers) {
+  return (papers || []).map(normalizeScholarPaper);
+}
+
 function selectedPapers() {
-  const papers = latestResult && latestResult.ranked ? latestResult.ranked : [];
+  const papers = latestResult && latestResult.ranked ? normalizePapers(latestResult.ranked) : [];
   return papers.filter((paper) => selectedPaperIds.has(paperId(paper)));
 }
 
 function getFilteredPapers() {
-  const papers = latestResult && latestResult.ranked ? [...latestResult.ranked] : [];
+  const papers = latestResult && latestResult.ranked ? normalizePapers(latestResult.ranked) : [];
   const query = resultFilters.query.trim().toLowerCase();
   let filtered = papers.filter((paper) => {
     if (query) {
@@ -1411,12 +1500,13 @@ function renderCandidatePreview(preview) {
 }
 
 function renderPapers(papers) {
-  if (!papers || papers.length === 0) {
+  const normalizedPapers = normalizePapers(papers);
+  if (!normalizedPapers || normalizedPapers.length === 0) {
     return emptyState("No ranked papers returned.");
   }
   return `
     <div class="paper-list">
-      ${papers.map((paper) => {
+      ${normalizedPapers.map((paper) => {
         const authors = paper.authors && paper.authors.length ? paper.authors.slice(0, 6).join(", ") : translatedText("No author metadata");
         const meta = [
           paper.provider || "",
@@ -2309,6 +2399,9 @@ function validatePayload(payload) {
   if (payload.data_source === "wos" && !String(payload.wos_api_key || "").trim() && !environmentConfig.has_wos_api_key) {
     return { ok: false, message: "WoS API Key is required for WoS searches.", fieldId: "wosApiKey" };
   }
+  if (payload.data_source === "googlescholar" && !String(payload.serper_api_key || "").trim() && !environmentConfig.has_serper_api_key) {
+    return { ok: false, message: "Serper API Key is required for Google Scholar searches.", fieldId: "serperApiKey" };
+  }
   if (payload.llm_provider !== "ollama" && !String(payload.llm_api_key || "").trim() && !envLlmKeyApplies(payload.llm_provider)) {
     return { ok: false, message: "LLM API Key is required for this provider.", fieldId: "llmApiKey" };
   }
@@ -2353,6 +2446,7 @@ function buildPayload() {
     pubmed_api_key: getValue("pubmedApiKey"),
     pubmed_email: getValue("pubmedEmail"),
     pubmed_tool: getValue("pubmedTool") || "paperseek",
+    serper_api_key: getValue("serperApiKey"),
     llm_api_key: getValue("llmApiKey"),
     llm_provider: getValue("llmProvider"),
     llm_api_type: getValue("llmApiType"),

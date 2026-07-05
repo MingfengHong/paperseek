@@ -94,6 +94,8 @@ Docker 镜像接受与 CLI 和 Web UI 后端相同的环境变量。绝大多数
 | `SEMANTIC_SCHOLAR_API_KEY` | `your-semantic-scholar-key` |
 | `PUBMED_EMAIL` | `you@example.org` |
 | `PUBMED_API_KEY` | `your-ncbi-key` |
+| `SERPER_API_KEY` | `your-serper-key` |
+| `SERPER_API_KEYS` | `serper-key-1,serper-key-2` |
 | `CROSSREF_EMAIL` | `you@example.org` |
 
 高级搜索、批量排序、多路召回、历史路径等参数都可以继续使用，默认值见 `.env.example` 的注释项。
@@ -298,7 +300,7 @@ Vercel 部署请替换域名：
 curl https://your-project.vercel.app/api/sources
 ```
 
-应返回包含 `openalex`、`arxiv`、`semanticscholar`、`pubmed`、`paperhub`、`crossref` 和 `wos` 的 JSON 数据源列表。
+应返回包含 `openalex`、`arxiv`、`semanticscholar`、`pubmed`、`googlescholar`、`paperhub`、`crossref` 和 `wos` 的 JSON 数据源列表。
 
 ---
 
@@ -334,7 +336,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Edit `.env` and fill `LLM_API_KEY` first. Provider, source, retrieval, ranking, and history variables can stay commented unless you need to override defaults. The Docker image accepts the same environment variables as the CLI and Web UI backend, including `DISCIPLINE_FIELDS` for default Discipline Field selections such as `17;14`. If you do not want server-side secrets, users can enter LLM and data-source keys in the Web UI for the current browser session.
+Edit `.env` and fill `LLM_API_KEY` first. Provider, source, retrieval, ranking, and history variables can stay commented unless you need to override defaults. The Docker image accepts the same environment variables as the CLI and Web UI backend, including `DISCIPLINE_FIELDS` for default Discipline Field selections such as `17;14`. Use `SERPER_API_KEY` or comma-/semicolon-separated `SERPER_API_KEYS` when the default source is Google Scholar through Serper. If you do not want server-side secrets, users can enter LLM and data-source keys in the Web UI for the current browser session.
 
 ## ModelScope Studio (English)
 
@@ -345,7 +347,7 @@ ModelScope Studio deployment is supported through Docker. PaperSeek's community 
 Basic flow:
 
 1. Sign in to ModelScope and click [Deploy to ModelScope](https://modelscope.cn/studios/fork?target=HongMingfeng/PaperSeek) to fork the community PaperSeek Studio.
-2. Set `LLM_API_KEY` in the Studio settings. If you switch away from the default OpenAI provider, also set `LLM_PROVIDER`, `LLM_API_TYPE`, `LLM_MODEL`, and `LLM_BASE_URL`. Add `OPENALEX_API_KEY`, `SEMANTIC_SCHOLAR_API_KEY`, `PUBMED_API_KEY`, `PUBMED_EMAIL`, `PUBMED_TOOL`, `CROSSREF_EMAIL`, `WOS_API_KEY`, or `DISCIPLINE_FIELDS` as needed.
+2. Set `LLM_API_KEY` in the Studio settings. If you switch away from the default OpenAI provider, also set `LLM_PROVIDER`, `LLM_API_TYPE`, `LLM_MODEL`, and `LLM_BASE_URL`. Add `OPENALEX_API_KEY`, `SEMANTIC_SCHOLAR_API_KEY`, `PUBMED_API_KEY`, `PUBMED_EMAIL`, `PUBMED_TOOL`, `SERPER_API_KEY`, `SERPER_API_KEYS`, `CROSSREF_EMAIL`, `WOS_API_KEY`, or `DISCIPLINE_FIELDS` as needed.
 3. Publish or restart the Studio and test the Web UI.
 
 Manual Git flow:
@@ -399,3 +401,5 @@ For Vercel:
 ```bash
 curl https://your-project.vercel.app/api/sources
 ```
+
+The response should include `openalex`, `arxiv`, `semanticscholar`, `pubmed`, `googlescholar`, `paperhub`, `crossref`, and `wos`.

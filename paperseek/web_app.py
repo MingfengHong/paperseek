@@ -56,6 +56,7 @@ FIELD_LABELS = {
     "pubmed_api_key": "PubMed API Key",
     "pubmed_email": "PubMed Email",
     "pubmed_tool": "PubMed Tool",
+    "serper_api_key": "Serper API Key",
     "llm_api_key": "LLM API Key",
     "llm_api_type": "LLM API Type",
     "discipline_fields": "Discipline Fields",
@@ -77,6 +78,7 @@ class SearchRequest(BaseModel):
     pubmed_api_key: Optional[str] = ""
     pubmed_email: Optional[str] = ""
     pubmed_tool: Optional[str] = ""
+    serper_api_key: Optional[str] = ""
     llm_api_key: Optional[str] = ""
     llm_provider: str = ""
     llm_api_type: str = ""
@@ -159,6 +161,7 @@ class DiagnosticRequest(BaseModel):
     pubmed_api_key: Optional[str] = ""
     pubmed_email: Optional[str] = ""
     pubmed_tool: Optional[str] = ""
+    serper_api_key: Optional[str] = ""
     llm_api_key: Optional[str] = ""
     llm_provider: str = ""
     llm_api_type: str = ""
@@ -336,6 +339,7 @@ def config_defaults():
         "has_semantic_scholar_api_key": bool(getattr(config, "semantic_scholar_api_key", "")),
         "has_pubmed_api_key": bool(getattr(config, "pubmed_api_key", "")),
         "has_pubmed_email": bool(getattr(config, "pubmed_email", "")),
+        "has_serper_api_key": bool(getattr(config, "serper_api_key", "")),
         "has_llm_api_key": bool(config.llm_api_key),
     }
 
@@ -362,6 +366,7 @@ def _config_from_payload(payload: SearchRequest) -> AgentConfig:
     config.pubmed_api_key = payload.pubmed_api_key or getattr(config, "pubmed_api_key", "")
     config.pubmed_email = payload.pubmed_email or getattr(config, "pubmed_email", "")
     config.pubmed_tool = payload.pubmed_tool or getattr(config, "pubmed_tool", "paperseek") or "paperseek"
+    config.serper_api_key = payload.serper_api_key or getattr(config, "serper_api_key", "")
     config.llm_api_key = payload.llm_api_key or config.llm_api_key
     config.llm_provider = payload_provider
     if payload.llm_api_type:

@@ -12,7 +12,7 @@ You are using PaperSeek as an LLM-based literature search agent. This Skill incl
 ## Reference Rules
 
 - For install, Skill script launching, `doctor`, `smoke`, `config`, health checks, and secrets handling, read `references/management-layer.md`.
-- For choosing OpenAlex, arXiv, Semantic Scholar, PubMed, computer science top-conference, Crossref, or WoS Starter and deciding whether citation expansion applies, read `references/source-routing.md`.
+- For choosing OpenAlex, arXiv, Semantic Scholar, PubMed, Google Scholar through Serper, computer science top-conference, Crossref, or WoS Starter and deciding whether citation expansion applies, read `references/source-routing.md`.
 - For exact CLI commands, output fields, JSON expectations, and stable command contracts, read `references/cli-contract.md`.
 - If a reference conflicts with `paperseek --help`, `paperseek sources --json`, or `paperseek doctor --json`, trust the live CLI and report that the Skill reference may need an update.
 

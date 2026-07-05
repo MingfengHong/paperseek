@@ -292,7 +292,7 @@ def create_server():
         """Search academic literature for a research question.
 
         Generates a search query from the question using an LLM, searches
-        OpenAlex, arXiv, Semantic Scholar, PubMed, computer science top conferences, Crossref, or
+        OpenAlex, arXiv, Semantic Scholar, PubMed, Google Scholar through Serper, computer science top conferences, Crossref, or
         Web of Science Starter, iteratively refines
         the query, ranks results by relevance, and optionally expands the
         citation network.
@@ -300,7 +300,7 @@ def create_server():
         Args:
             question: Research question in natural language (required).
             source: Data source: "openalex" (default), "arxiv",
-                "semanticscholar", "pubmed", "paperhub", "crossref", or "wos".
+                "semanticscholar", "pubmed", "googlescholar", "paperhub", "crossref", or "wos".
             field: Optional discipline or field hint for query generation.
             discipline_fields: OpenAlex Field IDs or labels, e.g. ["Computer Science", "17"].
             target_min: Minimum target results (default from env: 5).
