@@ -129,20 +129,20 @@ class ApiException(OpenApiException):
         data: Optional[Any],
     ) -> Self:
         if http_resp.status == 400:
-            raise BadRequestException(http_resp=http_resp, body=body, data=data)
+            return BadRequestException(http_resp=http_resp, body=body, data=data)
 
         if http_resp.status == 401:
-            raise UnauthorizedException(http_resp=http_resp, body=body, data=data)
+            return UnauthorizedException(http_resp=http_resp, body=body, data=data)
 
         if http_resp.status == 403:
-            raise ForbiddenException(http_resp=http_resp, body=body, data=data)
+            return ForbiddenException(http_resp=http_resp, body=body, data=data)
 
         if http_resp.status == 404:
-            raise NotFoundException(http_resp=http_resp, body=body, data=data)
+            return NotFoundException(http_resp=http_resp, body=body, data=data)
 
         if 500 <= http_resp.status <= 599:
-            raise ServiceException(http_resp=http_resp, body=body, data=data)
-        raise ApiException(http_resp=http_resp, body=body, data=data)
+            return ServiceException(http_resp=http_resp, body=body, data=data)
+        return ApiException(http_resp=http_resp, body=body, data=data)
 
     def __str__(self):
         """Custom error messages for exception"""
