@@ -1147,6 +1147,8 @@ class GoogleScholarSerperProvider:
     def _clean_source_name(value: Any) -> str:
         text = GoogleScholarSerperProvider._clean_text(value)
         text = re.sub(r"\b(19|20)\d{2}\b", "", text)
+        text = re.sub(r"\bAvailable at\s+", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bSSRN\s+\d+\b", "SSRN", text, flags=re.IGNORECASE)
         text = re.sub(r"\bet\s+al\.?\b", "", text, flags=re.IGNORECASE)
         text = text.replace("...", " ")
         text = re.sub(r"\s+", " ", text).strip(" ,;:-")
@@ -1178,6 +1180,7 @@ class GoogleScholarSerperProvider:
             "â€™": "’",
             "鈥�": "...",
             "鈥?": "...",
+            "\u0431\u043d": "...",
         }
         for bad, good in replacements.items():
             text = text.replace(bad, good)
@@ -1194,13 +1197,19 @@ class GoogleScholarSerperProvider:
 
     @staticmethod
     def _year(value: Any) -> Optional[int]:
+        current_year = time.gmtime().tm_year + 2
         try:
             if value not in (None, ""):
-                return int(value)
+                year = int(value)
+                if 1500 <= year <= current_year:
+                    return year
         except (TypeError, ValueError):
             pass
-        match = re.search(r"\b(19|20)\d{2}\b", str(value or ""))
-        return int(match.group(0)) if match else None
+        for match in re.finditer(r"\b(19|20)\d{2}\b", str(value or "")):
+            year = int(match.group(0))
+            if year <= current_year:
+                return year
+        return None
 
 
 class ArxivProvider:

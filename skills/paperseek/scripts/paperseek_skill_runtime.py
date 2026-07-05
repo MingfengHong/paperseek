@@ -973,7 +973,7 @@ def normalize_google_scholar(item: Dict[str, object]) -> Dict[str, object]:
     record_id = str(item.get("id") or item.get("link") or item.get("title") or "")
     title = clean_google_scholar_text(item.get("title") or "")
     snippet = clean_google_scholar_snippet(item.get("snippet") or "")
-    year = item.get("year") or year_from_text(google_scholar_publication_summary(item.get("publicationInfo"))) or ""
+    year = plausible_year(item.get("year")) or year_from_text(google_scholar_publication_summary(item.get("publicationInfo"))) or ""
     return {
         "id": "googlescholar:" + record_id if record_id else "",
         "source": "googlescholar",
@@ -1044,6 +1044,8 @@ def clean_google_scholar_author(value: object) -> str:
 def clean_google_scholar_source(value: object) -> str:
     text = clean_google_scholar_text(value)
     text = re.sub(r"\b(19|20)\d{2}\b", "", text)
+    text = re.sub(r"\bAvailable at\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bSSRN\s+\d+\b", "SSRN", text, flags=re.IGNORECASE)
     text = re.sub(r"\bet\s+al\.?\b", "", text, flags=re.IGNORECASE)
     text = text.replace("...", " ")
     return re.sub(r"\s+", " ", text).strip(" ,;:-")
@@ -1074,6 +1076,7 @@ def repair_google_scholar_mojibake(text: str) -> str:
         "â€™": "’",
         "鈥�": "...",
         "鈥?": "...",
+        "\u0431\u043d": "...",
     }
     for bad, good in replacements.items():
         text = text.replace(bad, good)
@@ -1895,7 +1898,20 @@ def safe_int(value, default: int = 0) -> int:
 
 def year_from_text(value: str) -> object:
     match = re.search(r"\b(19|20)\d{2}\b", value or "")
-    return int(match.group(0)) if match else ""
+    if not match:
+        return ""
+    return plausible_year(match.group(0)) or ""
+
+
+def plausible_year(value: object) -> object:
+    try:
+        if value not in (None, ""):
+            year = int(value)
+            if 1500 <= year <= time.gmtime().tm_year + 2:
+                return year
+    except (TypeError, ValueError):
+        return ""
+    return ""
 
 
 def int_env(key: str, default: int) -> int:

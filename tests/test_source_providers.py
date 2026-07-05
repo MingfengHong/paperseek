@@ -288,6 +288,32 @@ class SourceProviderTest(unittest.TestCase):
         self.assertEqual(record.source.source_title, "books.google.com")
         self.assertEqual(record.source.publish_year, 2025)
 
+    def test_google_scholar_serper_provider_rejects_implausible_item_year(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-ssrn",
+                    "title": "Do Foreign Direct Investments Crowd In or Crowd Out Domestic Investment?",
+                    "year": 3505,
+                    "publicationInfo": {
+                        "summary": "JMR Oualy\u0431\u043d - Available at SSRN 3505572, 2019 - papers.ssrn.com",
+                    },
+                    "citedBy": {"total": 12},
+                }
+            ]
+        }
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("foreign direct investment", limit=1)
+
+        record = result.hits[0]
+        self.assertEqual([author.display_name for author in record.names.authors], ["JMR Oualy"])
+        self.assertEqual(record.source.source_title, "SSRN")
+        self.assertEqual(record.source.publish_year, 2019)
+
     def test_google_scholar_serper_provider_skips_transient_empty_pages(self):
         payloads = [
             {"organic": []},
