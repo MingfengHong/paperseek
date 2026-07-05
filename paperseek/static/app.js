@@ -1033,13 +1033,86 @@ function paperId(paper) {
   return String(paper.uid || paper.doi || paper.title || paper.rank || "");
 }
 
+function plausiblePublishYear(value) {
+  const current = new Date().getUTCFullYear() + 2;
+  if (value !== null && value !== undefined && value !== "") {
+    const direct = Number(value);
+    if (Number.isInteger(direct) && direct >= 1500 && direct <= current) {
+      return direct;
+    }
+  }
+  const match = String(value || "").match(/\b(1[5-9]\d{2}|20\d{2})\b/);
+  if (!match) {
+    return "";
+  }
+  const year = Number(match[1]);
+  return year <= current ? year : "";
+}
+
+function cleanScholarFragment(value) {
+  return String(value || "")
+    .replace(/\u0431\u043d/g, "...")
+    .replace(/\b(1[5-9]\d{2}|20\d{2})\b/g, "")
+    .replace(/\bAvailable at\s+/gi, "")
+    .replace(/\bSSRN\s+\d+\b/gi, "SSRN")
+    .replace(/\.\.\./g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[,;: -]+|[,;: -]+$/g, "");
+}
+
+function splitScholarSummary(value) {
+  return String(value || "")
+    .split(/\s+-\s+/)
+    .map(cleanScholarFragment)
+    .filter(Boolean);
+}
+
+function normalizeScholarPaper(paper) {
+  if (!paper || paper.provider !== "googlescholar") {
+    return paper;
+  }
+  const source = String(paper.source || paper.venue || "");
+  const next = { ...paper };
+  const year = plausiblePublishYear(paper.publish_year || paper.year) || plausiblePublishYear(source);
+  if (year) {
+    next.publish_year = year;
+    next.year = year;
+  }
+  if (source.includes(" - ")) {
+    const parts = splitScholarSummary(source);
+    if ((!Array.isArray(next.authors) || next.authors.length === 0) && parts.length > 1 && !plausiblePublishYear(parts[0])) {
+      next.authors = parts[0]
+        .split(/\s*,\s*|;\s*/)
+        .map(cleanScholarFragment)
+        .filter((name) => name && !plausiblePublishYear(name) && !/:\/\/|www\.|\.(com|org|net|edu)\b/i.test(name));
+    }
+    const venue = parts.slice(1).find((part) => part && !plausiblePublishYear(part));
+    if (venue) {
+      next.source = venue;
+      next.venue = venue;
+    }
+  } else if (source) {
+    const cleanSource = cleanScholarFragment(source);
+    if (cleanSource) {
+      next.source = cleanSource;
+      next.venue = cleanSource;
+    }
+  }
+  return next;
+}
+
+function normalizePapers(papers) {
+  return (papers || []).map(normalizeScholarPaper);
+}
+
 function selectedPapers() {
-  const papers = latestResult && latestResult.ranked ? latestResult.ranked : [];
+  const papers = latestResult && latestResult.ranked ? normalizePapers(latestResult.ranked) : [];
   return papers.filter((paper) => selectedPaperIds.has(paperId(paper)));
 }
 
 function getFilteredPapers() {
-  const papers = latestResult && latestResult.ranked ? [...latestResult.ranked] : [];
+  const papers = latestResult && latestResult.ranked ? normalizePapers(latestResult.ranked) : [];
   const query = resultFilters.query.trim().toLowerCase();
   let filtered = papers.filter((paper) => {
     if (query) {
@@ -1427,12 +1500,13 @@ function renderCandidatePreview(preview) {
 }
 
 function renderPapers(papers) {
-  if (!papers || papers.length === 0) {
+  const normalizedPapers = normalizePapers(papers);
+  if (!normalizedPapers || normalizedPapers.length === 0) {
     return emptyState("No ranked papers returned.");
   }
   return `
     <div class="paper-list">
-      ${papers.map((paper) => {
+      ${normalizedPapers.map((paper) => {
         const authors = paper.authors && paper.authors.length ? paper.authors.slice(0, 6).join(", ") : translatedText("No author metadata");
         const meta = [
           paper.provider || "",
