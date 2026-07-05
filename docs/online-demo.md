@@ -1,6 +1,6 @@
 # PaperSeek 在线体验版使用说明
 
-在线体验版用于直接试用完整 Web UI，不需要自己部署服务。它与开源自托管版共享主要检索核心，但账号、云端历史、站点 Key 池和额度管理只属于在线版。
+在线体验版用于直接试用完整 Web UI，不需要自己部署服务。它与开源自托管版共享主要检索核心，但账号、云端历史、在线模型服务和额度管理只属于在线版。
 
 在线体验地址：
 
@@ -18,9 +18,9 @@ https://www.paperseek.xyz/
 
 - 默认每日额度为 20 次成功检索；失败不消耗额度。
 - 当前支持 OpenAlex、arXiv、Semantic Scholar、PubMed、Crossref 和计算机顶会检索。
-- OpenAlex 使用站点 OpenAlex key 池；Semantic Scholar 和 PubMed 在服务端配置了对应 Key 时使用站点 Key；Crossref 不需要 API Key，可使用站点 Crossref polite-pool 邮箱。
+- OpenAlex、Semantic Scholar、PubMed 和 Crossref 在 PaperSeek Service 范围内由在线服务处理；Crossref 不需要 API Key。
 - `Auto` 模式会自动选择当前最合适的模型，默认使用本地 hashing sparse cosine 和 RRF 预重排。
-- `Custom` 模式允许用户选择站点提供的请求模型、Embedding 模型和预重排方式；前端只显示模型名，后端负责映射到对应服务商。
+- `Custom` 模式允许用户选择在线服务提供的请求模型、Embedding 模型和预重排方式；前端只显示模型名，后端负责映射到对应服务商。
 - 免费模型仅面向个人注册用户提供轻量使用支持。PaperSeek 是个人维护的开源项目，免费额度有限且不做 SLA 稳定性保证；重度使用请部署开源版并填写自己的 API key。
 - 个人用户需要提高额度时，请提供姓名、单位、用途和 UID（右上角账户信息页的 Signed-in account 栏目）发送至 `paperseek-community@outlook.com`。
 
@@ -41,7 +41,7 @@ https://www.paperseek.xyz/
 - 未登录用户也可以使用。
 - 默认 provider 是 OpenAI，也可以选择 DeepSeek、中国科技云、ModelScope API-Inference、Ollama、OpenRouter、NVIDIA NIM 或自定义 OpenAI-compatible 服务。
 - API Key、Base URL、模型和运行参数只用于当前浏览器会话。
-- 未登录用户使用 OpenAlex 检索时必须填写自己的 OpenAlex Key；登录用户默认可使用站点 OpenAlex key 池，也可在高级设置中覆盖为自己的 Key。
+- 未登录用户使用 OpenAlex 检索时必须填写自己的 OpenAlex Key；登录用户可直接使用 OpenAlex，也可在高级设置中填写自己的 Key。
 - BYOK 模式不使用 PaperSeek Service 免费额度，也不消耗 Third-party Service 的 OAuth/session token。
 - 未登录用户不能使用云端历史记录。
 
@@ -53,7 +53,7 @@ https://www.paperseek.xyz/
 
 | 功能 | 未登录 | 邮箱/GitHub 登录 | 已连接 ModelScope 或 Hugging Face | OpenRouter 已授权 |
 | --- | --- | --- | --- | --- |
-| Bring your own Key | 支持，需要自填模型 Key；OpenAlex 需自填 Key | 支持，可默认使用站点 OpenAlex key 池 | 支持，可默认使用站点 OpenAlex key 池 | 支持；OpenRouter 仅用于本次浏览器会话 |
+| Bring your own Key | 支持，需要自填模型 Key；OpenAlex 需自填 Key | 支持 | 支持 | 支持；OpenRouter 仅用于本次浏览器会话 |
 | PaperSeek Service | 不支持 | 支持，每日成功检索额度 | 支持，每日成功检索额度 | 不支持，除非同时登录 PaperSeek 账号 |
 | Third-party Service | OpenRouter 授权后可使用 OpenRouter | 连接对应第三方后可使用 | 支持对应平台授权 | 支持 OpenRouter 会话授权 |
 | 云端 History | 不支持 | 支持 | 支持 | 不支持，除非同时登录 PaperSeek 账号 |
@@ -85,18 +85,18 @@ https://www.paperseek.xyz/
 | --- | --- | --- |
 | 登录 | 使用 Supabase 账号系统；PaperSeek Service 和 History 需要登录 | 默认不需要登录 |
 | 模型调用 | PaperSeek Service 可使用站点免费额度；Third-party Service 使用用户第三方授权；也可 BYOK | 使用你自己配置的 LLM API Key |
-| OpenAlex Key | 登录用户默认使用站点 key 池；未登录 BYOK 模式需自填 OpenAlex Key | 可匿名访问或自己配置 key |
+| OpenAlex Key | 登录用户可直接使用；未登录 BYOK 模式需自填 OpenAlex Key | 可匿名访问或自己配置 key |
 | Source Filter | 页面选择，随本次搜索提交 | 页面选择、CLI 参数或 `DISCIPLINE_FIELDS` 环境变量 |
 | 历史记录 | 登录后保存到云端 Supabase 数据库 | 默认保存到本地 SQLite |
 | 适用场景 | 快速体验、轻量检索、临时试用 | 私有部署、长期使用、可控配置 |
 
 ## English Summary
 
-The hosted PaperSeek edition lets users try the full Web UI without deploying their own server. It shares the main search core with the open-source edition, while account handling, hosted history, site-provided keys, and quota management belong to the hosted service.
+The hosted PaperSeek edition lets users try the full Web UI without deploying their own server. It shares the main search core with the open-source edition, while account handling, hosted history, hosted model service, and quota management belong to the hosted service.
 
 The hosted configuration panel has three mutually exclusive modes:
 
-- `PaperSeek Service`: requires sign-in and a verified email. PaperSeek provides hosted model routes plus server-side source settings for OpenAlex, Semantic Scholar, PubMed, and Crossref where configured. It currently exposes OpenAlex, arXiv, Semantic Scholar, PubMed, Crossref, and computer science top-conference search. The default quota is 20 successful searches per day; failed searches do not consume quota. Auto mode keeps embedding local and pre-ranking on RRF, while Custom mode lets users choose hosted request, embedding, and rerank models.
+- `PaperSeek Service`: requires sign-in and a verified email. PaperSeek provides hosted model routes and managed access to the supported sources in this mode. It currently exposes OpenAlex, arXiv, Semantic Scholar, PubMed, Crossref, and computer science top-conference search. The default quota is 20 successful searches per day; failed searches do not consume quota. Auto mode keeps embedding local and pre-ranking on RRF, while Custom mode lets users choose hosted request, embedding, and rerank models.
 - `Third-party Service`: uses the user's own third-party inference quota. ModelScope uses the signed-in user's API-Inference provider token; OpenRouter uses a browser PKCE session and can automatically try current free text models; Hugging Face uses Supabase custom OAuth/OIDC with the `inference-api` scope and the OpenAI-compatible Router endpoint. Automatic embedding/rerank only uses clearly identifiable free models and otherwise falls back to local hashing, BM25, and RRF.
 - `Bring your own Key`: can be used without sign-in. Users follow the bring your own provider keys (BYOK) pattern, including their own model API key and, when anonymous, their own OpenAlex key for OpenAlex searches.
 

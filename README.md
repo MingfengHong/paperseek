@@ -48,10 +48,11 @@
 
 ## 更新说明
 
-### v0.2.1 - 在线服务数据源开放
+### v0.2.1 - 在线服务与模型路由更新
 
-- 在线版 PaperSeek Service 放开 Semantic Scholar、PubMed 和 Crossref 数据源；Semantic Scholar 和 PubMed 使用服务端配置的站点 Key，Crossref 不需要 API Key，可使用站点 polite-pool 邮箱。
-- 补充在线版数据源、站点 Key、PaperSeek Service 与 Bring your own Key / BYOK 使用边界说明。
+- 在线版 PaperSeek Service 开放 Semantic Scholar、PubMed 和 Crossref 数据源；Crossref 不需要 API Key。
+- 在线版更新模型服务：PaperSeek Service 支持 Auto / Custom 模式，Auto 会自动选择当前可用模型，Custom 可手动选择请求模型、Embedding 模型和预重排方式。
+- 补充在线版 PaperSeek Service、Third-party Service 与 Bring your own Key / BYOK 使用边界说明。
 
 ### v0.2.0 - 多源检索与多路召回
 
