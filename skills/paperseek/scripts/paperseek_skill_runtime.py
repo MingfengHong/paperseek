@@ -960,34 +960,133 @@ def normalize_google_scholar(item: Dict[str, object]) -> Dict[str, object]:
     if isinstance(authors_list, list):
         for author in authors_list:
             if isinstance(author, dict) and author.get("name"):
-                authors.append(str(author["name"]))
+                name = clean_google_scholar_author(author["name"])
+                if name:
+                    authors.append(name)
             elif isinstance(author, str) and author.strip():
-                authors.append(author.strip())
-    venue = (
-        publication_info.get("journal")
-        or publication_info.get("venue")
-        or publication_info.get("summary")
-        or "Google Scholar"
-    )
+                name = clean_google_scholar_author(author)
+                if name:
+                    authors.append(name)
+    if not authors:
+        authors = authors_from_google_scholar_summary(item.get("publicationInfo"))
+    venue = google_scholar_source_title(item.get("publicationInfo"))
     record_id = str(item.get("id") or item.get("link") or item.get("title") or "")
+    title = clean_google_scholar_text(item.get("title") or "")
+    snippet = clean_google_scholar_snippet(item.get("snippet") or "")
+    year = item.get("year") or year_from_text(google_scholar_publication_summary(item.get("publicationInfo"))) or ""
     return {
         "id": "googlescholar:" + record_id if record_id else "",
         "source": "googlescholar",
-        "title": str(item.get("title") or ""),
+        "title": title,
         "authors": authors,
         "authors_text": ", ".join(authors),
-        "year": item.get("year") or "",
+        "year": year,
         "venue": str(venue or ""),
         "publication_type": "scholarly result",
         "doi": "",
         "url": item.get("link") or "",
         "pdf_url": item.get("pdfUrl") or "",
-        "abstract": truncate_text(str(item.get("snippet") or ""), 3000),
+        "abstract": truncate_text(snippet, 3000),
         "keywords": [],
         "keywords_text": "",
-        "citation_count": safe_int(cited_by.get("total"), 0),
+        "citation_count": safe_int(cited_by.get("total") or cited_by.get("cites") or cited_by.get("count") or cited_by.get("value"), 0),
         "source_raw_id": record_id,
     }
+
+
+def google_scholar_publication_summary(publication_info: object) -> str:
+    if isinstance(publication_info, dict):
+        return clean_google_scholar_text(publication_info.get("summary") or "")
+    return clean_google_scholar_text(publication_info)
+
+
+def google_scholar_summary_parts(publication_info: object) -> List[str]:
+    summary = google_scholar_publication_summary(publication_info)
+    return [part for part in (clean_google_scholar_text(item) for item in re.split(r"\s+-\s+", summary)) if part]
+
+
+def authors_from_google_scholar_summary(publication_info: object) -> List[str]:
+    parts = google_scholar_summary_parts(publication_info)
+    if len(parts) < 2 or year_from_text(parts[0]):
+        return []
+    authors = []
+    for part in re.split(r"\s*,\s*|;\s*", parts[0]):
+        name = clean_google_scholar_author(part)
+        if name:
+            authors.append(name)
+    return authors
+
+
+def google_scholar_source_title(publication_info: object) -> str:
+    if isinstance(publication_info, dict):
+        for key in ("journal", "venue"):
+            source = clean_google_scholar_source(publication_info.get(key))
+            if source:
+                return source
+    for part in google_scholar_summary_parts(publication_info)[1:]:
+        source = clean_google_scholar_source(part)
+        if source:
+            return source
+    return "Google Scholar"
+
+
+def clean_google_scholar_author(value: object) -> str:
+    text = clean_google_scholar_text(value)
+    text = re.sub(r"\bet\s+al\.?$", "", text, flags=re.IGNORECASE).strip()
+    text = text.replace("...", "").strip(" ,;.-")
+    if not text or year_from_text(text):
+        return ""
+    if re.search(r"://|www\.|\.com\b|\.org\b|\.net\b|\.edu\b", text, flags=re.IGNORECASE):
+        return ""
+    return text
+
+
+def clean_google_scholar_source(value: object) -> str:
+    text = clean_google_scholar_text(value)
+    text = re.sub(r"\b(19|20)\d{2}\b", "", text)
+    text = re.sub(r"\bet\s+al\.?\b", "", text, flags=re.IGNORECASE)
+    text = text.replace("...", " ")
+    return re.sub(r"\s+", " ", text).strip(" ,;:-")
+
+
+def clean_google_scholar_snippet(value: object) -> str:
+    text = clean_google_scholar_text(value)
+    text = re.sub(r"^(?:\.\.\.|…)\s*,?\s*", "", text)
+    text = re.sub(r"\s*(?:\.\.\.|…)$", "", text)
+    return text.strip()
+
+
+def clean_google_scholar_text(value: object) -> str:
+    text = unescape(str(value or ""))
+    text = text.replace("\u00a0", " ")
+    text = repair_google_scholar_mojibake(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def repair_google_scholar_mojibake(text: str) -> str:
+    replacements = {
+        "â€¦": "...",
+        "â€“": "–",
+        "â€”": "—",
+        "â€œ": "“",
+        "â€�": "”",
+        "â€˜": "‘",
+        "â€™": "’",
+        "鈥�": "...",
+        "鈥?": "...",
+    }
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+
+    def replace_pair(match: re.Match) -> str:
+        token = match.group(0)
+        try:
+            repaired = token.encode("gbk").decode("utf-8")
+        except UnicodeError:
+            return token
+        return repaired if "\ufffd" not in repaired else token
+
+    return re.sub(r"鈥[\u4e00-\u9fff]", replace_pair, text)
 
 
 def normalize_paperhub(paper: Dict[str, object]) -> Dict[str, object]:

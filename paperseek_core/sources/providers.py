@@ -1036,11 +1036,11 @@ class GoogleScholarSerperProvider:
 
     def _to_record(self, item: Dict[str, Any]) -> PaperRecord:
         scholar_id = str(item.get("id") or item.get("resultId") or "")
-        title = item.get("title") or scholar_id or item.get("link") or ""
+        title = self._clean_text(item.get("title") or scholar_id or item.get("link") or "")
         link = item.get("link") or ""
         pdf = item.get("pdfUrl") or ""
-        year = self._year(item.get("year"))
         publication_info = item.get("publicationInfo") or {}
+        year = self._year(item.get("year")) or self._year(self._publication_summary(publication_info))
         authors = self._authors(publication_info)
         source_title = self._source_title(publication_info)
         cited_by = item.get("citedBy") or {}
@@ -1048,7 +1048,7 @@ class GoogleScholarSerperProvider:
         citing_link = ""
         if isinstance(cited_by, dict):
             try:
-                cited_total = int(cited_by.get("total") or 0)
+                cited_total = int(cited_by.get("total") or cited_by.get("cites") or cited_by.get("count") or cited_by.get("value") or 0)
             except (TypeError, ValueError):
                 cited_total = 0
             citing_link = cited_by.get("link") or ""
@@ -1057,7 +1057,7 @@ class GoogleScholarSerperProvider:
                 cited_total = int(cited_by)
             except (TypeError, ValueError):
                 cited_total = 0
-        snippet = item.get("snippet") or ""
+        snippet = self._clean_snippet(item.get("snippet") or "")
         return PaperRecord(
             uid=f"googlescholar:{scholar_id}" if scholar_id else link or title,
             title=title,
@@ -1077,16 +1077,32 @@ class GoogleScholarSerperProvider:
     @staticmethod
     def _authors(publication_info: Any) -> List[PaperAuthor]:
         if not isinstance(publication_info, dict):
-            return []
+            return GoogleScholarSerperProvider._authors_from_summary(publication_info)
         authors_list = publication_info.get("authors")
-        if not isinstance(authors_list, list):
+        authors = []
+        if isinstance(authors_list, list):
+            for author in authors_list:
+                if isinstance(author, dict):
+                    name = GoogleScholarSerperProvider._clean_author_name(author.get("name") or author.get("title") or "")
+                else:
+                    name = GoogleScholarSerperProvider._clean_author_name(author)
+                if name:
+                    authors.append(PaperAuthor(display_name=name))
+        if authors:
+            return authors
+        return GoogleScholarSerperProvider._authors_from_summary(publication_info)
+
+    @staticmethod
+    def _authors_from_summary(publication_info: Any) -> List[PaperAuthor]:
+        parts = GoogleScholarSerperProvider._summary_parts(publication_info)
+        if len(parts) < 2:
+            return []
+        author_text = parts[0]
+        if GoogleScholarSerperProvider._year(author_text):
             return []
         authors = []
-        for author in authors_list:
-            if isinstance(author, dict):
-                name = author.get("name") or author.get("title") or ""
-            else:
-                name = str(author or "").strip()
+        for part in re.split(r"\s*,\s*|;\s*", author_text):
+            name = GoogleScholarSerperProvider._clean_author_name(part)
             if name:
                 authors.append(PaperAuthor(display_name=name))
         return authors
@@ -1094,9 +1110,87 @@ class GoogleScholarSerperProvider:
     @staticmethod
     def _source_title(publication_info: Any) -> str:
         if isinstance(publication_info, dict):
-            summary = publication_info.get("summary") or publication_info.get("journal") or publication_info.get("venue") or ""
-            return re.sub(r"\s+", " ", str(summary)).strip()
-        return re.sub(r"\s+", " ", str(publication_info or "")).strip()
+            for key in ("journal", "venue"):
+                value = GoogleScholarSerperProvider._clean_source_name(publication_info.get(key))
+                if value:
+                    return value
+        parts = GoogleScholarSerperProvider._summary_parts(publication_info)
+        for part in parts[1:]:
+            value = GoogleScholarSerperProvider._clean_source_name(part)
+            if value:
+                return value
+        return "Google Scholar"
+
+    @staticmethod
+    def _publication_summary(publication_info: Any) -> str:
+        if isinstance(publication_info, dict):
+            return GoogleScholarSerperProvider._clean_text(publication_info.get("summary") or "")
+        return GoogleScholarSerperProvider._clean_text(publication_info)
+
+    @staticmethod
+    def _summary_parts(publication_info: Any) -> List[str]:
+        summary = GoogleScholarSerperProvider._publication_summary(publication_info)
+        return [part for part in (GoogleScholarSerperProvider._clean_text(item) for item in re.split(r"\s+-\s+", summary)) if part]
+
+    @staticmethod
+    def _clean_author_name(value: Any) -> str:
+        text = GoogleScholarSerperProvider._clean_text(value)
+        text = re.sub(r"\bet\s+al\.?$", "", text, flags=re.IGNORECASE).strip()
+        text = text.replace("...", "").strip(" ,;.-")
+        if not text or GoogleScholarSerperProvider._year(text):
+            return ""
+        if re.search(r"://|www\.|\.com\b|\.org\b|\.net\b|\.edu\b", text, flags=re.IGNORECASE):
+            return ""
+        return text
+
+    @staticmethod
+    def _clean_source_name(value: Any) -> str:
+        text = GoogleScholarSerperProvider._clean_text(value)
+        text = re.sub(r"\b(19|20)\d{2}\b", "", text)
+        text = re.sub(r"\bet\s+al\.?\b", "", text, flags=re.IGNORECASE)
+        text = text.replace("...", " ")
+        text = re.sub(r"\s+", " ", text).strip(" ,;:-")
+        return text
+
+    @staticmethod
+    def _clean_snippet(value: Any) -> str:
+        text = GoogleScholarSerperProvider._clean_text(value)
+        text = re.sub(r"^(?:\.\.\.|…)\s*,?\s*", "", text)
+        text = re.sub(r"\s*(?:\.\.\.|…)$", "", text)
+        return text.strip()
+
+    @staticmethod
+    def _clean_text(value: Any) -> str:
+        text = unescape(str(value or ""))
+        text = text.replace("\u00a0", " ")
+        text = GoogleScholarSerperProvider._repair_mojibake(text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    @staticmethod
+    def _repair_mojibake(text: str) -> str:
+        replacements = {
+            "â€¦": "...",
+            "â€“": "–",
+            "â€”": "—",
+            "â€œ": "“",
+            "â€�": "”",
+            "â€˜": "‘",
+            "â€™": "’",
+            "鈥�": "...",
+            "鈥?": "...",
+        }
+        for bad, good in replacements.items():
+            text = text.replace(bad, good)
+
+        def replace_pair(match: re.Match) -> str:
+            token = match.group(0)
+            try:
+                repaired = token.encode("gbk").decode("utf-8")
+            except UnicodeError:
+                return token
+            return repaired if "\ufffd" not in repaired else token
+
+        return re.sub(r"鈥[\u4e00-\u9fff]", replace_pair, text)
 
     @staticmethod
     def _year(value: Any) -> Optional[int]:

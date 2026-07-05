@@ -236,6 +236,58 @@ class SourceProviderTest(unittest.TestCase):
 
         self.assertEqual(result.hits[0].names.authors, [])
 
+    def test_google_scholar_serper_provider_cleans_summary_metadata(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-clean",
+                    "title": "Digital\u9225\u63dceal Economy Integration",
+                    "link": "https://example.org/clean",
+                    "snippet": "\u9225?, resource allocation and industrial innovation \u9225?",
+                    "publicationInfo": {
+                        "summary": "Y Feng, Y Gao, L Yang\u9225? - Resources Policy, 2024 - Elsevier",
+                    },
+                    "citedBy": {"cites": 41},
+                }
+            ]
+        }
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("digital economy", limit=1)
+
+        record = result.hits[0]
+        self.assertEqual(record.title, "Digital\u2013Real Economy Integration")
+        self.assertEqual([author.display_name for author in record.names.authors], ["Y Feng", "Y Gao", "L Yang"])
+        self.assertEqual(record.source.source_title, "Resources Policy")
+        self.assertEqual(record.source.publish_year, 2024)
+        self.assertEqual(record.abstract, "resource allocation and industrial innovation")
+        self.assertEqual(record.citations[0].count, 41)
+
+    def test_google_scholar_serper_provider_uses_domain_when_summary_has_no_venue(self):
+        payload = {
+            "organic": [
+                {
+                    "id": "gs-book",
+                    "title": "Governing China's Digital Transformation",
+                    "publicationInfo": {"summary": "J Qian - 2025 - books.google.com"},
+                }
+            ]
+        }
+
+        def fake_post(url, json=None, headers=None, timeout=0):
+            return FakeResponse(payload=payload, status_code=200, url=url)
+
+        with patch("paperseek_core.sources.providers.requests.post", fake_post):
+            result = GoogleScholarSerperProvider(api_key="serper-a").search("digital transformation", limit=1)
+
+        record = result.hits[0]
+        self.assertEqual([author.display_name for author in record.names.authors], ["J Qian"])
+        self.assertEqual(record.source.source_title, "books.google.com")
+        self.assertEqual(record.source.publish_year, 2025)
+
     def test_google_scholar_serper_provider_skips_transient_empty_pages(self):
         payloads = [
             {"organic": []},

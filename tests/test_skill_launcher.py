@@ -137,6 +137,37 @@ class SkillLauncherTest(unittest.TestCase):
         self.assertEqual(records[0]["title"], "Recovered Scholar Result")
         self.assertEqual(records[0]["authors"], [])
 
+    def test_standalone_google_scholar_cleans_summary_metadata(self):
+        runtime = self._load_runtime()
+
+        def fake_http_json(url, method="GET", headers=None, payload=None):
+            self.assertIn("google.serper.dev/scholar", url)
+            return {
+                "organic": [
+                    {
+                        "id": "gs-clean",
+                        "title": "Digital\u9225\u63dceal Economy Integration",
+                        "snippet": "\u9225?, resource allocation and industrial innovation \u9225?",
+                        "publicationInfo": {
+                            "summary": "Y Feng, Y Gao, L Yang\u9225? - Resources Policy, 2024 - Elsevier",
+                        },
+                        "citedBy": {"cites": 41},
+                    }
+                ]
+            }
+
+        runtime.http_json = fake_http_json
+
+        records, total, _ = runtime.fetch_google_scholar("digital economy", 1, {"SERPER_API_KEY": "key"})
+
+        self.assertEqual(total, 1)
+        self.assertEqual(records[0]["title"], "Digital\u2013Real Economy Integration")
+        self.assertEqual(records[0]["authors"], ["Y Feng", "Y Gao", "L Yang"])
+        self.assertEqual(records[0]["venue"], "Resources Policy")
+        self.assertEqual(records[0]["year"], 2024)
+        self.assertEqual(records[0]["abstract"], "resource allocation and industrial innovation")
+        self.assertEqual(records[0]["citation_count"], 41)
+
     def test_standalone_arxiv_query_escapes_quotes(self):
         runtime = self._load_runtime()
         self.assertEqual(
