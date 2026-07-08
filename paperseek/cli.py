@@ -29,7 +29,6 @@ from paperseek.config_store import (
     import_env_file,
     list_config_entries,
     load_user_config_into_env,
-    read_config,
     set_config_value,
     supported_config_keys,
     unset_config_value,
