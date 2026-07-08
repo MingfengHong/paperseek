@@ -47,7 +47,6 @@ class ApiClient:
     PRIMITIVE_TYPES = (float, bool, bytes, str, int)
     NATIVE_TYPES_MAPPING = {
         'int': int,
-        'long': int, # TODO remove as only py3 is supported?
         'float': float,
         'str': str,
         'bool': bool,
@@ -320,7 +319,7 @@ class ApiClient:
         """Builds a JSON POST object.
 
         If obj is None, return None.
-        If obj is str, int, long, float, bool, return directly.
+        If obj is str, int, float, bool, return directly.
         If obj is datetime.datetime, datetime.date
             convert to string in iso8601 format.
         If obj is list, sanitize each element in the list.
@@ -656,7 +655,7 @@ class ApiClient:
         :param data: str.
         :param klass: class literal.
 
-        :return: int, long, float, str, bool.
+        :return: int, float, str, bool.
         """
         try:
             return klass(data)
