@@ -105,6 +105,22 @@ class HistoryStoreTest(unittest.TestCase):
             self.assertIsNotNone(detail)
             self.assertIn("-05:00", detail["created_at"])
 
+    def test_ensure_column_validates_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = HistoryStore(db_path=Path(tmp) / "paperseek.db", enabled=True)
+            with store._connection() as conn:
+                # Valid input
+                store._ensure_column(conn, "search_runs", "test_column", "TEXT")
+                # Invalid table
+                with self.assertRaises(ValueError):
+                    store._ensure_column(conn, "search_runs; DROP TABLE search_runs;", "test_column", "TEXT")
+                # Invalid column
+                with self.assertRaises(ValueError):
+                    store._ensure_column(conn, "search_runs", "test_column; DROP TABLE search_runs;", "TEXT")
+                # Invalid definition
+                with self.assertRaises(ValueError):
+                    store._ensure_column(conn, "search_runs", "test_column2", "TEXT; DROP TABLE search_runs;")
+
 
 class HistoryApiTest(unittest.TestCase):
     def test_history_endpoint_reads_configured_local_database(self):

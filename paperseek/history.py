@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -348,6 +349,13 @@ class HistoryStore:
         self._ensure_column(conn, "search_runs", "history_json", "TEXT")
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        if not re.match(r"^[a-zA-Z0-9_]+$", table):
+            raise ValueError(f"Invalid table name: {table}")
+        if not re.match(r"^[a-zA-Z0-9_]+$", column):
+            raise ValueError(f"Invalid column name: {column}")
+        if not re.match(r"^[a-zA-Z0-9_ ]+$", definition):
+            raise ValueError(f"Invalid column definition: {definition}")
+
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         if column not in columns:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
