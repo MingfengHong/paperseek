@@ -1443,17 +1443,20 @@ class PaperSeekAgent:
     def _maybe_crossref_enrich_candidates(self, documents: list) -> list:
         if not getattr(self.config, "retrieval_crossref_enrichment", False):
             return documents
-        enriched = 0
+
         headers = {"Accept": "application/json", "User-Agent": "paperseek/1.0"}
-        for document in documents[:100]:
+        session = requests.Session()
+        session.headers.update(headers)
+
+        def _enrich_single_document(document) -> bool:
             identifiers = getattr(document, "identifiers", None)
             doi = getattr(identifiers, "doi", "") if identifiers is not None else ""
             if not doi:
-                continue
+                return False
             try:
-                response = requests.get(f"https://api.crossref.org/works/{doi}", headers=headers, timeout=20)
+                response = session.get(f"https://api.crossref.org/works/{doi}", timeout=20)
                 if response.status_code < 200 or response.status_code >= 300:
-                    continue
+                    return False
                 message = (response.json().get("message") or {})
                 cited = int(message.get("is-referenced-by-count") or 0)
                 if cited and not getattr(document, "citations", None):
@@ -1462,9 +1465,15 @@ class PaperSeekAgent:
                     year = self._crossref_year(message)
                     if year:
                         document.source.publish_year = year
-                enriched += 1
+                return True
             except Exception:
-                continue
+                return False
+
+        enriched = 0
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            results = executor.map(_enrich_single_document, documents[:100])
+            enriched = sum(1 for result in results if result)
+
         self._emit_log(f"Optional Crossref candidate enrichment completed: enriched={enriched}.")
         return documents
 
