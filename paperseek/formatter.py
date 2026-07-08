@@ -1,5 +1,4 @@
 import json
-from typing import List
 
 from paperseek.results import ranked_items_to_results
 
