@@ -168,7 +168,7 @@ class RESTClientObject:
 
         try:
             # For `POST`, `PUT`, `PATCH`, `OPTIONS`, `DELETE`
-            if method in ['POST', 'PUT', 'PATCH', 'OPTIONS', 'DELETE']:
+            if method in {'POST', 'PUT', 'PATCH', 'OPTIONS', 'DELETE'}:
 
                 # no content type provided or payload is json
                 content_type = headers.get('Content-Type')
