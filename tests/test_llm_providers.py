@@ -13,6 +13,21 @@ from tests.helpers import read_text, temporary_env
 
 
 class LLMProviderTest(unittest.TestCase):
+    def test_default_api_type(self):
+        # Edge cases and default fallback behavior
+        self.assertEqual(default_api_type(None), "openai_responses")
+        self.assertEqual(default_api_type(""), "openai_responses")
+
+        # Specific mappings with case-insensitivity
+        self.assertEqual(default_api_type("openai"), "openai_responses")
+        self.assertEqual(default_api_type("OPENAI"), "openai_responses")
+        self.assertEqual(default_api_type("anthropic"), "anthropic_messages")
+        self.assertEqual(default_api_type("ANTHROPIC"), "anthropic_messages")
+
+        # Fallback to openai_chat for anything else
+        self.assertEqual(default_api_type("google"), "openai_chat")
+        self.assertEqual(default_api_type("anything_else"), "openai_chat")
+
     def test_modelscope_provider_defaults(self):
         self.assertIn("modelscope", SUPPORTED_LLM_PROVIDERS)
         self.assertEqual(default_api_type("modelscope"), "openai_chat")
