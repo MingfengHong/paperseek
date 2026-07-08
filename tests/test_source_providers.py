@@ -9,6 +9,7 @@ from paperseek_core.sources.providers import (
     PaperHubProvider,
     PubMedProvider,
     SemanticScholarProvider,
+    normalize_doi,
 )
 
 
@@ -26,6 +27,20 @@ class FakeResponse:
 
 
 class SourceProviderTest(unittest.TestCase):
+    def test_normalize_doi(self):
+        self.assertEqual(normalize_doi(None), "")
+        self.assertEqual(normalize_doi(""), "")
+        self.assertEqual(normalize_doi("  "), "")
+
+        self.assertEqual(normalize_doi("10.1234/5678"), "10.1234/5678")
+        self.assertEqual(normalize_doi(" 10.1234/5678  "), "10.1234/5678")
+
+        self.assertEqual(normalize_doi("https://doi.org/10.1234/5678"), "10.1234/5678")
+        self.assertEqual(normalize_doi("http://doi.org/10.1234/5678"), "10.1234/5678")
+        self.assertEqual(normalize_doi("doi:10.1234/5678"), "10.1234/5678")
+        self.assertEqual(normalize_doi(" DOI:10.1234/5678 "), "10.1234/5678")
+        self.assertEqual(normalize_doi("HTTPS://DOI.ORG/10.1234/5678"), "10.1234/5678")
+
     def test_arxiv_provider_parses_atom_records(self):
         atom = """<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom">
