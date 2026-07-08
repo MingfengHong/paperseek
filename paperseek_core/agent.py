@@ -3218,17 +3218,23 @@ class PaperSeekAgent:
         return []
 
     def _enrich_with_abstracts(self, ranked: list) -> list:
-        for entry in ranked:
+        def fetch_for_entry(entry):
             doc = entry["document"]
             if not doc:
-                continue
+                return
             identifiers = getattr(doc, "identifiers", None)
-            if identifiers:
-                doi = getattr(identifiers, "doi", None)
-                if doi:
-                    abstract = self.abstract_fetcher.fetch(doi)
-                    if abstract:
-                        entry["abstract"] = abstract
+            if not identifiers:
+                return
+            doi = getattr(identifiers, "doi", None)
+            if not doi:
+                return
+            abstract = self.abstract_fetcher.fetch(doi)
+            if abstract:
+                entry["abstract"] = abstract
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            list(executor.map(fetch_for_entry, ranked))
+
         return ranked
 
 
