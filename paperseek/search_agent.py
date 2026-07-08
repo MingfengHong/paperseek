@@ -1,3 +1,3 @@
-from paperseek_core.agent import LiteratureSearchAgent, PaperSeekAgent, WosSearchAgent
+from paperseek_core.agent import PaperSeekAgent
 
-__all__ = ["PaperSeekAgent", "LiteratureSearchAgent", "WosSearchAgent"]
+__all__ = ["PaperSeekAgent"]
