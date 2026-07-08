@@ -185,24 +185,6 @@ def _query_response_from_json(text: str) -> Tuple[str, str]:
     return query, "\n".join(rationale_parts).strip()
 
 
-def _balance_parentheses(query: str) -> str:
-    chars = []
-    open_count = 0
-    for char in query:
-        if char == "(":
-            open_count += 1
-            chars.append(char)
-        elif char == ")":
-            if open_count:
-                open_count -= 1
-                chars.append(char)
-        else:
-            chars.append(char)
-    if open_count:
-        chars.extend(")" for _ in range(open_count))
-    return "".join(chars)
-
-
 def _trim_boolean_edges(query: str) -> str:
     query = re.sub(r"^\s*(?:AND|OR|NOT)\b\s*", "", query, flags=re.IGNORECASE)
     query = re.sub(r"\s+\b(?:AND|OR|NOT)\s*$", "", query, flags=re.IGNORECASE)
