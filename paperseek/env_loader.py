@@ -1,11 +1,9 @@
-from __future__ import annotations
-
 import os
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Union, Tuple
 
 
-def load_env_file(path: Optional[Path | str] = None, *, override: bool = False) -> List[str]:
+def load_env_file(path: Optional[Union[Path, str]] = None, *, override: bool = False) -> List[str]:
     """Load simple KEY=VALUE pairs from a .env file into os.environ."""
     if os.environ.get("PAPERSEEK_DOTENV_DISABLED", "").lower() in ("1", "true", "yes", "on"):
         return []
@@ -34,11 +32,11 @@ def _default_env_paths() -> Iterable[Path]:
     yield package_root / ".env"
 
 
-def _normalize_path(path: Path | str) -> Path:
+def _normalize_path(path: Union[Path, str]) -> Path:
     return Path(path).expanduser().resolve()
 
 
-def _parse_env_line(raw_line: str) -> Optional[tuple[str, str]]:
+def _parse_env_line(raw_line: str) -> Optional[Tuple[str, str]]:
     line = raw_line.strip()
     if not line or line.startswith("#") or "=" not in line:
         return None
