@@ -8,7 +8,7 @@ from paperseek.config import (
     default_base_url,
     default_model,
 )
-from paperseek_core.llm import OpenAIChatClient
+from paperseek_core.llm import OpenAIChatClient, format_modelscope_quota
 from tests.helpers import read_text, temporary_env
 
 
@@ -186,6 +186,31 @@ class LLMProviderTest(unittest.TestCase):
         with temporary_env({"RANKING_LLM_TIMEOUT_SECONDS": "2"}):
             config = AgentConfig.from_env()
             self.assertEqual(config.ranking_llm_timeout_seconds, 10)
+
+    def test_format_modelscope_quota(self):
+        self.assertEqual(format_modelscope_quota(None), "")
+        self.assertEqual(format_modelscope_quota({}), "")
+
+        # Partial values
+        self.assertEqual(
+            format_modelscope_quota({"user_remaining": "100"}),
+            "user remaining 100/?; model remaining ?/?"
+        )
+        self.assertEqual(
+            format_modelscope_quota({"model_remaining": "50", "model_limit": "200"}),
+            "user remaining ?/?; model remaining 50/200"
+        )
+
+        # Full values
+        self.assertEqual(
+            format_modelscope_quota({
+                "user_remaining": "100",
+                "user_limit": "1000",
+                "model_remaining": "50",
+                "model_limit": "200"
+            }),
+            "user remaining 100/1000; model remaining 50/200"
+        )
 
     def test_llm_timeout_is_configurable_and_keeps_safe_minimum(self):
         import importlib
