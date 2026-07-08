@@ -8,7 +8,12 @@ from paperseek.config import (
     default_base_url,
     default_model,
 )
-from paperseek_core.llm import OpenAIChatClient
+from paperseek_core.llm import (
+    AnthropicClient,
+    OpenAIChatClient,
+    OpenAIResponsesClient,
+    create_llm_client,
+)
 from tests.helpers import read_text, temporary_env
 
 
@@ -171,6 +176,51 @@ class LLMProviderTest(unittest.TestCase):
         with temporary_env({"RANKING_LLM_TIMEOUT_SECONDS": "2"}):
             config = AgentConfig.from_env()
             self.assertEqual(config.ranking_llm_timeout_seconds, 10)
+
+    def test_create_llm_client_factory(self):
+        class MockConfig:
+            def __init__(self, api_type=None, max_tokens=None, timeout=None):
+                if api_type is not None:
+                    self.llm_api_type = api_type
+                if max_tokens is not None:
+                    self.llm_max_tokens = max_tokens
+                if timeout is not None:
+                    self.llm_timeout_seconds = timeout
+                self.llm_api_key = "test-key"
+                self.llm_model = "test-model"
+                self.llm_base_url = "https://test.url"
+
+        import paperseek_core.llm as core_llm
+
+        # Test Anthropic
+        client = core_llm.create_llm_client(MockConfig(api_type="anthropic_messages"))
+        self.assertIsInstance(client, core_llm.AnthropicClient)
+        self.assertEqual(client.model, "test-model")
+
+        # Test OpenAI Responses
+        client = core_llm.create_llm_client(MockConfig(api_type="openai_responses"))
+        self.assertIsInstance(client, core_llm.OpenAIResponsesClient)
+
+        # Test default fallback (OpenAI Chat)
+        client = core_llm.create_llm_client(MockConfig(api_type="unknown"))
+        self.assertIsInstance(client, core_llm.OpenAIChatClient)
+
+        client = core_llm.create_llm_client(MockConfig(api_type=""))
+        self.assertIsInstance(client, core_llm.OpenAIChatClient)
+
+        client = core_llm.create_llm_client(MockConfig())
+        self.assertIsInstance(client, core_llm.OpenAIChatClient)
+
+        # Test default config attribute missing
+        client = core_llm.create_llm_client(MockConfig(api_type="anthropic_messages"))
+        self.assertEqual(client.max_tokens, core_llm.DEFAULT_LLM_MAX_TOKENS)
+        self.assertEqual(client.timeout_seconds, core_llm.DEFAULT_LLM_TIMEOUT_SECONDS)
+
+        # Test values are passed through
+        client = core_llm.create_llm_client(MockConfig(api_type="openai_responses", max_tokens=100, timeout=50))
+        self.assertEqual(client.max_tokens, 100)
+        self.assertEqual(client.timeout_seconds, 50)
+
 
     def test_llm_timeout_is_configurable_and_keeps_safe_minimum(self):
         import importlib
