@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from paperseek_core.sources.providers import (
     ArxivProvider,
+    reconstruct_abstract,
     GoogleScholarSerperProvider,
     PaperHubProvider,
     PubMedProvider,
@@ -378,6 +379,38 @@ class SourceProviderTest(unittest.TestCase):
         self.assertEqual(sum(1 for url in calls if url.endswith("manifest.json")), 1)
         self.assertEqual(sum(1 for url in calls if url.endswith("iclr-2025.fake.json")), 1)
 
+
+
+class TestReconstructAbstract(unittest.TestCase):
+    def test_none_input(self):
+        self.assertEqual(reconstruct_abstract(None), "")
+
+    def test_empty_dict(self):
+        self.assertEqual(reconstruct_abstract({}), "")
+
+    def test_standard_inverted_index(self):
+        index = {"hello": [0], "world": [1]}
+        self.assertEqual(reconstruct_abstract(index), "hello world")
+
+    def test_word_multiple_times(self):
+        index = {"a": [0, 2], "test": [1]}
+        self.assertEqual(reconstruct_abstract(index), "a test a")
+
+    def test_invalid_values(self):
+        # "invalid" has an invalid list
+        # "world" has a valid index 1
+        # "ignored" has invalid inner values
+        index = {
+            "invalid": "not a list",
+            "world": [1],
+            "hello": [0],
+            "ignored": ["string", 2.5]
+        }
+        self.assertEqual(reconstruct_abstract(index), "hello world")
+
+    def test_no_valid_positions(self):
+        index = {"invalid": "not a list", "ignored": ["str"]}
+        self.assertEqual(reconstruct_abstract(index), "")
 
 if __name__ == "__main__":
     unittest.main()
