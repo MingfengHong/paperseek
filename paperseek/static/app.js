@@ -448,6 +448,7 @@ let historyStatus = { enabled: true, path: "" };
 let historyLoading = false;
 let historyError = "";
 let activeSearchController = null;
+let activeSearchToken = 0;
 let latestStreamHeartbeatLogAt = 0;
 let disciplineOptions = [];
 let sourceFilterDefinitions = {};
@@ -2526,27 +2527,36 @@ function updateSourceFields() {
   updateSourceSummary();
 }
 
-async function readNdjsonStream(response) {
+async function readNdjsonStream(response, signal, searchToken) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 
   while (true) {
+    if ((signal && signal.aborted) || searchToken !== activeSearchToken) {
+      break;
+    }
     const { value, done } = await reader.read();
     if (done) {
+      break;
+    }
+    if ((signal && signal.aborted) || searchToken !== activeSearchToken) {
       break;
     }
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
     for (const line of lines) {
+      if ((signal && signal.aborted) || searchToken !== activeSearchToken) {
+        break;
+      }
       if (!line.trim()) {
         continue;
       }
       handleStreamEvent(JSON.parse(line));
     }
   }
-  if (buffer.trim()) {
+  if (buffer.trim() && !(signal && signal.aborted) && searchToken === activeSearchToken) {
     handleStreamEvent(JSON.parse(buffer));
   }
 }
@@ -2609,9 +2619,16 @@ if (stopButton) {
     if (!activeSearchController) {
       return;
     }
+    const controller = activeSearchController;
     setTranslatedText(stateLabel, "Stopping");
     log("Stop requested.");
-    activeSearchController.abort();
+    activeSearchToken += 1;
+    activeSearchController = null;
+    stopButton.disabled = true;
+    controller.abort();
+    showRunStopped();
+    setBusy(false);
+    updateExportButtons();
   });
 }
 
@@ -2841,7 +2858,9 @@ form.addEventListener("submit", async (event) => {
   renderWorkflow();
   setBusy(true);
   latestStreamHeartbeatLogAt = 0;
-  activeSearchController = new AbortController();
+  const controller = new AbortController();
+  activeSearchController = controller;
+  const searchToken = ++activeSearchToken;
   log(`Run ${id} started.`);
   log(`Source: ${payload.data_source}; provider: ${payload.llm_provider}; api type: ${payload.llm_api_type}; model: ${payload.llm_model || "provider default"}.`);
   log(`Target range: ${payload.target_min}-${payload.target_max}; max iterations: ${payload.max_iterations}.`);
@@ -2851,23 +2870,29 @@ form.addEventListener("submit", async (event) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: activeSearchController.signal,
+      signal: controller.signal,
     });
     log(`Backend POST /api/search/stream -> HTTP ${response.status} ${response.ok ? "OK" : "ERROR"}.`);
     if (!response.ok || !response.body) {
       const data = await response.json().catch(() => ({}));
       throw new Error(responseErrorMessage(data, response.status));
     }
-    await readNdjsonStream(response);
+    await readNdjsonStream(response, controller.signal, searchToken);
   } catch (error) {
-    if (error.name === "AbortError") {
+    if (searchToken !== activeSearchToken) {
+      // The user has already stopped this run; ignore late stream/abort errors.
+    } else if (error.name === "AbortError") {
       showRunStopped();
     } else {
       showRunError(error.message);
     }
   } finally {
-    activeSearchController = null;
-    setBusy(false);
+    if (activeSearchController === controller) {
+      activeSearchController = null;
+    }
+    if (searchToken === activeSearchToken) {
+      setBusy(false);
+    }
     updateExportButtons();
   }
 });

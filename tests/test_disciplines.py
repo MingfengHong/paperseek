@@ -289,6 +289,51 @@ class DisciplineMappingTest(unittest.TestCase):
         self.assertIn("backward", directions["relevance"])
         self.assertIn("forward", directions["relevance"])
 
+    def test_agent_limits_citation_seed_ranking_candidate_count(self):
+        captured = {}
+
+        class FakeOpenAlexProvider(OpenAlexProvider):
+            def citation_neighbors_with_graph(self, seeds, per_seed=4, max_records=40, field_ids=None, seed_plans=None, depth=1):
+                captured["seed_plans"] = seed_plans
+                return {"records": [], "nodes": [], "edges": []}
+
+        config = SimpleNamespace(
+            data_source="openalex",
+            discipline_fields=(),
+            expand_citations=True,
+            citation_seed_count=30,
+            citation_per_seed=2,
+            citation_max_records=20,
+            citation_depth=2,
+            ranking_candidate_limit=256,
+            target_max=50,
+            retrieval_pool_max=3000,
+            openalex_api_key="",
+            openalex_email="",
+        )
+        agent = PaperSeekAgent(config, object())
+        records = [
+            PaperRecord(
+                uid=f"https://openalex.org/Wseed{index}",
+                title=f"Seed {index}",
+                identifiers=PaperIdentifiers(openalex=f"https://openalex.org/Wseed{index}"),
+                raw={"referenced_works": []},
+            )
+            for index in range(1000)
+        ]
+        agent.provider = FakeOpenAlexProvider()
+
+        def fake_rank(question, candidates, **_):
+            captured["rank_candidate_count"] = len(candidates)
+            return [{"document": doc, "score": 10} for doc in candidates]
+
+        agent._rank_results = fake_rank
+
+        agent._prepare_candidates("open innovation", records)
+
+        self.assertEqual(captured["rank_candidate_count"], 120)
+        self.assertEqual(len(captured["seed_plans"]), 30)
+
     def test_agent_ranks_large_candidate_sets_in_parallel_batches(self):
         calls = []
         llm = BatchRankingLlm(calls)

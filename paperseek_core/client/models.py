@@ -349,18 +349,18 @@ class DocumentNames(BaseModel):
     DocumentNames
     """ # noqa: E501
     authors: Optional[List[AuthorName]] = Field(default=None, description="Authors of document")
-    inventors: Optional[List[AuthorName]] = None
-    book_corp: Optional[List[AuthorName]] = Field(default=None, alias="bookCorp")
-    book_editors: Optional[List[AuthorName]] = Field(default=None, alias="bookEditors")
-    books: Optional[List[AuthorName]] = None
-    additional_authors: Optional[List[AuthorName]] = Field(default=None, alias="additionalAuthors")
-    anonymous: Optional[List[AuthorName]] = None
-    assignees: Optional[List[AuthorName]] = None
-    corp: Optional[List[AuthorName]] = None
-    editors: Optional[List[AuthorName]] = None
-    investigators: Optional[List[AuthorName]] = None
-    sponsors: Optional[List[AuthorName]] = None
-    issuing_organizations: Optional[List[AuthorName]] = Field(default=None, alias="issuingOrganizations")
+    inventors: Optional[List[OtherName]] = None
+    book_corp: Optional[List[OtherName]] = Field(default=None, alias="bookCorp")
+    book_editors: Optional[List[OtherName]] = Field(default=None, alias="bookEditors")
+    books: Optional[List[OtherName]] = None
+    additional_authors: Optional[List[OtherName]] = Field(default=None, alias="additionalAuthors")
+    anonymous: Optional[List[OtherName]] = None
+    assignees: Optional[List[OtherName]] = None
+    corp: Optional[List[OtherName]] = None
+    editors: Optional[List[OtherName]] = None
+    investigators: Optional[List[OtherName]] = None
+    sponsors: Optional[List[OtherName]] = None
+    issuing_organizations: Optional[List[OtherName]] = Field(default=None, alias="issuingOrganizations")
     __properties: ClassVar[List[str]] = ["authors", "inventors", "bookCorp", "bookEditors", "books", "additionalAuthors", "anonymous", "assignees", "corp", "editors", "investigators", "sponsors", "issuingOrganizations"]
 
     model_config = {
@@ -504,18 +504,18 @@ class DocumentNames(BaseModel):
 
         _obj = cls.model_validate({
             "authors": [AuthorName.from_dict(_item) for _item in obj.get("authors")] if obj.get("authors") is not None else None,
-            "inventors": [AuthorName.from_dict(_item) for _item in obj.get("inventors")] if obj.get("inventors") is not None else None,
-            "bookCorp": [AuthorName.from_dict(_item) for _item in obj.get("bookCorp")] if obj.get("bookCorp") is not None else None,
-            "bookEditors": [AuthorName.from_dict(_item) for _item in obj.get("bookEditors")] if obj.get("bookEditors") is not None else None,
-            "books": [AuthorName.from_dict(_item) for _item in obj.get("books")] if obj.get("books") is not None else None,
-            "additionalAuthors": [AuthorName.from_dict(_item) for _item in obj.get("additionalAuthors")] if obj.get("additionalAuthors") is not None else None,
-            "anonymous": [AuthorName.from_dict(_item) for _item in obj.get("anonymous")] if obj.get("anonymous") is not None else None,
-            "assignees": [AuthorName.from_dict(_item) for _item in obj.get("assignees")] if obj.get("assignees") is not None else None,
-            "corp": [AuthorName.from_dict(_item) for _item in obj.get("corp")] if obj.get("corp") is not None else None,
-            "editors": [AuthorName.from_dict(_item) for _item in obj.get("editors")] if obj.get("editors") is not None else None,
-            "investigators": [AuthorName.from_dict(_item) for _item in obj.get("investigators")] if obj.get("investigators") is not None else None,
-            "sponsors": [AuthorName.from_dict(_item) for _item in obj.get("sponsors")] if obj.get("sponsors") is not None else None,
-            "issuingOrganizations": [AuthorName.from_dict(_item) for _item in obj.get("issuingOrganizations")] if obj.get("issuingOrganizations") is not None else None
+            "inventors": [OtherName.from_dict(_item) for _item in obj.get("inventors")] if obj.get("inventors") is not None else None,
+            "bookCorp": [OtherName.from_dict(_item) for _item in obj.get("bookCorp")] if obj.get("bookCorp") is not None else None,
+            "bookEditors": [OtherName.from_dict(_item) for _item in obj.get("bookEditors")] if obj.get("bookEditors") is not None else None,
+            "books": [OtherName.from_dict(_item) for _item in obj.get("books")] if obj.get("books") is not None else None,
+            "additionalAuthors": [OtherName.from_dict(_item) for _item in obj.get("additionalAuthors")] if obj.get("additionalAuthors") is not None else None,
+            "anonymous": [OtherName.from_dict(_item) for _item in obj.get("anonymous")] if obj.get("anonymous") is not None else None,
+            "assignees": [OtherName.from_dict(_item) for _item in obj.get("assignees")] if obj.get("assignees") is not None else None,
+            "corp": [OtherName.from_dict(_item) for _item in obj.get("corp")] if obj.get("corp") is not None else None,
+            "editors": [OtherName.from_dict(_item) for _item in obj.get("editors")] if obj.get("editors") is not None else None,
+            "investigators": [OtherName.from_dict(_item) for _item in obj.get("investigators")] if obj.get("investigators") is not None else None,
+            "sponsors": [OtherName.from_dict(_item) for _item in obj.get("sponsors")] if obj.get("sponsors") is not None else None,
+            "issuingOrganizations": [OtherName.from_dict(_item) for _item in obj.get("issuingOrganizations")] if obj.get("issuingOrganizations") is not None else None
         })
         return _obj
 

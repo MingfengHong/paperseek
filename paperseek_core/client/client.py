@@ -683,7 +683,7 @@ class ApiClient:
         except ImportError:
             return string
         except ValueError:
-            raise ApiException(
+            raise rest.ApiException(
                 status=0,
                 reason="Failed to parse `{0}` as date object".format(string)
             )
@@ -701,7 +701,7 @@ class ApiClient:
         except ImportError:
             return string
         except ValueError:
-            raise ApiException(
+            raise rest.ApiException(
                 status=0,
                 reason=(
                     "Failed to parse `{0}` as datetime object"

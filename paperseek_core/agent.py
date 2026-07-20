@@ -1229,6 +1229,13 @@ class PaperSeekAgent:
             target_max = 50
         return min(max(configured, target_max), self._retrieval_pool_max())
 
+    def _citation_seed_ranking_limit(self) -> int:
+        try:
+            seed_count = max(1, int(getattr(self.config, "citation_seed_count", 30) or 30))
+        except (TypeError, ValueError):
+            seed_count = 30
+        return min(self._llm_ranking_candidate_limit(), max(seed_count * 4, 64))
+
     def _ranked_output_floor(self) -> int:
         return 50
 
@@ -1777,6 +1784,7 @@ class PaperSeekAgent:
             "dashscope",
             "siliconflow",
             "openrouter",
+            "huggingface",
             "nvidia",
             "zhipu",
             "volcengine",
@@ -1799,6 +1807,7 @@ class PaperSeekAgent:
             "dashscope": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "siliconflow": "https://api.siliconflow.cn/v1",
             "openrouter": "https://openrouter.ai/api/v1",
+            "huggingface": "https://router.huggingface.co/v1",
             "nvidia": "https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking" if kind == "reranker" else "https://integrate.api.nvidia.com/v1",
             "zhipu": "https://open.bigmodel.cn/api/paas/v4",
             "volcengine": "https://ark.cn-beijing.volces.com/api/v3",
@@ -1932,22 +1941,29 @@ class PaperSeekAgent:
             self.citation_map.update({"supported": False, "status": "unsupported"})
             return candidates
 
+        seed_ranking_limit = self._citation_seed_ranking_limit()
+        seed_candidates = candidates[:seed_ranking_limit]
+        if len(candidates) > len(seed_candidates):
+            self._emit_log(
+                "Citation seed ranking candidate list truncated: "
+                f"candidates={len(candidates)}; seed_ranking_limit={seed_ranking_limit}."
+            )
         self._emit_log("Citation expansion started: ranking seed papers before traversing references and citing works.")
         self._emit_ranking_step(
             "citation_seed_ranking",
             "processing",
             "Citation seed ranking",
             current=0,
-            total=max(1, len(candidates)),
-            detail="Ranking initial candidates to choose citation expansion seeds.",
+            total=max(1, len(seed_candidates)),
+            detail="Ranking a bounded pre-ranked candidate prefix to choose citation expansion seeds.",
         )
-        seed_ranked = self._rank_results(question, candidates, step_id="citation_seed_ranking", step_title="Citation seed ranking")
+        seed_ranked = self._rank_results(question, seed_candidates, step_id="citation_seed_ranking", step_title="Citation seed ranking")
         self._emit_ranking_step(
             "citation_seed_ranking",
             "complete",
             "Citation seed ranking",
-            current=len(candidates),
-            total=max(1, len(candidates)),
+            current=len(seed_candidates),
+            total=max(1, len(seed_candidates)),
             detail="Seed ranking completed.",
         )
         seed_limit = max(1, int(getattr(self.config, "citation_seed_count", 30) or 30))
@@ -2216,7 +2232,7 @@ class PaperSeekAgent:
     @staticmethod
     def _display_llm_model(model: str) -> str:
         return {
-            "kimi-for-coding": "kimi-k2.7-code",
+            "kimi-for-coding": "kimi-k2.6",
             "z-ai/glm-5.2": "glm-5.2",
             "minimaxai/minimax-m3": "minimax-m3",
             "moonshotai/kimi-k2.6": "kimi-k2.6",
@@ -3092,6 +3108,10 @@ class PaperSeekAgent:
                 client = self.llm.fork()
                 if hasattr(client, "timeout_seconds"):
                     client.timeout_seconds = timeout_seconds
+                if hasattr(client, "attempts"):
+                    attempts = getattr(client, "attempts", None)
+                    if isinstance(attempts, int):
+                        client.attempts = 1
                 return client
             except Exception:
                 pass

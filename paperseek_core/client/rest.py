@@ -135,7 +135,7 @@ class RESTClientObject:
                                  (connection, read) timeouts.
         """
         method = method.upper()
-        assert method in {
+        assert method in [
             'GET',
             'HEAD',
             'DELETE',
@@ -143,7 +143,7 @@ class RESTClientObject:
             'PUT',
             'PATCH',
             'OPTIONS'
-        }
+        ]
 
         if post_params and body:
             raise ApiValueError(
@@ -168,7 +168,7 @@ class RESTClientObject:
 
         try:
             # For `POST`, `PUT`, `PATCH`, `OPTIONS`, `DELETE`
-            if method in {'POST', 'PUT', 'PATCH', 'OPTIONS', 'DELETE'}:
+            if method in ['POST', 'PUT', 'PATCH', 'OPTIONS', 'DELETE']:
 
                 # no content type provided or payload is json
                 content_type = headers.get('Content-Type')

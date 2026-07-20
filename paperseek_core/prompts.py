@@ -520,7 +520,7 @@ PaperHub guidance converted into prompt rules:
 - Use the same Google / Google Scholar style subset as PaperHub generation: required terms by spaces, quoted phrases, OR alternatives, - exclusions, and conference:/venue:/year:/after:/before: metadata filters.
 - Broaden by removing one required term, changing an exact phrase to broader words, adding an OR synonym inside an existing required group, or dropping a metadata/exclusion filter that is not essential.
 - Avoid unsupported API parameters, unsupported field tags, and database-specific syntax.
-- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then replace/remove drift-causing terms or broaden only on-intent wording.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
@@ -541,14 +541,14 @@ PaperHub guidance converted into prompt rules:
 - Do not narrow by appending many optional synonyms. In PaperHub, extra plain terms become required constraints; OR alternatives broaden the query.
 - Prefer terms likely to occur in top-conference paper titles, abstracts, keywords, or metadata.
 - Avoid unsupported API parameters, unsupported field tags, and database-specific syntax.
-- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then remove/replace drift-causing terms or add one missing mandatory facet instead of mechanically adding keywords.
+- Treat supplied top returned titles as the primary revision signal: compare them with the interpreted intent, identify on-intent, off-intent, or missing-facet patterns, then revise by replacing/removing drift-causing terms, adding one missing mandatory facet, or broadening only on-intent wording.
 
 Output contract:
 - Return exactly one valid JSON object with keys "query" and "rationale".
 - The query field must contain only the narrowed source-specific query string.
 - Put the narrowing reason and title-based diagnostic in the rationale field.
 - Do not include markdown, bullets, or code blocks outside JSON.
-- Make at least one minimal valid narrowing change, such as reducing alternatives, replacing a broad term with a narrower phrase, or adding one mandatory facet.
+- Make at least one minimal valid narrowing change, such as adding one missing core concept from the research intent.
 
 Output ONLY the JSON object."""
 
