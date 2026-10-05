@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <a href="https://www.paperseek.xyz/">Online</a>
+  <a href="https://paperseek.app/">Online</a>
   ·
-  <a href="https://docs.paperseek.xyz/">Docs</a>
+  <a href="https://docs.paperseek.app/">Docs</a>
   ·
   <a href="https://modelscope.cn/studios/HongMingfeng/PaperSeek">ModelScope Studio</a>
   ·
@@ -86,7 +86,7 @@ PaperSeek focuses on first-pass paper discovery and metadata organization, helpi
 
 ## Choose Your Path
 
-- **Hosted online edition**: use [paperseek.xyz](https://www.paperseek.xyz/) with PaperSeek Service, Third-party Service (ModelScope, OpenRouter, or Hugging Face), or Bring your own Key. Bring your own Key means bring your own provider keys (BYOK); see the [hosted demo guide](docs/online-demo.md).
+- **Hosted online edition**: use [paperseek.xyz](https://paperseek.app/) with PaperSeek Service, Third-party Service (ModelScope, OpenRouter, or Hugging Face), or Bring your own Key. Bring your own Key means bring your own provider keys (BYOK); see the [hosted demo guide](docs/online-demo.md).
 - **Self-hosted open-source edition**: install from PyPI or source, or run with Docker/VPS for longer searches, citation expansion, and heavier request volume.
 - **ModelScope Studio**: use the public [PaperSeek Studio](https://modelscope.cn/studios/HongMingfeng/PaperSeek) or deploy your own Docker Studio from the guide.
 - **Agent Skill**: copy `skills/paperseek/` into a skill-aware agent platform; the Skill includes a lightweight runtime for core search without installing the full package.

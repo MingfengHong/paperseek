@@ -50,11 +50,11 @@ mcp = [
 ]
 
 [project.urls]
-Homepage = "https://www.paperseek.xyz/"
+Homepage = "https://paperseek.app/"
 Repository = "https://github.com/MingfengHong/paperseek"
 Issues = "https://github.com/MingfengHong/paperseek/issues"
-Documentation = "https://docs.paperseek.xyz/"
-Online-Demo = "https://www.paperseek.xyz/"
+Documentation = "https://docs.paperseek.app/"
+Online-Demo = "https://paperseek.app/"
 
 [project.scripts]
 paperseek = "paperseek.cli:main"

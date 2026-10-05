@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <a href="https://www.paperseek.xyz/">在线版</a>
+  <a href="https://paperseek.app/">在线版</a>
   ·
-  <a href="https://docs.paperseek.xyz/">文档站</a>
+  <a href="https://docs.paperseek.app/">文档站</a>
   ·
   <a href="https://modelscope.cn/studios/HongMingfeng/PaperSeek">创空间</a>
   ·
@@ -86,7 +86,7 @@ PaperSeek 专注于第一轮候选文献发现和元数据整理，帮助研究�
 
 ## 选择使用方式
 
-- **在线版**：直接访问 [paperseek.xyz](https://www.paperseek.xyz/)。支持 PaperSeek Service、Third-party Service（ModelScope、OpenRouter、Hugging Face）和 Bring your own Key 三种模式；Bring your own Key 即 bring your own provider keys (BYOK)，适合快速试用或自带服务商 Key；详情见 [在线体验版使用说明](docs/online-demo.md)。
+- **在线版**：直接访问 [paperseek.xyz](https://paperseek.app/)。支持 PaperSeek Service、Third-party Service（ModelScope、OpenRouter、Hugging Face）和 Bring your own Key 三种模式；Bring your own Key 即 bring your own provider keys (BYOK)，适合快速试用或自带服务商 Key；详情见 [在线体验版使用说明](docs/online-demo.md)。
 - **开源自托管版**：通过 PyPI、源码安装、Docker 或 VPS 运行，适合长期检索、引用扩展和大量请求。
 - **ModelScope 创空间**：可在 [PaperSeek 创空间](https://modelscope.cn/studios/HongMingfeng/PaperSeek) 直接使用，也可参考部署指南创建自己的 Docker 创空间。
 - **Agent Skill**：可复制 `skills/paperseek/` 到支持 Skill 的 agent 平台；Skill 自带轻量 runtime，可在未安装完整包时执行核心检索。

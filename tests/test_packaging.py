@@ -13,9 +13,9 @@ class PackagingTest(unittest.TestCase):
             (
                 'name = "paperseek"',
                 'version = "0.2.1"',
-                'Homepage = "https://www.paperseek.xyz/"',
+                'Homepage = "https://paperseek.app/"',
                 'Repository = "https://github.com/MingfengHong/paperseek"',
-                'Documentation = "https://docs.paperseek.xyz/"',
+                'Documentation = "https://docs.paperseek.app/"',
             ),
         )
         self.assertNotIn("modelscope.cn/studios", pyproject)
@@ -35,7 +35,7 @@ class PackagingTest(unittest.TestCase):
             "docs/user-manual.md",
             "docs/deployment.md",
             "docs/online-demo.md",
-            "https://www.paperseek.xyz/",
+            "https://paperseek.app/",
         )
         for path in ("README.md", "README.en.md"):
             readme = read_text(path)
@@ -86,7 +86,7 @@ class PackagingTest(unittest.TestCase):
             self,
             guide,
             (
-                "https://www.paperseek.xyz/",
+                "https://paperseek.app/",
                 "ModelScope",
                 "API Inference",
                 "历史记录按登录账号隔离",

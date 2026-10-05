@@ -9,7 +9,7 @@ PaperSeek Web UI 常见部署方式有三种：
 如果只是试用 PaperSeek，可以直接访问在线体验版：
 
 ```text
-https://www.paperseek.xyz/
+https://paperseek.app/
 ```
 
 在线体验版的 PaperSeek Service、Third-party Service（ModelScope、OpenRouter、Hugging Face）、Bring your own Key / BYOK、登录权限、第三方推理额度和历史记录说明见 [在线体验版用户手册](online-demo.md)。
