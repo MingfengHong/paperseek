@@ -62,7 +62,7 @@ https://paperseek.app/
 
 ## 推荐流程
 
-1. 进入 [paperseek.xyz](https://paperseek.app/)。
+1. 进入 [paperseek.app](https://paperseek.app/)。
 2. 如需中文界面，点击顶部状态栏中的 `中文`。
 3. 选择使用模式：
    - 想快速试用：登录后选择 `PaperSeek Service`。
